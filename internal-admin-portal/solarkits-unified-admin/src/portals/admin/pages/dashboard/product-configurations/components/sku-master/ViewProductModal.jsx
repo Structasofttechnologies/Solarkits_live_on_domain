@@ -209,12 +209,46 @@ export default function ViewProductModal({ isOpen, onClose, product }) {
             </div>
           </div>
 
+          {/* Configured Technical Specifications */}
+          {product.specifications && Array.isArray(product.specifications) && product.specifications.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded bg-primary/10 text-primary flex items-center justify-center">
+                  <FaMicrochip size={12} />
+                </div>
+                <h4 className="text-[10px] font-black text-text-primary uppercase tracking-[0.2em]">Configured Technical Specifications ({product.specifications.length})</h4>
+                <div className="h-px flex-1 bg-border/40" />
+              </div>
+
+              <div className="border border-border/60 rounded-xl overflow-hidden bg-surface">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-surface-hover/60 text-text-secondary text-[10px] uppercase font-bold border-b border-border">
+                    <tr>
+                      <th className="py-2 px-3 w-40">Group</th>
+                      <th className="py-2 px-3">Specification</th>
+                      <th className="py-2 px-3">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {product.specifications.map((s, idx) => (
+                      <tr key={idx} className="hover:bg-surface-hover/30">
+                        <td className="py-2 px-3 text-[10px] font-medium text-text-muted">{s.group || "General"}</td>
+                        <td className="py-2 px-3 font-bold text-text-primary">{s.key || s.specification}</td>
+                        <td className="py-2 px-3 text-text-primary font-medium">{s.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Associated SKU Variants */}
           <div className="space-y-5">
             <div className="flex items-center gap-3">
-               <div className="w-6 h-6 rounded bg-primary/10 text-primary flex items-center justify-center">
-                  <FaTags size={12} />
-               </div>
+              <div className="w-6 h-6 rounded bg-primary/10 text-primary flex items-center justify-center">
+                <FaTags size={12} />
+              </div>
                <h4 className="text-[10px] font-black text-text-primary uppercase tracking-[0.2em]">Associated SKU Variants ({skus.length})</h4>
                <div className="h-px flex-1 bg-border/40" />
             </div>

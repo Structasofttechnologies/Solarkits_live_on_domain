@@ -415,24 +415,26 @@ export default function EpcTeamUsers() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 animate-in fade-in duration-300">
-      {/* ── TOP BANNER ─────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-primary-900 to-slate-950 border border-slate-800 text-white shadow-2xl p-6 sm:p-8">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+      {/* ── TOP BANNER (Solar Store Theme) ──────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary via-[#1e2f70] to-[#152250] text-white border border-primary-400/20 shadow-xl shadow-primary/15 p-6 sm:p-8">
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-accent/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 -mb-16 w-60 h-60 bg-sky-400/15 rounded-full blur-2xl pointer-events-none" />
+
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-xl ring-4 ring-white/10 shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-accent to-amber-500 text-white flex items-center justify-center font-black text-2xl shadow-xl ring-4 ring-white/15 shrink-0">
               <FiUsers size={28} />
             </div>
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                   EPC Team & Sub-Users
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/30 text-sky-300 border border-sky-400/30">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/15 text-white border border-white/20 backdrop-blur-sm">
                   <FiShield size={13} /> Admin Managed
                 </span>
               </div>
-              <p className="text-slate-300 text-sm mt-1 max-w-xl">
+              <p className="text-white/80 text-sm mt-1 max-w-xl leading-relaxed">
                 Create sub-logins for your team to work on your behalf. Grant
                 district-level permissions to ensure staff only access regions
                 where your EPC has activated offices.
@@ -440,49 +442,49 @@ export default function EpcTeamUsers() {
             </div>
           </div>
 
-          <Button
-            variant="primary"
-            leftIcon={<FiUserPlus size={18} />}
+          <button
+            type="button"
             onClick={() => {
               resetForm();
               setShowAddModal(true);
             }}
-            className="bg-accent hover:bg-accent-600 text-slate-950 font-black px-6 py-3 rounded-xl shadow-lg shadow-accent/20 border-0 shrink-0"
+            className="bg-gradient-to-r from-accent to-amber-500 hover:from-amber-500 hover:to-accent text-white font-extrabold px-6 py-3 rounded-xl shadow-lg shadow-accent/25 hover:shadow-accent/40 hover:-translate-y-0.5 transition-all duration-200 border-0 shrink-0 flex items-center gap-2 cursor-pointer text-sm"
           >
-            Create New User
-          </Button>
+            <FiUserPlus size={18} />
+            <span>Create New User</span>
+          </button>
         </div>
 
-        {/* Metric Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-8 pt-6 border-t border-slate-800/80">
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+        {/* Metric Badges (Frosted Glass Solar Store Style) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-8 pt-6 border-t border-white/15">
+          <div className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white">
+            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider block">
               Total Sub-Users
             </span>
             <span className="text-2xl font-black text-white mt-1 block">
               {users.length}
             </span>
-            <span className="text-[11px] text-slate-400">Created staff accounts</span>
+            <span className="text-[11px] text-white/70">Created staff accounts</span>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+          <div className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white">
+            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider block">
               Active Logins
             </span>
-            <span className="text-2xl font-black text-emerald-400 mt-1 block">
+            <span className="text-2xl font-black text-emerald-300 mt-1 block">
               {users.filter((u) => u.is_active).length}
             </span>
-            <span className="text-[11px] text-slate-400">Can access portal</span>
+            <span className="text-[11px] text-white/70">Can access portal</span>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50 col-span-2 sm:col-span-1">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+          <div className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white col-span-2 sm:col-span-1">
+            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider block">
               Activated EPC Districts
             </span>
-            <span className="text-2xl font-black text-accent mt-1 block">
+            <span className="text-2xl font-black text-amber-300 mt-1 block">
               {activatedDistricts.length}
             </span>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-white/70">
               Assigned across offices
             </span>
           </div>
@@ -500,7 +502,7 @@ export default function EpcTeamUsers() {
               offices in your{" "}
               <button
                 onClick={() => navigate("/profile")}
-                className="underline font-bold hover:text-amber-500"
+                className="underline font-bold hover:text-amber-500 cursor-pointer"
               >
                 EPC Profile
               </button>
@@ -509,7 +511,7 @@ export default function EpcTeamUsers() {
           </div>
         </div>
       ) : (
-        <div className="bg-surface rounded-2xl border border-border p-4 flex items-center justify-between text-xs text-text-secondary">
+        <div className="bg-surface rounded-2xl border border-border p-4 flex items-center justify-between text-xs text-text-secondary shadow-xs">
           <span className="flex items-center gap-2">
             <FiMapPin className="text-primary font-bold" />
             <span>
@@ -520,7 +522,7 @@ export default function EpcTeamUsers() {
           </span>
           <button
             onClick={() => navigate("/profile")}
-            className="text-primary hover:text-primary-hover font-bold shrink-0 ml-4"
+            className="text-primary hover:text-primary-hover font-bold shrink-0 ml-4 cursor-pointer"
           >
             Manage Offices in Profile →
           </button>
@@ -529,8 +531,8 @@ export default function EpcTeamUsers() {
 
       {/* ── TEAM USERS LIST ──────────────────────────────────────────────── */}
       {users.length === 0 ? (
-        <div className="bg-surface rounded-2xl border border-dashed border-border p-12 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+        <div className="bg-surface rounded-2xl border border-dashed border-border p-12 text-center shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center mx-auto mb-3">
             <FiUsers size={28} />
           </div>
           <h3 className="text-base font-bold text-text-primary">
@@ -541,17 +543,17 @@ export default function EpcTeamUsers() {
             project managers, site engineers, or procurement staff to operate on
             your behalf.
           </p>
-          <Button
-            variant="primary"
-            leftIcon={<FiUserPlus />}
+          <button
+            type="button"
             onClick={() => {
               resetForm();
               setShowAddModal(true);
             }}
-            className="font-bold text-xs"
+            className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md shadow-primary/20 transition-all inline-flex items-center gap-2 cursor-pointer"
           >
-            Create Your First User
-          </Button>
+            <FiUserPlus size={15} />
+            <span>Create Your First User</span>
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -969,21 +971,20 @@ export default function EpcTeamUsers() {
           </div>
 
           <div className="pt-3 flex justify-end gap-3 border-t border-border">
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => setShowAddModal(false)}
+              className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
-              variant="primary"
               disabled={submitting}
-              className="bg-primary hover:bg-primary-hover font-bold px-6"
+              className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md shadow-primary/20 transition-all disabled:opacity-50 cursor-pointer"
             >
               {submitting ? "Creating User..." : "Create Team Member"}
-            </Button>
+            </button>
           </div>
         </form>
       </Dialog>

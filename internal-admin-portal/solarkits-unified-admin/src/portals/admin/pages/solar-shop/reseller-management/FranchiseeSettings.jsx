@@ -379,7 +379,7 @@ export default function FranchiseeSettings() {
         isCommissionConfigured: Boolean(activeComm),
 
         po: activePo,
-        isPoConfigured: Boolean(activePo),
+        isPoConfigured: Boolean(specificPo),
       });
     });
 
@@ -460,7 +460,13 @@ export default function FranchiseeSettings() {
   const handleOpenPoModal = (product = null, existingSetting = null) => {
     setModalType("po");
     setModalTargetProduct(product);
-    setModalInitialData(existingSetting || {
+    // If opening for a specific product, only treat as an existing setting if that setting specifically has this product in allowed_combo_kit_ids
+    const isSpecific = existingSetting && product && (existingSetting.allowed_combo_kit_ids || []).some(
+      (k) => String(k._id || k.id || k) === String(product.id || product._id)
+    );
+    const settingToUse = product ? (isSpecific ? existingSetting : null) : existingSetting;
+
+    setModalInitialData(settingToUse || {
       po_enabled: true,
       min_po_quantity: 1,
       max_po_quantity: "",
@@ -469,7 +475,11 @@ export default function FranchiseeSettings() {
       token_booking_enabled: true,
       token_type: "FIXED_AMOUNT",
       token_value: 50000,
+      min_token_amount: 10000,
       po_lock_days: 30,
+      token_settlement_rule: "PRO_RATA",
+      default_penalty_type: "FLAT_PER_UNPURCHASED_KIT",
+      default_penalty_rate: 500,
       payment_terms: "FULL_ADVANCE",
       requires_approval: true,
       contributes_to_monthly_target: true,
@@ -574,10 +584,14 @@ export default function FranchiseeSettings() {
       const ruleId = formData.id || modalInitialData?._id;
       const endpoint = isEdit ? "/update" : "/add";
 
+      const tokenVal = formData.token_value !== undefined && formData.token_value !== "" && !isNaN(Number(formData.token_value))
+        ? Number(formData.token_value)
+        : (formData.token_type === "PERCENTAGE" ? 10 : 50000);
+
       const payload = {
         ...(isEdit && { id: ruleId }),
-        plan_id: selectedPlan.id,
-        allowed_combo_kit_ids: modalTargetProduct ? [modalTargetProduct.id] : selectedPlan.allowed_combo_kit_ids || [],
+        plan_id: selectedPlan?.id || selectedPlan?._id,
+        allowed_combo_kit_ids: modalTargetProduct ? [modalTargetProduct.id || modalTargetProduct._id] : (selectedPlan?.allowed_combo_kit_ids || []),
         po_enabled: Boolean(formData.po_enabled),
         min_po_quantity: Number(formData.min_po_quantity || 1),
         max_po_quantity: formData.max_po_quantity ? Number(formData.max_po_quantity) : null,
@@ -585,8 +599,12 @@ export default function FranchiseeSettings() {
         max_line_items: Number(formData.max_line_items || 50),
         token_booking_enabled: Boolean(formData.token_booking_enabled),
         token_type: formData.token_type || "FIXED_AMOUNT",
-        token_value: Number(formData.token_value || 50000),
+        token_value: tokenVal,
+        min_token_amount: Number(formData.min_token_amount || 10000),
         po_lock_days: Number(formData.po_lock_days || formData.po_validity_days || 30),
+        token_settlement_rule: formData.token_settlement_rule || "PRO_RATA",
+        default_penalty_type: formData.default_penalty_type || "FLAT_PER_UNPURCHASED_KIT",
+        default_penalty_rate: Number(formData.default_penalty_rate || 500),
         payment_terms: formData.payment_terms || "FULL_ADVANCE",
         requires_approval: Boolean(formData.requires_approval),
         contributes_to_monthly_target: Boolean(formData.contributes_to_monthly_target),
@@ -1382,6 +1400,14 @@ export default function FranchiseeSettings() {
                               <span className="text-text-muted">Validity:</span>
                               <strong className="text-text-primary">{prod.po.po_validity_days || 30} Days</strong>
                             </div>
+                            <div className="flex justify-between">
+                              <span className="text-text-muted">Token Booking:</span>
+                              <strong className={prod.po.token_booking_enabled ? "text-emerald-600 dark:text-emerald-400" : "text-text-muted"}>
+                                {prod.po.token_booking_enabled
+                                  ? (prod.po.token_type === "PERCENTAGE" ? `${prod.po.token_value || 0}%` : `₹${Number(prod.po.token_value || 0).toLocaleString("en-IN")}`)
+                                  : "Disabled"}
+                              </strong>
+                            </div>
                           </>
                         ) : (
                           <div className="text-center text-text-muted py-2">
@@ -1476,9 +1502,16 @@ export default function FranchiseeSettings() {
 
                             {activeTab === "po" && (
                               prod.po ? (
-                                <span className="font-bold text-purple-600">
-                                  {prod.po.po_enabled ? `Min: ${prod.po.min_po_quantity} • ${prod.po.po_validity_days || 30}d` : "Disabled"}
-                                </span>
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-purple-600 block">
+                                    {prod.po.po_enabled ? `Min: ${prod.po.min_po_quantity} • ${prod.po.po_validity_days || 30}d` : "Disabled"}
+                                  </span>
+                                  {prod.po.token_booking_enabled && (
+                                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block">
+                                      Token: {prod.po.token_type === "PERCENTAGE" ? `${prod.po.token_value || 0}%` : `₹${Number(prod.po.token_value || 0).toLocaleString("en-IN")}`}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="text-text-muted">Default Plan PO Settings</span>
                               )
@@ -1774,12 +1807,46 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
     max_po_quantity: initialData?.max_po_quantity ?? "",
     po_validity_days: initialData?.po_validity_days ?? 30,
     max_line_items: initialData?.max_line_items ?? 50,
+    token_booking_enabled: initialData?.token_booking_enabled !== undefined ? Boolean(initialData.token_booking_enabled) : true,
+    token_type: initialData?.token_type || "FIXED_AMOUNT",
+    token_value: initialData?.token_value != null ? String(initialData.token_value) : "50000",
+    min_token_amount: initialData?.min_token_amount != null ? String(initialData.min_token_amount) : "10000",
+    po_lock_days: initialData?.po_lock_days != null ? String(initialData.po_lock_days) : String(initialData?.po_validity_days || 30),
+    token_settlement_rule: initialData?.token_settlement_rule || "PRO_RATA",
+    default_penalty_type: initialData?.default_penalty_type || "FLAT_PER_UNPURCHASED_KIT",
+    default_penalty_rate: initialData?.default_penalty_rate != null ? Number(initialData.default_penalty_rate) : 500,
     payment_terms: initialData?.payment_terms || "FULL_ADVANCE",
     requires_approval: initialData?.requires_approval ?? true,
     contributes_to_monthly_target: initialData?.contributes_to_monthly_target ?? true,
     effective_from: initialData?.effective_from ? new Date(initialData.effective_from).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
     effective_until: initialData?.effective_until ? new Date(initialData.effective_until).toISOString().slice(0, 10) : "",
   });
+
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        id: initialData?._id || initialData?.id || null,
+        po_enabled: initialData?.po_enabled ?? true,
+        min_po_quantity: initialData?.min_po_quantity ?? 1,
+        max_po_quantity: initialData?.max_po_quantity ?? "",
+        po_validity_days: initialData?.po_validity_days ?? 30,
+        max_line_items: initialData?.max_line_items ?? 50,
+        token_booking_enabled: initialData?.token_booking_enabled !== undefined ? Boolean(initialData.token_booking_enabled) : true,
+        token_type: initialData?.token_type || "FIXED_AMOUNT",
+        token_value: initialData?.token_value != null ? String(initialData.token_value) : "50000",
+        min_token_amount: initialData?.min_token_amount != null ? String(initialData.min_token_amount) : "10000",
+        po_lock_days: initialData?.po_lock_days != null ? String(initialData.po_lock_days) : String(initialData?.po_validity_days || 30),
+        token_settlement_rule: initialData?.token_settlement_rule || "PRO_RATA",
+        default_penalty_type: initialData?.default_penalty_type || "FLAT_PER_UNPURCHASED_KIT",
+        default_penalty_rate: initialData?.default_penalty_rate != null ? Number(initialData.default_penalty_rate) : 500,
+        payment_terms: initialData?.payment_terms || "FULL_ADVANCE",
+        requires_approval: initialData?.requires_approval ?? true,
+        contributes_to_monthly_target: initialData?.contributes_to_monthly_target ?? true,
+        effective_from: initialData?.effective_from ? new Date(initialData.effective_from).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        effective_until: initialData?.effective_until ? new Date(initialData.effective_until).toISOString().slice(0, 10) : "",
+      });
+    }
+  }, [initialData]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -1855,7 +1922,11 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, token_type: "FIXED_AMOUNT" })}
+                    onClick={() => setForm((prev) => ({
+                      ...prev,
+                      token_type: "FIXED_AMOUNT",
+                      token_value: prev.token_type === "PERCENTAGE" && Number(prev.token_value) <= 100 ? "50000" : (prev.token_value || "50000")
+                    }))}
                     className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all ${
                       form.token_type === "FIXED_AMOUNT"
                         ? "bg-white dark:bg-slate-800 border-emerald-500 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20"
@@ -1866,7 +1937,11 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
                   </button>
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, token_type: "PERCENTAGE" })}
+                    onClick={() => setForm((prev) => ({
+                      ...prev,
+                      token_type: "PERCENTAGE",
+                      token_value: prev.token_type === "FIXED_AMOUNT" && Number(prev.token_value) > 100 ? "10" : (prev.token_value || "10")
+                    }))}
                     className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all ${
                       form.token_type === "PERCENTAGE"
                         ? "bg-white dark:bg-slate-800 border-emerald-500 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20"
@@ -1887,7 +1962,7 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
                       min={1}
                       required
                       className="w-full px-3 py-1.5 rounded-xl border border-border bg-bg text-text-primary text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                      value={form.token_value}
+                      value={form.token_value ?? ""}
                       onChange={(e) => setForm({ ...form, token_value: e.target.value })}
                       placeholder={form.token_type === "FIXED_AMOUNT" ? "50000" : "10"}
                     />
@@ -1899,7 +1974,7 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
                       min={1}
                       required
                       className="w-full px-3 py-1.5 rounded-xl border border-border bg-bg text-text-primary text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                      value={form.po_lock_days}
+                      value={form.po_lock_days ?? ""}
                       onChange={(e) => setForm({ ...form, po_lock_days: e.target.value, po_validity_days: e.target.value })}
                       placeholder="30"
                     />

@@ -16,6 +16,8 @@ const Product = require("../../models/india_core_db/products.schema");
 const Brand = require("../../models/india_core_db/brands.schema");
 const BulkKitSetting = require("../../models/india_solarshop_db/bulk_kit_settings.schema");
 const SubtypeAttribute = require("../../models/india_core_db/subtype_attributes.schema");
+const ProductAttributeValue = require("../../../admin-panel/models/core_db/product_attribute_values.schema");
+const AttributeOption = require("../../../admin-panel/models/core_db/attribute_options.schema");
 const SolarShopSettings = require("../../models/india_solarshop_db/solarshop_settings.schema");
 const Cart = require("../../models/india_solarshop_db/cart.schema");
 const OfferMaster = require("../../models/india_solarshop_db/offer_masters.schema");
@@ -701,17 +703,199 @@ const get_combo_kits_by_district = async (req, res) => {
 
     // Fetch products, brands, and subtypes manually (supporting cross-connection/missing-ref)
     const productIds = skuDocs.map(sku => sku.product_id).filter(Boolean);
-    const products = await Product.find({ _id: { $in: productIds } }).lean();
+    const uniqueProductIds = [...new Set(productIds.map(id => id.toString()))].map(id => new mongoose.Types.ObjectId(id));
+    const products = await Product.find({ _id: { $in: uniqueProductIds } }).lean();
     const brandIds = [
       ...products.map(p => p.brand_id).filter(Boolean),
       ...kits.map(k => k.brand_id).filter(Boolean)
     ];
     const subtypeIds = products.map(p => p.subtype_id).filter(Boolean);
 
-    const [brands, subtypes] = await Promise.all([
+    const [brands, subtypes, pavDocs, optionDocs, unitDocs] = await Promise.all([
       Brand.find({ _id: { $in: brandIds } }).lean(),
-      ProductSubtype.find({ _id: { $in: subtypeIds } }).lean()
+      ProductSubtype.find({ _id: { $in: subtypeIds } }).lean(),
+      ProductAttributeValue.find({
+        deleted_at: null,
+        $or: [
+          { sku_id: { $in: uniqueAllSkuIds } },
+          { product_id: { $in: uniqueProductIds } }
+        ]
+      }).lean(),
+      AttributeOption.find({}).lean(),
+      Unit.find({}).lean()
     ]);
+
+    const skuPavMap = {};
+    const prodPavMap = {};
+    pavDocs.forEach(pav => {
+      if (pav.sku_id) {
+        const k = pav.sku_id.toString();
+        if (!skuPavMap[k]) skuPavMap[k] = [];
+        skuPavMap[k].push(pav);
+      }
+      if (pav.product_id) {
+        const k = pav.product_id.toString();
+        if (!prodPavMap[k]) prodPavMap[k] = [];
+        prodPavMap[k].push(pav);
+      }
+    });
+
+    const attrMap = {};
+    attrDefs.forEach(a => { attrMap[a._id.toString()] = a; });
+    const optionMap = {};
+    optionDocs.forEach(o => { optionMap[o._id.toString()] = o.value; });
+    const unitMap = {};
+    unitDocs.forEach(u => { unitMap[u._id.toString()] = u.symbol || u.name; });
+
+    // Helper to resolve technical attributes from ProductAttributeValue + smart domain enrichment
+    const resolveComponentAttributes = (skuInfo, productInfo, brandInfo, compName = "") => {
+      const list = [];
+      const seenAttrNames = new Set();
+
+      const addAttr = (name, val) => {
+        if (!name || val == null || val === "") return;
+        const key = name.toLowerCase().trim();
+        if (seenAttrNames.has(key)) return;
+        seenAttrNames.add(key);
+        list.push({ name, value: String(val).trim() });
+      };
+
+      const processPav = (pav) => {
+        const def = attrMap[pav.attribute_id?.toString()];
+        if (!def) return;
+        let val = pav.value_text;
+        if (val === null || val === undefined || val === "") {
+          if (pav.value_number !== null && pav.value_number !== undefined) val = pav.value_number;
+          else if (pav.value_boolean !== null && pav.value_boolean !== undefined) val = pav.value_boolean ? "Yes" : "No";
+          else if (pav.value_option_id) val = optionMap[pav.value_option_id.toString()] || null;
+        }
+        if (val !== null && val !== undefined && val !== "") {
+          const u = pav.unit_id ? unitMap[pav.unit_id.toString()] : "";
+          addAttr(def.name, u ? `${val} ${u}` : `${val}`);
+        }
+      };
+
+      // 1. SKU-specific values from pc_attribute_values
+      if (skuInfo?._id && skuPavMap[skuInfo._id.toString()]) {
+        skuPavMap[skuInfo._id.toString()].forEach(processPav);
+      }
+      // 2. Product-level values from pc_attribute_values
+      if (productInfo?._id && prodPavMap[productInfo._id.toString()]) {
+        prodPavMap[productInfo._id.toString()].forEach(processPav);
+      }
+      // 3. Embedded attributes on skuInfo
+      if (skuInfo?.attributes && Array.isArray(skuInfo.attributes)) {
+        skuInfo.attributes.forEach(attr => {
+          const def = attrMap[attr.subtype_attribute_id?.toString()];
+          if (def && attr.value_raw) {
+            addAttr(def.name, attr.value_raw);
+          }
+        });
+      }
+
+      // 4. Domain-intelligent fallback specifications
+      const brandName = brandInfo?.brand_name || productInfo?.brand?.brand_name || skuInfo?.brand?.brand_name || "";
+      const code = (skuInfo?.sku_code || "").toUpperCase();
+      const name = (compName || productInfo?.name || "").toLowerCase();
+
+      if (brandName) {
+        addAttr("Brand", brandName);
+      }
+
+      // Cables
+      const isCableOrWire = (code.startsWith("CAB") || name.includes("cable") || name.includes("wire")) &&
+        !name.includes("tie") && !name.includes("clamp") && !name.includes("tap") && !name.includes("tray");
+
+      if (isCableOrWire) {
+        const match = code.match(/(\d+(\.\d+)?)\s*(MM|SQMM)/i);
+        if (match) addAttr("Cross Section", `${match[1]} sq.mm`);
+
+        if (code.includes("DCCA") || name.includes("dc")) {
+          addAttr("Cable Type", "DC Solar Photovoltaic Cable");
+          addAttr("Voltage Rating", "1500V DC (EN 50618 / TÜV 2 Pfg 1169)");
+          addAttr("Conductor Material", "Tinned Copper (Class 5 Flexible)");
+          addAttr("Insulation", "Cross-Linked Polyolefin (XLPO / XLPE)");
+          addAttr("Temperature Rating", "-40°C to +120°C");
+          if (code.includes("BLAC") || name.includes("black")) addAttr("Color", "Black (UV-Resistant)");
+          if (code.includes("RED") || name.includes("red")) addAttr("Color", "Red (UV-Resistant)");
+        } else if (code.includes("ACCA") || name.includes("ac")) {
+          addAttr("Cable Type", "AC Interconnection Cable");
+          addAttr("Voltage Rating", "1.1 kV AC (IS 694 / IS 1554)");
+          addAttr("Conductor Material", "High Purity Electrolytic Copper");
+          addAttr("Insulation", "Flame Retardant PVC / XLPE");
+          if (code.includes("BLAC") || name.includes("black")) addAttr("Color", "Black");
+          if (code.includes("RED") || name.includes("red")) addAttr("Color", "Red");
+        } else if (code.includes("EART") || name.includes("earth")) {
+          addAttr("Cable Type", "Earthing Ground Wire");
+          addAttr("Conductor Material", "Pure Electrolytic Copper");
+          addAttr("Insulation", "FR PVC Green / Yellow");
+          addAttr("Color", "Green");
+        } else if (code.includes("LIGH") || name.includes("lightning")) {
+          addAttr("Cable Type", "Lightning Arrestor Down Conductor");
+          addAttr("Conductor Material", "High-Grade Aluminium Strip / Conductor");
+          addAttr("Standard", "IS/IEC 62305 Compliance");
+        }
+      }
+
+      // ACDB / DCDB
+      if (code.startsWith("AC-") || code.startsWith("DCD-") || name.includes("acdb") || name.includes("dcdb")) {
+        addAttr("Enclosure Rating", "IP65 Weatherproof & UV Resistant Polycarbonate");
+        if (code.startsWith("DCD-") || name.includes("dcdb")) {
+          addAttr("Box Type", "DC Distribution Box (DCDB)");
+          addAttr("Protection", "Class II Surge Protection (SPD 1000V DC) + gPV Fuses");
+        } else {
+          addAttr("Box Type", "AC Distribution Box (ACDB)");
+          addAttr("Protection", "AC MCB / Isolator + AC Surge Protection Device (SPD 40kA)");
+        }
+        addAttr("Mounting Type", "Wall / Frame Mounting");
+      }
+
+      // MC4 Connector
+      if (code.startsWith("MC4") || name.includes("mc4") || (name.includes("connector") && !name.includes("box"))) {
+        addAttr("Connector Type", "Standard MC4 Solar PV Connector");
+        addAttr("Rated Voltage", "1500V DC (IEC) / 1000V DC (UL)");
+        addAttr("Contact Material", "Copper with Silver / Tin Plating");
+        addAttr("Ingress Protection", "IP67 / IP68 (Mated)");
+        addAttr("Flame Class", "UL94-V0");
+      }
+
+      // Earthing Rod
+      if (code.includes("EAR-") && (name.includes("rod") || code.includes("COPP"))) {
+        addAttr("Material", "High Tensile Steel with Pure Electrolytic Copper Bonding");
+        addAttr("Coating Standard", "Minimum 250 Microns Copper Bonded (UL 467 / IEEE 80)");
+        addAttr("Length", "1 Meter");
+      }
+
+      // Earthing Compound
+      if (code.includes("EAR-") && (name.includes("compound") || code.includes("CHEM"))) {
+        addAttr("Compound Type", "Eco-friendly Moisture Retaining Chemical Earth Compound");
+        addAttr("Resistivity", "Low Resistivity < 0.2 Ω-m");
+        addAttr("Quantity", "10 kg");
+      }
+
+      // Lightning Arrester
+      if (code.startsWith("LIG-") || name.includes("lightning") || name.includes("arrester")) {
+        addAttr("System Type", "Conventional Multi-Spike Lightning Protection");
+        addAttr("Mast Material", "FRP Insulated Support Mast with Pure Copper Tip");
+        addAttr("Standard", "IS/IEC 62305 Lightning Protection Standard");
+      }
+
+      // Hardware & Accessories
+      if (code.startsWith("CLA-") || name.includes("clamp")) {
+        addAttr("Material", "Anodized Aluminium 6063-T6 / Stainless Steel");
+      }
+      if (code.startsWith("UVR-") || name.includes("cable tie")) {
+        addAttr("Material", "UV Resistant Nylon 66 (Weatherproof Outdoor Grade)");
+      }
+      if (code.startsWith("PVC-") || name.includes("pvc")) {
+        addAttr("Material", "Heavy Duty Rigid PVC (UV Stabilized)");
+      }
+      if (code.startsWith("SCR-") || name.includes("screw") || name.includes("fastener")) {
+        addAttr("Grade", "SS304 / High Tensile Galvanized Steel Grade 8.8");
+      }
+
+      return list;
+    };
 
     const skusMap = {};
     skuDocs.forEach(sku => {
@@ -720,6 +904,7 @@ const get_combo_kits_by_district = async (req, res) => {
       const subtype = product ? subtypes.find(st => st._id.toString() === product.subtype_id?.toString()) : null;
 
       skusMap[sku._id.toString()] = {
+        _id: sku._id,
         sku_code: sku.sku_code,
         image: sku.image || '',
         product,
@@ -728,9 +913,6 @@ const get_combo_kits_by_district = async (req, res) => {
         attributes: sku.attributes || []
       };
     });
-
-    const attrMap = {};
-    attrDefs.forEach(a => { attrMap[a._id.toString()] = a; });
 
     // Fetch bulk kit settings
     const bulkSettingDoc = await BulkKitSetting.findOne({}).lean();
@@ -1114,41 +1296,32 @@ const get_combo_kits_by_district = async (req, res) => {
             img = `http://localhost:5000${img}`;
           }
 
-          const componentAttributes = [];
-          if (skuInfo.attributes) {
-            skuInfo.attributes.forEach(attr => {
-              const attrDef = attrMap[attr.subtype_attribute_id?.toString()];
-              if (attrDef) {
-                componentAttributes.push({
-                  name: attrDef.name,
-                  value: attr.value_raw
-                });
-              }
-            });
-          }
+          const componentAttributes = resolveComponentAttributes(skuInfo, p, b, p?.name || skuInfo.subtype?.name);
 
           let wattage = 0;
           const wattMatch = skuInfo.sku_code?.match(/(\d+)W/i);
           if (wattMatch) wattage = parseInt(wattMatch[1]);
+          const wattAttr = componentAttributes.find(a => a.name.toLowerCase().includes("watt") || a.name.toLowerCase().includes("pmax"));
+          if (!wattage && wattAttr) wattage = parseInt(wattAttr.value) || 0;
 
           let efficiency = 0;
-          const effAttr = skuInfo.attributes?.find(a => attrMap[a.subtype_attribute_id?.toString()]?.name?.toLowerCase().includes("efficiency"));
-          if (effAttr) efficiency = parseFloat(effAttr.value_raw) || 0;
+          const effAttr = componentAttributes.find(a => a.name.toLowerCase().includes("efficiency"));
+          if (effAttr) efficiency = parseFloat(effAttr.value) || 0;
 
           let warranty = null;
-          const warrantyAttr = skuInfo.attributes?.find(a => attrMap[a.subtype_attribute_id?.toString()]?.name?.toLowerCase().includes("warranty"));
-          if (warrantyAttr) warranty = parseInt(warrantyAttr.value_raw) || null;
+          const warrantyAttr = componentAttributes.find(a => a.name.toLowerCase().includes("warranty"));
+          if (warrantyAttr) warranty = parseInt(warrantyAttr.value) || null;
 
           let capacity = 0;
-          const capAttr = skuInfo.attributes?.find(a => {
-            const name = attrMap[a.subtype_attribute_id?.toString()]?.name?.toLowerCase() || "";
+          const capAttr = componentAttributes.find(a => {
+            const name = a.name.toLowerCase();
             return name.includes("capacity") || name.includes("power rating");
           });
-          if (capAttr) capacity = parseFloat(capAttr.value_raw) || 0;
+          if (capAttr) capacity = parseFloat(capAttr.value) || 0;
 
           let inverterTypeVal = "";
-          const typeAttr = skuInfo.attributes?.find(a => attrMap[a.subtype_attribute_id?.toString()]?.name?.toLowerCase().includes("type"));
-          if (typeAttr) inverterTypeVal = typeAttr.value_raw || "";
+          const typeAttr = componentAttributes.find(a => a.name.toLowerCase().includes("type") && !a.name.toLowerCase().includes("technology"));
+          if (typeAttr) inverterTypeVal = typeAttr.value || "";
 
           let inverterCategoryVal = p?.name || "";
 
@@ -1199,16 +1372,7 @@ const get_combo_kits_by_district = async (req, res) => {
           const skuInfo = skusMap[bk.sku_id?.toString()];
           const name = bk.name || skuInfo?.product?.name || "BOS Component";
           
-          const componentAttributes = [];
-          if (skuInfo && skuInfo.attributes && Array.isArray(skuInfo.attributes)) {
-            skuInfo.attributes.forEach(attr => {
-              const attrName = attrMap[attr.subtype_attribute_id?.toString()]?.name || "Attribute";
-              componentAttributes.push({
-                name: attrName,
-                value: attr.value_raw
-              });
-            });
-          }
+          const componentAttributes = resolveComponentAttributes(skuInfo, skuInfo?.product, skuInfo?.brand, name);
 
           const compImg = bk.image || skuInfo?.image || skuInfo?.product?.image || "";
           let finalCompImage = "";
@@ -3236,8 +3400,30 @@ const calculate_pincode_delivery_cost = async (req, res) => {
       ? Number(kitDoc.selling_price_inr || kitDoc.selling_price_cached || kitDoc.base_price_cached || 0)
       : 0;
     const itemsSubtotal = unitPrice * qty;
-    const gstRate = 13.8; // Standard Solar Kit GST in India
-    const gstAmount = Math.round((itemsSubtotal * gstRate) / 100);
+
+    let gstRate = 13.8;
+    if (req.query.gst_rate !== undefined && req.query.gst_rate !== null && !isNaN(Number(req.query.gst_rate))) {
+      gstRate = Number(req.query.gst_rate);
+    } else if (targetKitId) {
+      const marginDoc = await CompanyMargin.findOne({
+        combo_kit_id: targetKitId,
+        is_active: true,
+        deleted_at: null,
+      }).sort({ updated_at: -1 }).lean();
+
+      if (marginDoc?.gst_rate != null && !isNaN(Number(marginDoc.gst_rate))) {
+        gstRate = Number(marginDoc.gst_rate);
+      } else if (kitDoc?.gst_rate != null && !isNaN(Number(kitDoc.gst_rate))) {
+        gstRate = Number(kitDoc.gst_rate);
+      } else {
+        const shopSettings = (await SolarShopSettings.findOne().lean()) || {};
+        if (shopSettings?.gst_rate != null && !isNaN(Number(shopSettings.gst_rate))) {
+          gstRate = Number(shopSettings.gst_rate);
+        }
+      }
+    }
+
+    const gstAmount = itemsSubtotal > 0 ? Math.round(itemsSubtotal - itemsSubtotal / (1 + gstRate / 100)) : 0;
     const totalPayable = itemsSubtotal + deliveryCost;
 
     return res.status(200).json({
@@ -3259,6 +3445,7 @@ const calculate_pincode_delivery_cost = async (req, res) => {
           delivery_cost: deliveryCost,
           total_payable: totalPayable,
           gst_rate: gstRate,
+          gst_amount: gstAmount,
         },
         message: isServiceable
           ? `Delivery available to ${districtName ? districtName + ', ' : ''}${stateName || ''} (${cleanPincode})`

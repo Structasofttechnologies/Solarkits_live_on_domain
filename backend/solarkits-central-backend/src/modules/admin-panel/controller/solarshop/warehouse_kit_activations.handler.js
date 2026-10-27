@@ -200,10 +200,17 @@ const get_warehouse_kit_activations = async (req, res) => {
         // DB connection (company_warehouse_db) so cross-connection .populate() fails.
         const warehouseIds = [...new Set(activations.map(a => a.warehouse_id?.toString()).filter(Boolean))];
         const warehouseDocs = await CompanyWarehouse.find({ _id: { $in: warehouseIds } })
-            .select('warehouse_code address level_1')
+            .select('warehouse_code address level_1 order_fulfillment_types order_fulfillment_config')
             .lean();
         const warehouseMap = {};
-        warehouseDocs.forEach(w => { warehouseMap[w._id.toString()] = w; });
+        warehouseDocs.forEach(w => { 
+            warehouseMap[w._id.toString()] = {
+                ...w,
+                order_fulfillment_types: w.order_fulfillment_types && w.order_fulfillment_types.length > 0 
+                    ? w.order_fulfillment_types 
+                    : ['po_order', 'loose_order', 'trial_order']
+            }; 
+        });
         activations = activations.map(a => ({
             ...a,
             warehouse_id: warehouseMap[a.warehouse_id?.toString()] || a.warehouse_id,
@@ -439,6 +446,7 @@ const get_warehouse_activations = async (req, res) => {
                 ...activation,
                 id: activation._id || null,
                 combo_kit_id: kit,
+                allowed_order_types: activation.allowed_order_types || warehouse.order_fulfillment_types || ['po_order', 'loose_order', 'trial_order'],
                 sku_price_info: skuPriceInfo,
                 is_margin_configured: isMarginConfigured,
                 is_gst_configured: isGstConfigured,
@@ -455,6 +463,14 @@ const get_warehouse_activations = async (req, res) => {
         res.status(200).json({
             status: 'success',
             data: {
+                warehouse: {
+                    id: (warehouse._id || warehouse.id)?.toString(),
+                    warehouse_code: warehouse.warehouse_code,
+                    order_fulfillment_types: warehouse.order_fulfillment_types && warehouse.order_fulfillment_types.length > 0
+                        ? warehouse.order_fulfillment_types
+                        : ['po_order', 'loose_order', 'trial_order'],
+                    order_fulfillment_config: warehouse.order_fulfillment_config || null
+                },
                 combo_kits: enrichedComboKits,
                 customize_kits: enrichedCustomizeKits,
             }
@@ -714,6 +730,10 @@ const bulk_save_warehouse_kit_activations = async (req, res) => {
                     is_active: true,
                     updated_at: new Date(),
                 };
+
+                if (Array.isArray(item.allowed_order_types)) {
+                    update.allowed_order_types = item.allowed_order_types;
+                }
 
                 const result = await WarehouseKitActivation.findOneAndUpdate(filter, update, {
                     upsert: true,

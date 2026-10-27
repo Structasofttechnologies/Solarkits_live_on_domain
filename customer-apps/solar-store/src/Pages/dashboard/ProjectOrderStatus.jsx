@@ -1732,7 +1732,7 @@ export default function ProjectOrderStatus() {
                         <th className="p-2.5">Item Description</th>
                         <th className="p-2.5 text-center">Qty</th>
                         <th className="p-2.5 text-right">Taxable</th>
-                        <th className="p-2.5 text-right">GST (13.8%)</th>
+                        <th className="p-2.5 text-right">GST ({viewingInvoice.items?.[0]?.gst_rate || viewingInvoice.financials?.gst_rate || 13.8}%)</th>
                         <th className="p-2.5 text-right">Total (₹)</th>
                       </tr>
                     </thead>

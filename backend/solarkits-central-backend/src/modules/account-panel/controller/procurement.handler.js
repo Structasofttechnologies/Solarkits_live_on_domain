@@ -28,6 +28,11 @@ const {
   ProductSkuPrice
 } = require('../../admin-panel/models/core_db');
 
+const {
+  Cluster,
+  GeoLevel2
+} = require('../../admin-panel/models/geolocation_db');
+
 const Supplier = require('../../supplier-panel/models/supplier.schema');
 const SupplierWarehouse = require('../../supplier-panel/models/supplier_warehouse.schema');
 
@@ -129,7 +134,7 @@ exports.get_batch_ready_orders = async (req, res) => {
  * 3. ComboKit (pc_comobo_kit / pc_combo_kits base_components & bos_kits)
  * 4. ProductSku & Brands from core database
  */
-async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetWarehouseId, totalKits }) {
+async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetWarehouseId, targetClusterId, totalKits }) {
   // 1. Try to find configured warehouse kit partner mapping
   let mapping = null;
   if (targetWarehouseId) {
@@ -146,10 +151,41 @@ async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetW
   let comboKitDoc = null;
   const targetKitId = mapping?.combo_kit_id || epcOrder?.items?.[0]?.kit_id || fpoOrder?.items?.[0]?.kit_id;
   if (targetKitId) {
-    comboKitDoc = await ComboKit.findById(targetKitId).lean();
+    comboKitDoc = await ComboKit.findOne({ _id: targetKitId, deleted_at: null }).lean();
   }
-  if (!comboKitDoc) {
-    comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true }).lean();
+  // If targetKitId is deleted or lacks real bos_kits, find the active ComboKit with BOS components
+  if (!comboKitDoc || !comboKitDoc.bos_kits || comboKitDoc.bos_kits.length === 0) {
+    const kitNameHints = (group?.kit_type_breakdown || []).map(k => (k.kit_type || '').toLowerCase());
+    if (kitNameHints.some(h => h.includes('3') || h.includes('3kw'))) {
+      comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true, name: /3\s*kw/i }).lean();
+    } else if (kitNameHints.some(h => h.includes('2') || h.includes('2kw'))) {
+      comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true, name: /2\s*k\.?w/i }).lean();
+    } else if (kitNameHints.some(h => h.includes('1') || h.includes('1kw'))) {
+      comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true, name: /1\s*k\.?w/i }).lean();
+    }
+    if (!comboKitDoc || !comboKitDoc.bos_kits || comboKitDoc.bos_kits.length === 0) {
+      comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true, 'bos_kits.0': { $exists: true } }).lean();
+    }
+    if (!comboKitDoc) {
+      comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true }).lean();
+    }
+  }
+
+  // 3. Resolve target cluster ID for Live Benchmark Pricing from ProductSkuPrice (Admin Price Master)
+  let resolvedClusterId = targetClusterId || null;
+  if (!resolvedClusterId && targetWarehouseId) {
+    const wh = await CompanyWarehouse.findById(targetWarehouseId).lean();
+    if (wh) {
+      resolvedClusterId = wh.cluster_id || null;
+      if (!resolvedClusterId && wh.level_2) {
+        const dist = await GeoLevel2.findById(wh.level_2).lean();
+        if (dist && dist.cluster) resolvedClusterId = dist.cluster;
+      }
+    }
+  }
+  if (!resolvedClusterId) {
+    const defCluster = await Cluster.findOne({ deleted_at: null }).lean();
+    if (defCluster) resolvedClusterId = defCluster._id;
   }
 
   const breakdown = group?.supplier_breakdown || [];
@@ -179,7 +215,19 @@ async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetW
     (panelBreakdown?.total_units && totalKits ? Math.round(panelBreakdown.total_units / totalKits) : 9) ||
     9;
 
-  const panelRate = panelBreakdown?.estimated_unit_cost || 6875;
+  let panelRate = panelBreakdown?.estimated_unit_cost || 0;
+  if (!panelRate) {
+    const panelSkuDoc = await ProductSku.findOne({ sku_code: panelSku, deleted_at: null }).lean();
+    if (panelSkuDoc) {
+      const pPrice = await ProductSkuPrice.findOne({
+        sku_id: panelSkuDoc._id,
+        ...(resolvedClusterId ? { cluster_id: resolvedClusterId } : {}),
+        price: { $gt: 0 }
+      }).lean() || await ProductSkuPrice.findOne({ sku_id: panelSkuDoc._id, price: { $gt: 0 } }).lean();
+      if (pPrice && pPrice.price > 0) panelRate = pPrice.price;
+    }
+  }
+  if (!panelRate) panelRate = 6875;
 
   // B. Inverter
   const inverterMapping = mapping?.product_mappings?.find(m => m.component_type === 'inverter');
@@ -205,100 +253,151 @@ async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetW
     (inverterBreakdown?.total_units && totalKits ? Math.round(inverterBreakdown.total_units / totalKits) : 1) ||
     1;
 
-  const inverterRate = inverterBreakdown?.estimated_unit_cost || 32000;
+  let inverterRate = inverterBreakdown?.estimated_unit_cost || 0;
+  if (!inverterRate) {
+    const invSkuDoc = await ProductSku.findOne({ sku_code: inverterSku, deleted_at: null }).lean();
+    if (invSkuDoc) {
+      const iPrice = await ProductSkuPrice.findOne({
+        sku_id: invSkuDoc._id,
+        ...(resolvedClusterId ? { cluster_id: resolvedClusterId } : {}),
+        price: { $gt: 0 }
+      }).lean() || await ProductSkuPrice.findOne({ sku_id: invSkuDoc._id, price: { $gt: 0 } }).lean();
+      if (iPrice && iPrice.price > 0) inverterRate = iPrice.price;
+    }
+  }
+  if (!inverterRate) inverterRate = 32000;
 
   // C. Balance of System (BOS)
+  const bosComboList = comboKitDoc?.bos_kits || [];
+  const bosMappings = mapping?.product_mappings?.filter(m => m.component_type === 'bos_kit') || [];
   const bosBreakdownList = breakdown.filter(b => {
     const txt = `${b.category || ''} ${b.product || ''} ${b.component_name || ''} ${b.product_name || ''}`.toLowerCase();
     return !txt.includes('module') && !txt.includes('panel') && !txt.includes('inverter') && !txt.includes('inv-');
   });
-  const bosMappings = mapping?.product_mappings?.filter(m => m.component_type === 'bos_kit') || [];
-  const bosComboList = comboKitDoc?.bos_kits || [];
 
   let subItems = [];
-  if (bosBreakdownList.length > 0) {
+
+  // Priority 1: Real BOS components from ComboKit (linked directly with Price Master SKUs)
+  if (bosComboList.length > 0) {
+    const skuIds = bosComboList.map(bk => bk.sku_id).filter(Boolean);
+    const skus = await ProductSku.find({ _id: { $in: skuIds }, deleted_at: null })
+      .populate('product_id', 'name image category_id')
+      .lean();
+    const skuMap = new Map(skus.map(s => [s._id.toString(), s]));
+
+    const priceQuery = { sku_id: { $in: skuIds }, price: { $gt: 0 } };
+    if (resolvedClusterId) priceQuery.cluster_id = resolvedClusterId;
+    let priceDocs = await ProductSkuPrice.find(priceQuery).lean();
+    const priceMap = new Map();
+    priceDocs.forEach(p => priceMap.set(p.sku_id.toString(), p.price));
+
+    const missingIds = skuIds.filter(id => !priceMap.has(id.toString()));
+    if (missingIds.length > 0) {
+      const fallbackPrices = await ProductSkuPrice.find({ sku_id: { $in: missingIds }, price: { $gt: 0 } }).lean();
+      fallbackPrices.forEach(p => {
+        if (!priceMap.has(p.sku_id.toString())) {
+          priceMap.set(p.sku_id.toString(), p.price);
+        }
+      });
+    }
+
+    subItems = bosComboList.map((bk, idx) => {
+      const skuObj = bk.sku_id ? skuMap.get(bk.sku_id.toString()) : null;
+      const unitCost = bk.sku_id ? (priceMap.get(bk.sku_id.toString()) || 0) : 0;
+      const rawName = skuObj?.product_id?.name || skuObj?.name || bk.name || `BOS Component ${idx + 1}`;
+      const skuCode = skuObj?.sku_code || bk.sku_code || `BOS-ITEM-${idx + 1}`;
+      const category = bk.name?.includes('—') ? bk.name.split('—')[0].trim() : (skuObj?.category || 'Balance of System (BOS)');
+      const qtyPerKit = bk.quantity || 1;
+
+      return {
+        sku_id: skuObj?._id || bk.sku_id || null,
+        sku_code: skuCode,
+        product_name: rawName,
+        category: category,
+        qty_per_kit: qtyPerKit,
+        unit_rate: unitCost,
+        benchmark_cost: unitCost,
+        unit: 'Pcs'
+      };
+    });
+  } else if (bosMappings.length > 0) {
+    const skuCodes = bosMappings.map(m => m.sku_code).filter(Boolean);
+    const skus = await ProductSku.find({ sku_code: { $in: skuCodes }, deleted_at: null }).lean();
+    const skuCodeMap = new Map(skus.map(s => [s.sku_code, s]));
+    const skuIds = skus.map(s => s._id);
+
+    const priceDocs = await ProductSkuPrice.find({ sku_id: { $in: skuIds }, price: { $gt: 0 } }).lean();
+    const priceMap = new Map();
+    priceDocs.forEach(p => priceMap.set(p.sku_id.toString(), p.price));
+
+    subItems = bosMappings.map((m, idx) => {
+      const skuObj = m.sku_code ? skuCodeMap.get(m.sku_code) : null;
+      const unitCost = skuObj ? (priceMap.get(skuObj._id.toString()) || 0) : 0;
+      return {
+        sku_id: skuObj?._id || null,
+        sku_code: m.sku_code || `BOS-ITEM-${idx + 1}`,
+        product_name: m.product_name,
+        category: m.subtype_name || m.template_name || 'Balance of System (BOS)',
+        qty_per_kit: m.quantity || 1,
+        unit_rate: unitCost,
+        benchmark_cost: unitCost,
+        unit: 'Pcs'
+      };
+    });
+  } else if (bosBreakdownList.length > 0) {
+    const allBosSkus = await ProductSku.find({ deleted_at: null }).lean();
+    const allPrices = await ProductSkuPrice.find({ price: { $gt: 0 } }).lean();
+    const priceMap = new Map(allPrices.map(p => [p.sku_id.toString(), p.price]));
+
     subItems = bosBreakdownList.map((b, idx) => {
       const name = b.component_name || b.product || b.product_name || `BOS Component ${idx + 1}`;
-      let subSku = 'BOS-ITEM';
+      let subSku = b.sku_code && b.sku_code !== 'null' ? b.sku_code : null;
       let subCategory = b.category || 'Balance of System (BOS)';
-
       const lower = name.toLowerCase();
+
+      let matchedSkus = [];
       if (lower.includes('struct') || lower.includes('mount') || lower.includes('gi')) {
-        subSku = 'BOS-STRUCTURE-GI-HD';
         subCategory = 'Mounting Structure';
+        matchedSkus = allBosSkus.filter(s => (s.sku_code || '').includes('CLA') || (s.sku_code || '').includes('SCR') || (s.sku_code || '').includes('WAL') || (s.sku_code || '').includes('PVC'));
+        if (!subSku) subSku = matchedSkus[0]?.sku_code || 'BOS-STRUCTURE-KIT';
       } else if (lower.includes('box') || lower.includes('acdb') || lower.includes('dcdb') || lower.includes('protect')) {
-        subSku = 'BOS-ACDB-DCDB-IP65';
         subCategory = 'Protection Box';
+        matchedSkus = allBosSkus.filter(s => (s.sku_code || '').includes('AC-') || (s.sku_code || '').includes('DCD-'));
+        if (!subSku) subSku = matchedSkus[0]?.sku_code || 'BOS-PROTECTION-BOX';
       } else if (lower.includes('cable') || lower.includes('earth') || lower.includes('wire')) {
-        subSku = 'BOS-CABLE-EARTH-KIT';
         subCategory = 'Cabling & Safety';
+        matchedSkus = allBosSkus.filter(s => (s.sku_code || '').includes('CAB-') || (s.sku_code || '').includes('EAR-') || (s.sku_code || '').includes('LIG-') || (s.sku_code || '').includes('WIR-'));
+        if (!subSku) subSku = matchedSkus[0]?.sku_code || 'BOS-CABLE-EARTH-KIT';
       } else {
-        subSku = `BOS-COMP-${idx + 1}`;
+        if (!subSku) subSku = `BOS-COMP-${idx + 1}`;
+      }
+
+      let benchmarkCost = 0;
+      if (matchedSkus.length > 0) {
+        benchmarkCost = matchedSkus.reduce((acc, s) => acc + (priceMap.get(s._id.toString()) || 0), 0);
+      }
+      if (b.estimated_unit_cost && b.estimated_unit_cost > 0) {
+        benchmarkCost = b.estimated_unit_cost;
       }
 
       const qtyPerKit = b.kit_multiplier ||
         (b.total_units && totalKits ? Math.round(b.total_units / totalKits) : 1) ||
         1;
 
-      const rate = b.estimated_unit_cost || (subCategory === 'Mounting Structure' ? 16000 : subCategory === 'Protection Box' ? 8500 : 5500);
-
       return {
+        sku_id: matchedSkus[0]?._id || null,
         sku_code: subSku,
         product_name: name,
         category: subCategory,
         qty_per_kit: qtyPerKit,
-        unit_rate: rate,
+        unit_rate: benchmarkCost,
+        benchmark_cost: benchmarkCost,
         unit: 'Sets'
       };
     });
-  } else if (bosMappings.length > 0) {
-    subItems = bosMappings.map((m, idx) => ({
-      sku_code: m.sku_code || `BOS-ITEM-${idx + 1}`,
-      product_name: m.product_name,
-      category: m.subtype_name || m.template_name || 'Balance of System (BOS)',
-      qty_per_kit: m.quantity || 1,
-      unit_rate: idx === 0 ? 16000 : idx === 1 ? 8500 : 5500,
-      unit: 'Sets'
-    }));
-  } else if (bosComboList.length > 0) {
-    subItems = bosComboList.map((bk, idx) => ({
-      sku_code: `BOS-KIT-${idx + 1}`,
-      product_name: bk.name,
-      category: 'Balance of System (BOS)',
-      qty_per_kit: bk.quantity || 1,
-      unit_rate: idx === 0 ? 16000 : 14000,
-      unit: 'Sets'
-    }));
-  } else {
-    subItems = [
-      {
-        sku_code: 'BOS-STRUCTURE-GI-HD',
-        product_name: 'GI Hot-Dip Rooftop Mounting Structure Kit',
-        category: 'Mounting Structure',
-        qty_per_kit: 1,
-        unit_rate: 16000,
-        unit: 'Sets'
-      },
-      {
-        sku_code: 'BOS-ACDB-DCDB-IP65',
-        product_name: 'ACDB & DCDB IP65 Surge Protection Distribution Box',
-        category: 'Protection Box',
-        qty_per_kit: 1,
-        unit_rate: 8500,
-        unit: 'Sets'
-      },
-      {
-        sku_code: 'BOS-CABLE-EARTH-KIT',
-        product_name: 'Solar DC Cable (4/6 sq.mm) & Chemical Earthing Kit',
-        category: 'Cabling & Safety',
-        qty_per_kit: 1,
-        unit_rate: 5500,
-        unit: 'Sets'
-      }
-    ];
   }
 
-  const totalBosRate = subItems.reduce((acc, it) => acc + (it.unit_rate || 0), 0);
+  const totalBosRate = subItems.reduce((acc, it) => acc + (it.unit_rate || 0) * (it.qty_per_kit || 1), 0);
 
   return [
     {
@@ -325,7 +424,7 @@ async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetW
       category: 'Balance of System (BOS)',
       component_type: 'bos_kit',
       qty_per_kit: 1,
-      unit_rate: totalBosRate || 30000,
+      unit_rate: totalBosRate,
       unit: 'Sets',
       sub_items: subItems
     }
@@ -387,12 +486,23 @@ exports.calculate_procurement_bom = async (req, res) => {
 
     const warehouseDoc = targetWarehouseId ? await CompanyWarehouse.findById(targetWarehouseId).lean() : null;
 
+    let targetClusterId = warehouseDoc?.cluster_id || null;
+    if (!targetClusterId && warehouseDoc?.level_2) {
+      const dist = await GeoLevel2.findById(warehouseDoc.level_2).lean();
+      if (dist && dist.cluster) targetClusterId = dist.cluster;
+    }
+    if (!targetClusterId) {
+      const defCluster = await Cluster.findOne({ deleted_at: null }).lean();
+      if (defCluster) targetClusterId = defCluster._id;
+    }
+
     // Dynamically resolve BOM definitions from database (WarehouseKitPartnerMapping, ProcurementGroup, ComboKit, Brand)
     const bomDefinitions = await resolveDynamicBomDefinitions({
       group,
       epcOrder: epc,
       fpoOrder: fpo,
       targetWarehouseId,
+      targetClusterId,
       totalKits
     });
 
@@ -416,27 +526,57 @@ exports.calculate_procurement_bom = async (req, res) => {
         
         // Sub-items with existing benchmark prices from Admin database
         const calculatedSubItems = await Promise.all((def.sub_items || []).map(async (sub) => {
-          let subBenchmark = sub.unit_rate || 0;
+          let subBenchmark = sub.benchmark_cost || sub.unit_rate || 0;
           try {
-            const subPrice = await ProductSkuPrice.findOne({
-              sku_code: { $regex: new RegExp(sub.sku_code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-              price: { $gt: 0 }
-            }).lean();
-            if (subPrice && subPrice.price > 0) {
-              subBenchmark = subPrice.price;
+            if (sub.sku_id) {
+              const skuPrice = await ProductSkuPrice.findOne({
+                sku_id: sub.sku_id,
+                ...(targetClusterId ? { cluster_id: targetClusterId } : {}),
+                price: { $gt: 0 }
+              }).lean() || await ProductSkuPrice.findOne({
+                sku_id: sub.sku_id,
+                price: { $gt: 0 }
+              }).lean();
+
+              if (skuPrice && skuPrice.price > 0) {
+                subBenchmark = skuPrice.price;
+              }
+            } else if (sub.sku_code) {
+              const skuDoc = await ProductSku.findOne({
+                sku_code: { $regex: new RegExp(`^${sub.sku_code.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                deleted_at: null
+              }).lean();
+              if (skuDoc) {
+                const skuPrice = await ProductSkuPrice.findOne({
+                  sku_id: skuDoc._id,
+                  ...(targetClusterId ? { cluster_id: targetClusterId } : {}),
+                  price: { $gt: 0 }
+                }).lean() || await ProductSkuPrice.findOne({
+                  sku_id: skuDoc._id,
+                  price: { $gt: 0 }
+                }).lean();
+                if (skuPrice && skuPrice.price > 0) {
+                  subBenchmark = skuPrice.price;
+                }
+              }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn("Could not load sub-item ProductSkuPrice:", e.message);
+          }
+
+          const resolvedRate = subBenchmark > 0 ? subBenchmark : (sub.unit_rate || 0);
 
           return {
+            sku_id: sub.sku_id || null,
             sku_code: sub.sku_code,
             product_name: sub.product_name,
             category: sub.category,
             qty_per_kit: sub.qty_per_kit,
             required_quantity: sub.qty_per_kit * totalKits,
-            unit_rate: sub.unit_rate,
-            benchmark_cost: subBenchmark || sub.unit_rate,
-            unit: sub.unit || 'Sets',
-            subtotal: (sub.qty_per_kit * totalKits) * sub.unit_rate
+            unit_rate: resolvedRate,
+            benchmark_cost: subBenchmark || resolvedRate,
+            unit: sub.unit || 'Pcs',
+            subtotal: (sub.qty_per_kit * totalKits) * resolvedRate
           };
         }));
 
@@ -491,30 +631,48 @@ exports.calculate_procurement_bom = async (req, res) => {
 
         // Query existing SKU Benchmark Price configured in Admin panel
         let benchmarkCost = 0;
-        try {
-          if (skuId) {
-            const skuPrice = await ProductSkuPrice.findOne({
-              sku_id: skuId,
-              price: { $gt: 0 }
-            }).lean();
-            if (skuPrice && skuPrice.price > 0) {
-              benchmarkCost = skuPrice.price;
+        if (def.component_type === 'bos_kit' && calculatedSubItems.length > 0) {
+          benchmarkCost = calculatedSubItems.reduce((acc, sub) => acc + (sub.benchmark_cost || 0) * (sub.qty_per_kit || 1), 0);
+        } else {
+          try {
+            if (skuId) {
+              const skuPrice = await ProductSkuPrice.findOne({
+                sku_id: skuId,
+                ...(targetClusterId ? { cluster_id: targetClusterId } : {}),
+                price: { $gt: 0 }
+              }).lean() || await ProductSkuPrice.findOne({
+                sku_id: skuId,
+                price: { $gt: 0 }
+              }).lean();
+              if (skuPrice && skuPrice.price > 0) {
+                benchmarkCost = skuPrice.price;
+              }
             }
-          }
-          if (!benchmarkCost && def.sku_code) {
-            const codePrice = await ProductSkuPrice.findOne({
-              sku_code: { $regex: new RegExp(def.sku_code.split('-')[0], 'i') },
-              price: { $gt: 0 }
-            }).lean();
-            if (codePrice && codePrice.price > 0) {
-              benchmarkCost = codePrice.price;
+            if (!benchmarkCost && def.sku_code) {
+              const skuDoc = await ProductSku.findOne({
+                sku_code: { $regex: new RegExp(`^${def.sku_code.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                deleted_at: null
+              }).lean();
+              if (skuDoc) {
+                const codePrice = await ProductSkuPrice.findOne({
+                  sku_id: skuDoc._id,
+                  ...(targetClusterId ? { cluster_id: targetClusterId } : {}),
+                  price: { $gt: 0 }
+                }).lean() || await ProductSkuPrice.findOne({
+                  sku_id: skuDoc._id,
+                  price: { $gt: 0 }
+                }).lean();
+                if (codePrice && codePrice.price > 0) {
+                  benchmarkCost = codePrice.price;
+                }
+              }
             }
+          } catch (e) {
+            console.warn("Could not load ProductSkuPrice:", e.message);
           }
-        } catch (e) {
-          console.warn("Could not load ProductSkuPrice:", e.message);
-        }
-        if (!benchmarkCost || benchmarkCost <= 0) {
-          benchmarkCost = def.unit_rate || (def.component_type === 'panel' ? 6875 : def.component_type === 'inverter' ? 32000 : 30000);
+          if (!benchmarkCost || benchmarkCost <= 0) {
+            benchmarkCost = def.unit_rate || (def.component_type === 'panel' ? 6875 : def.component_type === 'inverter' ? 32000 : 0);
+          }
         }
 
         // Lookup eligible suppliers & OEM partners dynamically
@@ -630,7 +788,7 @@ exports.calculate_procurement_bom = async (req, res) => {
           category: def.category,
           component_type: def.component_type,
           unit: def.unit,
-          unit_rate: def.unit_rate,
+          unit_rate: (benchmarkCost && benchmarkCost > 0) ? benchmarkCost : def.unit_rate,
           benchmark_cost: benchmarkCost,
           required_quantity: requiredQuantity,
           available_stock: availableStock,
@@ -883,6 +1041,9 @@ exports.create_purchase_indent = async (req, res) => {
 
     const isAboveBenchmark = Boolean(req.body.is_above_benchmark);
     const benchmarkCost = Number(req.body.benchmark_cost) || 0;
+    const totalQuantity = (processedItems || []).reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+    const avgGst = processedItems?.[0]?.gst_rate != null ? Number(processedItems[0].gst_rate) : 13.8;
+    const benchmarkTotalCost = Number(req.body.benchmark_total_cost) || (benchmarkCost > 0 ? Math.round(benchmarkCost * totalQuantity * (1 + avgGst / 100)) : totalPiValue);
     const requiresAdminApproval = isAboveBenchmark;
 
     const newPI = new PurchaseIndent({
@@ -903,6 +1064,7 @@ exports.create_purchase_indent = async (req, res) => {
       total_pi_value: totalPiValue,
       is_above_benchmark: isAboveBenchmark,
       benchmark_cost: benchmarkCost,
+      benchmark_total_cost: benchmarkTotalCost,
       requires_admin_approval: requiresAdminApproval,
       po_approval: {
         status: isAboveBenchmark ? 'pending' : (requiresAdminApproval ? 'pending' : 'approved'),
@@ -1143,6 +1305,9 @@ exports.admin_approve_supplier_payment = async (req, res) => {
         pi.po_approval.remarks = remarks || 'PO approved by Admin';
         pi.pi_status = 'Approved';
         pi.requires_admin_approval = false;
+        if (pi.payment) {
+          pi.payment.payment_status = 'PI Submitted';
+        }
 
         pi.audit_history.push({
           action: 'Admin Approved Purchase Order (PO)',

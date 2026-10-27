@@ -148,5 +148,36 @@ router.get("/industry/my-industries",    verify_auth, epcIndustryHandler.get_my_
 router.get("/industry/dashboard-content",verify_auth, epcIndustryHandler.get_dashboard_content);
 router.get("/industry/theme",            verify_auth, epcIndustryHandler.get_industry_theme);
 
+// ── Technical Specifications & Combined Kit Datasheet (Storefront) ───────
+const { get_or_create_settings } = require('../../../admin-panel/controller/datasheet_settings.handler');
+const { getCombinedKitDatasheetData, generateCombinedDatasheetPdf } = require('../../../admin-panel/utils/datasheet.generator');
+
+router.get("/datasheet-settings", async (req, res) => {
+  try {
+    const settings = await get_or_create_settings();
+    return res.status(200).json({ status: "success", data: settings });
+  } catch (err) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+router.get("/combokit/:id/combined-datasheet", async (req, res) => {
+  try {
+    const data = await getCombinedKitDatasheetData(req.params.id);
+    return res.status(200).json({ status: "success", data });
+  } catch (err) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+router.get("/combokit/:id/combined-datasheet-pdf", async (req, res) => {
+  try {
+    const data = await getCombinedKitDatasheetData(req.params.id);
+    await generateCombinedDatasheetPdf(data, res);
+  } catch (err) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
 module.exports = router;
 

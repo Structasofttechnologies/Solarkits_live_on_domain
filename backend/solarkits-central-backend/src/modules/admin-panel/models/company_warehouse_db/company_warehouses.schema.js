@@ -23,6 +23,18 @@ const schema = new mongoose.Schema({
   max_weight_capacity_kg:      { type: Number, default: 0 }, // Max total payload weight in kg
   allocated_incoming_capacity: { type: Number, default: 0 }, // Kit slots reserved by placed but un-delivered orders
 
+  // ── Order Type Fulfillment Capabilities ─────────────────────────────────
+  order_fulfillment_types: {
+    type: [String],
+    enum: ['po_order', 'loose_order', 'trial_order'],
+    default: ['po_order', 'loose_order', 'trial_order']
+  },
+  order_fulfillment_config: {
+    po_order:    { is_active: { type: Boolean, default: true }, max_daily_capacity: { type: Number, default: 50 }, notes: { type: String, default: null } },
+    loose_order: { is_active: { type: Boolean, default: true }, max_daily_capacity: { type: Number, default: 100 }, notes: { type: String, default: null } },
+    trial_order: { is_active: { type: Boolean, default: true }, max_daily_capacity: { type: Number, default: 20 }, notes: { type: String, default: null } }
+  },
+
   is_active:       { type: Boolean, default: false },
   due_date:        { type: Date, default: null },
   deleted_at:      { type: Date, default: null },

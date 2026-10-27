@@ -14,6 +14,7 @@ import { setAlert } from "@/features/alert.slice";
 import { hasPermission } from "@/utils/permissions";
 import TrialKitOrderModal from "./TrialKitOrderModal";
 import DatasheetModal from "@/Components/storefront/DatasheetModal";
+import CombinedKitDatasheetSection from "@/Components/storefront/CombinedKitDatasheetSection";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -240,7 +241,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
     }
     const ourP = Number(kit?.ourPrice || kit?.selling_price_inr || kit?.price || kit?.discounted_price || kit?.mrp || 0);
     const mktP = Number(kit?.marketPrice || kit?.mrp || (ourP > 0 ? Math.round(ourP * 1.15) : 0));
-    const gstR = Number(kit?.gstRate ?? kit?.pricing?.gstRate ?? (kit?.taxes_and_charges_inr ? 13.8 : 13.8));
+    const gstR = Number(kit?.gstRate ?? kit?.gst_rate ?? kit?.pricing?.gstRate ?? kit?.pricing?.gst_rate ?? 13.8);
     const cap = kit?.capacityKW || (kit?.wattage ? (kit.wattage >= 100 ? (kit.wattage / 1000) : kit.wattage) : 0.55);
     return {
       productTier: kit?.productTier || kit?.tier || kit?.sku_code || "Tier-1 High Efficiency",
@@ -368,7 +369,15 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       ? (ourPriceNum + activeTierPricing.discount_amount)
       : baseMarketPrice;
 
-    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
+    const gstRate = Number(
+      currentVariant?.gstRate ??
+      currentVariant?.gst_rate ??
+      kit?.gstRate ??
+      kit?.gst_rate ??
+      kit?.pricing?.gstRate ??
+      kit?.pricing?.gst_rate ??
+      13.8
+    );
     const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
       ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
       : 0;
@@ -1460,6 +1469,9 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
         </div>
       </div>
 
+      {/* Combined Kit Technical Datasheet & Specification Table */}
+      <CombinedKitDatasheetSection kit={kit} />
+
       {/* BOS Kit Components Details Dialog */}
       <Dialog
         isOpen={showBosPopup}
@@ -1514,13 +1526,18 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                   Technical Attributes
                 </h4>
                 {selectedBosComp.attributes && selectedBosComp.attributes.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedBosComp.attributes.map((attr, attrIdx) => (
-                      <div key={attrIdx} className="bg-surface-hover rounded-xl p-3 border border-border flex flex-col justify-center">
-                        <span className="text-[10px] text-text-secondary font-medium">{attr.name}</span>
-                        <span className="text-sm text-text-primary font-bold mt-1">{attr.value}</span>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {selectedBosComp.attributes.map((attr, attrIdx) => {
+                      const attrName = attr.name || attr.attribute_name || "Attribute";
+                      const attrVal = attr.value ?? attr.option_value ?? attr.value_text ?? attr.value_number ?? "";
+                      if (!attrVal) return null;
+                      return (
+                        <div key={attrIdx} className="bg-surface-hover rounded-xl p-2.5 border border-border flex flex-col justify-center">
+                          <span className="text-[10px] text-text-secondary font-semibold uppercase tracking-wider">{attrName}</span>
+                          <span className="text-xs text-text-primary font-bold mt-0.5 break-words">{String(attrVal)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-xs text-text-secondary bg-surface-hover rounded-xl p-4 text-center border border-dashed border-border">

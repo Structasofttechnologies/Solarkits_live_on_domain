@@ -39,6 +39,7 @@ app.use('/solarshop',require('./routes/solarshop.route'));
 app.use('/saas-products', require('./routes/saas_products.route'));
 app.use('/combo-kits', require('./routes/combo_kits.route'));
 app.use('/combo-kit-variants', require('./routes/combo_kit_variants.route'));
+app.use('/datasheet-settings', require('./routes/datasheet_settings.route'));
 app.use('/product-sku-prices', require('./routes/product_sku_prices.route'));
 app.use('/price-requests', require('./routes/price_requests.route'));
 app.use('/suppliers', require('./routes/suppliers.route'));

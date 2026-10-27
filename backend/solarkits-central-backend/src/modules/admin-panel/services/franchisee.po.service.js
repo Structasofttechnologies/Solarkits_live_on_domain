@@ -117,6 +117,7 @@ async function createPoDraft({
   order_type = 'po_order',
   po_category = 'SINGLE_PO',
   is_token_booking = false,
+  token_amount_paise: custom_token_amount_paise = null,
   parent_po_id = null,
   destination_type = 'hub_stock',
   destination_address = null,
@@ -170,14 +171,16 @@ async function createPoDraft({
     const allowsPo = allowedTypes.includes('po_order');
     const allowsCombinePo = allowedTypes.includes('combine_po_order');
 
-    if (!allowsPo && !allowsCombinePo) {
-      throw new Error('Your Store Type only permits Loose Orders. Purchase Orders cannot be placed under this plan.');
-    }
-    if (po_category === 'COMBINE_PO' && !allowsCombinePo) {
-      throw new Error('Your Store Type does not permit Combine PO Orders.');
-    }
-    if (po_category !== 'COMBINE_PO' && !allowsPo) {
-      throw new Error('Your Store Type does not permit standard Single PO Orders.');
+    if (created_by_role !== 'BDE') {
+      if (!allowsPo && !allowsCombinePo) {
+        throw new Error('Your Store Type only permits Loose Orders. Purchase Orders cannot be placed under this plan.');
+      }
+      if (po_category === 'COMBINE_PO' && !allowsCombinePo) {
+        throw new Error('Your Store Type does not permit Combine PO Orders.');
+      }
+      if (po_category !== 'COMBINE_PO' && !allowsPo) {
+        throw new Error('Your Store Type does not permit standard Single PO Orders.');
+      }
     }
 
     custDetails = {
@@ -291,7 +294,7 @@ async function createPoDraft({
     let totalItemQty = 0;
 
     if (hasItems) {
-      if (authorizedKitIds.size > 0) {
+      if (authorizedKitIds.size > 0 && created_by_role !== 'BDE') {
         for (const item of items) {
           if (item.kit_id && mongoose.Types.ObjectId.isValid(item.kit_id) && !authorizedKitIds.has(String(item.kit_id))) {
             throw new Error(`The selected product "${item.item_name || 'Solar Kit'}" is not assigned for Purchase Orders under your franchise plan.`);
@@ -304,7 +307,7 @@ async function createPoDraft({
       }
 
       let validationResults = [];
-      if (!parent_po_id) {
+      if (!parent_po_id && created_by_role !== 'BDE') {
         validationResults = await validatePoItems(items, plan_id, po_settings);
         const failures = validationResults.filter((r) => !r.valid);
         if (failures.length > 0) {
@@ -396,7 +399,9 @@ async function createPoDraft({
       const lockDays = Number(po_settings.po_lock_days || po_settings.po_validity_days || 30);
       lock_expires_at = new Date(Date.now() + lockDays * 24 * 60 * 60 * 1000);
 
-      if (po_settings.token_booking_enabled !== false) {
+      if (custom_token_amount_paise != null && Number(custom_token_amount_paise) >= 0) {
+        token_amount_paise = Number(custom_token_amount_paise);
+      } else if (po_settings.token_booking_enabled !== false) {
         if (po_settings.token_type === 'PERCENTAGE') {
           const pct = Number(po_settings.token_value) || 10;
           token_amount_paise = Math.round(grand_total_paise * (pct / 100));
@@ -1102,7 +1107,11 @@ async function createPoDraft({
 
       // Dynamic Token calculation
       let token_amount_paise = 0;
-      if (po_settings.token_booking_enabled !== false) {
+      if (items[0]?.token_rate_paise != null && Number(items[0].token_rate_paise) > 0) {
+        token_amount_paise = Number(items[0].token_rate_paise);
+      } else if (order.token_amount_paise != null && Number(order.token_amount_paise) > 0) {
+        token_amount_paise = Number(order.token_amount_paise);
+      } else if (po_settings.token_booking_enabled !== false) {
         if (po_settings.token_type === 'PERCENTAGE') {
           const pct = Number(po_settings.token_value) || 10;
           token_amount_paise = Math.round(grand_total_paise * (pct / 100));

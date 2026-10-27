@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import { setAlert } from "@/features/alert.slice";
 import { authHeaderObj } from "@/app/authHeader";
+import readXlsxFile from "read-excel-file";
 
 import Button from "@/components/Button";
 import IconButton from "@/components/IconButton";
@@ -33,6 +34,14 @@ import {
   FaRupeeSign,
   FaCheck,
   FaExclamationTriangle,
+  FaFileCsv,
+  FaFileExcel,
+  FaDownload,
+  FaUpload,
+  FaCloudUploadAlt,
+  FaTimes,
+  FaTimesCircle,
+  FaFileAlt,
 } from "react-icons/fa";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -110,10 +119,17 @@ export default function PincodeDeliveryCosts({ moduleUniqueId = MODULE_UID }) {
     notes: "",
   });
 
-  // Bulk Import Modal State
+  // Bulk Import & Update State
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkMode, setBulkMode] = useState("file"); // "file" | "paste"
   const [bulkText, setBulkText] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkParsedItems, setBulkParsedItems] = useState([]);
+  const [bulkPreviewCount, setBulkPreviewCount] = useState(15);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Delete Confirmation
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -460,59 +476,435 @@ export default function PincodeDeliveryCosts({ moduleUniqueId = MODULE_UID }) {
     }
   };
 
-  // Bulk Import
-  const handleBulkImport = async () => {
-    if (!bulkText.trim()) {
-      dispatch(setAlert({ type: "warning", message: "Please paste CSV / tabular lines to import." }));
-      return;
+  // ──────────────────────────────────────────────────────────────────────────
+  // SMART PARSER & BULK IMPORT UTILITIES
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Smart parser for single line of text (supports tabs, commas, semicolons, and spaces)
+  const parseTextLine = (line, knownStatesList = []) => {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+
+    // Detect and skip header row
+    const lower = trimmed.toLowerCase();
+    if (
+      (lower.includes("state") && lower.includes("district")) ||
+      (lower.includes("pincode") &&
+        (lower.includes("cost") || lower.includes("rate") || lower.includes("freight") || lower.includes("price") || lower.includes("delivery"))) ||
+      (lower.includes("state") && lower.includes("pincode"))
+    ) {
+      return null;
     }
 
-    const lines = bulkText.split("\n").map((l) => l.trim()).filter(Boolean);
-    const parsedItems = [];
+    let state = "";
+    let district = "";
+    let pincode = "";
+    let cost = NaN;
+    let minDays = 3;
+    let maxDays = 7;
+    let isMatched = false;
 
-    const defaultKitId =
-      selectedKit && selectedKit !== "default" ? selectedKit._id || selectedKit.id : null;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const parts = line.split(",").map((p) => p.trim());
+    // 1. Tab separated (Direct copy from Excel / Google Sheets)
+    if (trimmed.includes("\t")) {
+      const parts = trimmed.split("\t").map((p) => p.trim()).filter(Boolean);
       if (parts.length >= 4) {
-        parsedItems.push({
-          state_name: parts[0],
-          district_name: parts[1],
-          pincode: parts[2],
-          delivery_cost: Number(parts[3]) || 0,
-          combo_kit_id: parts[4] || defaultKitId || null,
-        });
+        state = parts[0];
+        district = parts[1];
+        pincode = parts[2].replace(/\D/g, "");
+        cost = parseFloat(parts[3].replace(/[^\d.]/g, ""));
+        if (parts[4]) minDays = parseInt(parts[4], 10) || 3;
+        if (parts[5]) maxDays = parseInt(parts[5], 10) || 7;
+        isMatched = true;
       }
     }
 
-    if (parsedItems.length === 0) {
+    // 2. Comma separated (CSV standard)
+    if (!isMatched && trimmed.includes(",")) {
+      const parts = trimmed.split(",").map((p) => p.trim().replace(/^["']|["']$/g, ""));
+      if (parts.length >= 4) {
+        state = parts[0];
+        district = parts[1];
+        pincode = parts[2].replace(/\D/g, "");
+        cost = parseFloat(parts[3].replace(/[^\d.]/g, ""));
+        if (parts[4]) minDays = parseInt(parts[4], 10) || 3;
+        if (parts[5]) maxDays = parseInt(parts[5], 10) || 7;
+        isMatched = true;
+      }
+    }
+
+    // 3. Semicolon separated
+    if (!isMatched && trimmed.includes(";")) {
+      const parts = trimmed.split(";").map((p) => p.trim().replace(/^["']|["']$/g, ""));
+      if (parts.length >= 4) {
+        state = parts[0];
+        district = parts[1];
+        pincode = parts[2].replace(/\D/g, "");
+        cost = parseFloat(parts[3].replace(/[^\d.]/g, ""));
+        if (parts[4]) minDays = parseInt(parts[4], 10) || 3;
+        if (parts[5]) maxDays = parseInt(parts[5], 10) || 7;
+        isMatched = true;
+      }
+    }
+
+    // 4. Space / Regex Fallback (e.g. "Gujarat Patan 384265 15500" or "Gujarat Devbhoomi Dwarka 361320 1500")
+    if (!isMatched) {
+      const pinMatch = trimmed.match(/\b(\d{6})\b/);
+      if (pinMatch) {
+        pincode = pinMatch[1];
+        const pinIndex = pinMatch.index;
+        const beforePin = trimmed.slice(0, pinIndex).trim();
+        const afterPin = trimmed.slice(pinIndex + 6).trim();
+
+        const costMatch = afterPin.match(/[\d.]+/);
+        cost = costMatch ? parseFloat(costMatch[0]) : NaN;
+
+        const remainingNums = afterPin.replace(costMatch ? costMatch[0] : "", "").match(/\d+/g) || [];
+        if (remainingNums[0]) minDays = parseInt(remainingNums[0], 10) || 3;
+        if (remainingNums[1]) maxDays = parseInt(remainingNums[1], 10) || 7;
+
+        // Match state against loaded states list
+        const matchedState = knownStatesList.find((st) => {
+          const name = (st.name || st).toLowerCase();
+          return beforePin.toLowerCase().startsWith(name);
+        });
+
+        if (matchedState) {
+          state = matchedState.name || matchedState;
+          district = beforePin.slice(state.length).trim().replace(/^[,-]/, "").trim();
+        } else {
+          const words = beforePin.split(/\s+/);
+          state = words[0] || "";
+          district = words.slice(1).join(" ") || "";
+        }
+        isMatched = true;
+      }
+    }
+
+    if (!isMatched) {
+      return {
+        raw: trimmed,
+        state_name: "",
+        district_name: "",
+        pincode: "",
+        delivery_cost: 0,
+        estimated_days_min: 3,
+        estimated_days_max: 7,
+        isValid: false,
+        error: "Unrecognized format. Expected: State, District, 6-digit Pincode, Cost",
+      };
+    }
+
+    const cleanPincode = String(pincode || "").trim();
+    const isValidPin = /^\d{6}$/.test(cleanPincode);
+    const isValidCost = !isNaN(cost) && cost >= 0;
+    const hasState = Boolean(state && state.trim());
+    const hasDistrict = Boolean(district && district.trim());
+
+    let error = "";
+    if (!hasState) error = "Missing State name";
+    else if (!hasDistrict) error = "Missing District name";
+    else if (!isValidPin) error = `Pincode must be 6 digits (${cleanPincode || "empty"})`;
+    else if (!isValidCost) error = `Invalid delivery freight cost (${cost})`;
+
+    return {
+      raw: trimmed,
+      state_name: (state || "").trim(),
+      district_name: (district || "").trim(),
+      pincode: cleanPincode,
+      delivery_cost: isNaN(cost) ? 0 : cost,
+      estimated_days_min: minDays,
+      estimated_days_max: maxDays,
+      isValid: !error,
+      error,
+    };
+  };
+
+  // Re-parse automatically when bulkText changes in "paste" mode
+  useEffect(() => {
+    if (bulkMode === "paste") {
+      if (!bulkText.trim()) {
+        setBulkParsedItems([]);
+        return;
+      }
+      const lines = bulkText.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      const items = lines.map((l) => parseTextLine(l, states)).filter(Boolean);
+      setBulkParsedItems(items);
+    }
+  }, [bulkText, bulkMode, states]);
+
+  // Handle CSV / Excel File Upload
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    setBulkFile(file);
+    const fileName = file.name.toLowerCase();
+    const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+
+    try {
+      if (isExcel) {
+        const rows = await readXlsxFile(file);
+        if (!rows || rows.length === 0) {
+          dispatch(setAlert({ type: "warning", message: "The selected Excel sheet has no data." }));
+          setBulkParsedItems([]);
+          return;
+        }
+
+        let headerIdx = -1;
+        let stateCol = 0;
+        let districtCol = 1;
+        let pinCol = 2;
+        let costCol = 3;
+        let minDaysCol = -1;
+        let maxDaysCol = -1;
+
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+          const row = (rows[i] || []).map((c) => String(c || "").toLowerCase().trim());
+          const hasState = row.some((c) => c.includes("state"));
+          const hasPin = row.some((c) => c.includes("pin") || c.includes("postal"));
+          if (hasState || hasPin) {
+            headerIdx = i;
+            stateCol = row.findIndex((c) => c.includes("state"));
+            districtCol = row.findIndex((c) => c.includes("dist"));
+            pinCol = row.findIndex((c) => c.includes("pin") || c.includes("postal"));
+            costCol = row.findIndex(
+              (c) =>
+                c.includes("cost") ||
+                c.includes("rate") ||
+                c.includes("freight") ||
+                c.includes("price") ||
+                c.includes("delivery")
+            );
+            minDaysCol = row.findIndex((c) => c.includes("min"));
+            maxDaysCol = row.findIndex((c) => c.includes("max"));
+            if (stateCol === -1) stateCol = 0;
+            if (districtCol === -1) districtCol = 1;
+            if (pinCol === -1) pinCol = 2;
+            if (costCol === -1) costCol = 3;
+            break;
+          }
+        }
+
+        const dataRows = rows.slice(headerIdx + 1);
+        const parsed = [];
+
+        for (const r of dataRows) {
+          if (!r || r.every((c) => c === null || c === undefined || c === "")) continue;
+
+          const state = String(r[stateCol] || "").trim();
+          const district = String(r[districtCol] || "").trim();
+          const pincode = String(r[pinCol] || "").replace(/\D/g, "").trim();
+          const rawCost = r[costCol];
+          const cost = parseFloat(String(rawCost || "0").replace(/[^\d.]/g, ""));
+          const minDays = minDaysCol !== -1 && r[minDaysCol] ? parseInt(r[minDaysCol], 10) || 3 : 3;
+          const maxDays = maxDaysCol !== -1 && r[maxDaysCol] ? parseInt(r[maxDaysCol], 10) || 7 : 7;
+
+          const isValidPin = /^\d{6}$/.test(pincode);
+          const isValidCost = !isNaN(cost) && cost >= 0;
+          let error = "";
+          if (!state) error = "Missing State name";
+          else if (!district) error = "Missing District name";
+          else if (!isValidPin) error = `Pincode must be 6 digits (${pincode || "empty"})`;
+          else if (!isValidCost) error = `Invalid delivery freight cost`;
+
+          parsed.push({
+            raw: `${state}, ${district}, ${pincode}, ${cost}`,
+            state_name: state,
+            district_name: district,
+            pincode,
+            delivery_cost: isNaN(cost) ? 0 : cost,
+            estimated_days_min: minDays,
+            estimated_days_max: maxDays,
+            isValid: !error,
+            error,
+          });
+        }
+
+        setBulkParsedItems(parsed);
+      } else {
+        // CSV or plain text
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        const parsed = lines.map((l) => parseTextLine(l, states)).filter(Boolean);
+        setBulkParsedItems(parsed);
+      }
+    } catch (err) {
+      console.error("File parse error:", err);
+      dispatch(setAlert({ type: "error", message: `Failed to parse file: ${err.message}` }));
+      setBulkParsedItems([]);
+    }
+  };
+
+  // Download Sample CSV Template
+  const handleDownloadTemplate = () => {
+    const headers = ["State", "District", "Pincode", "DeliveryCost", "EstimatedDaysMin", "EstimatedDaysMax"];
+    const sampleRows = [
+      headers.join(","),
+      "Gujarat,Devbhoomi Dwarka,361320,1500,3,7",
+      "Gujarat,Jamnagar,361001,1200,3,7",
+      "Gujarat,Rajkot,360001,2500,3,7",
+      "Gujarat,Patan,384265,15500,3,7",
+      "Gujarat,Surat,395003,17500,3,7",
+      "Gujarat,Vadodara,390001,14500,3,7",
+      "Maharashtra,Pune,411001,1400,3,7",
+      "Rajasthan,Jaipur,302001,1800,3,7",
+    ];
+    const blob = new Blob([sampleRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Solarkits_Pincode_Delivery_Rates_Template.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export Current Configured Rates to CSV for Offline Editing & Re-uploading
+  const handleExportCurrentRates = async () => {
+    try {
+      setIsExporting(true);
+      const targetKitId =
+        selectedKit && selectedKit !== "default"
+          ? selectedKit._id || selectedKit.id
+          : "default";
+
+      const res = await axios.get(`${API_URL}/pincode-delivery-costs`, {
+        params: {
+          unique_id: moduleUniqueId,
+          req_for: "view",
+          combo_kit_id: targetKitId,
+          is_export: "true",
+          limit: 10000,
+        },
+        headers: authHeaderObj(),
+      });
+
+      const rates = res.data?.data || [];
+      if (rates.length === 0) {
+        dispatch(
+          setAlert({
+            type: "warning",
+            message: "No pincode rates found to export for this selection.",
+          })
+        );
+        return;
+      }
+
+      const headers = [
+        "State",
+        "District",
+        "Pincode",
+        "DeliveryCost",
+        "EstimatedDaysMin",
+        "EstimatedDaysMax",
+        "IsActive",
+        "Notes",
+      ];
+      const rows = [headers.join(",")];
+      rates.forEach((r) => {
+        const state = `"${(r.state_name || "").replace(/"/g, '""')}"`;
+        const district = `"${(r.district_name || "").replace(/"/g, '""')}"`;
+        const pin = r.pincode || "";
+        const cost = r.delivery_cost ?? 0;
+        const minDays = r.estimated_days_min ?? 3;
+        const maxDays = r.estimated_days_max ?? 7;
+        const active = r.is_active !== false ? "true" : "false";
+        const notes = `"${(r.notes || "").replace(/"/g, '""')}"`;
+        rows.push([state, district, pin, cost, minDays, maxDays, active, notes].join(","));
+      });
+
+      const kitLabel =
+        selectedKit && selectedKit !== "default"
+          ? selectedKit.name.replace(/[^a-zA-Z0-9_-]/g, "_")
+          : "Default_Rates";
+
+      const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Pincode_Rates_${kitLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      dispatch(
+        setAlert({
+          type: "success",
+          message: `Exported ${rates.length} pincode rates to CSV!`,
+        })
+      );
+    } catch (err) {
+      console.error("Export error:", err);
+      dispatch(
+        setAlert({
+          type: "error",
+          message: "Failed to export rates to CSV.",
+        })
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Valid and Invalid row counts
+  const validCount = useMemo(
+    () => bulkParsedItems.filter((i) => i.isValid).length,
+    [bulkParsedItems]
+  );
+  const invalidCount = useMemo(
+    () => bulkParsedItems.filter((i) => !i.isValid).length,
+    [bulkParsedItems]
+  );
+
+  // Bulk Import & Update (Upsert)
+  const handleBulkImport = async () => {
+    const validItems = bulkParsedItems.filter((i) => i.isValid);
+
+    if (validItems.length === 0) {
       dispatch(
         setAlert({
           type: "warning",
-          message: "No valid rows found. Format: State, District, Pincode, Cost (e.g. Gujarat, Devbhoomi Dwarka, 361320, 1500)",
+          message:
+            "No valid rows found to import. Please check that each row contains State, District, a 6-digit Pincode, and Delivery Cost.",
         })
       );
       return;
     }
+
+    const defaultKitId =
+      selectedKit && selectedKit !== "default" ? selectedKit._id || selectedKit.id : null;
+
+    const itemsToSend = validItems.map((item) => ({
+      state_name: item.state_name,
+      district_name: item.district_name,
+      pincode: item.pincode,
+      delivery_cost: Number(item.delivery_cost),
+      estimated_days_min: item.estimated_days_min || 3,
+      estimated_days_max: item.estimated_days_max || 7,
+      combo_kit_id: defaultKitId,
+      is_active: true,
+    }));
 
     setBulkLoading(true);
     try {
       const res = await axios.post(
         `${API_URL}/pincode-delivery-costs/bulk-import?unique_id=${moduleUniqueId}&req_for=add`,
-        { items: parsedItems },
+        { items: itemsToSend },
         { headers: authHeaderObj() }
       );
 
+      const countMsg =
+        res.data?.message || `Successfully processed and updated ${itemsToSend.length} pincodes!`;
       dispatch(
         setAlert({
           type: "success",
-          message: res.data?.message || `Successfully processed ${parsedItems.length} pincodes!`,
+          message: countMsg,
         })
       );
       setShowBulkModal(false);
       setBulkText("");
+      setBulkFile(null);
+      setBulkParsedItems([]);
       fetchRecords(selectedKit);
       fetchKitStats();
     } catch (err) {
@@ -556,11 +948,21 @@ export default function PincodeDeliveryCosts({ moduleUniqueId = MODULE_UID }) {
             <Button
               variant="outline"
               size="md"
+              onClick={handleExportCurrentRates}
+              loading={isExporting}
+              leftIcon={<FaFileCsv />}
+              className="border-border text-text-secondary hover:bg-surface-hover"
+            >
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="md"
               onClick={() => setShowBulkModal(true)}
               leftIcon={<FaFileImport />}
               className="border-border text-text-secondary hover:bg-surface-hover"
             >
-              Bulk Import
+              Bulk Import & Update
             </Button>
             <Button
               variant="outline"
@@ -571,8 +973,6 @@ export default function PincodeDeliveryCosts({ moduleUniqueId = MODULE_UID }) {
             >
               Refresh
             </Button>
-            {/* Note: As requested, the generic "+ Add Delivery Freight" button is removed from this main header.
-                Admins add charges specifically under each configured combo kit card! */}
           </div>
         }
       />
@@ -656,11 +1056,21 @@ export default function PincodeDeliveryCosts({ moduleUniqueId = MODULE_UID }) {
                 <Button
                   variant="outline"
                   size="md"
+                  onClick={handleExportCurrentRates}
+                  loading={isExporting}
+                  leftIcon={<FaFileCsv />}
+                  className="border-border text-text-secondary hover:bg-surface-hover"
+                >
+                  Export CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  size="md"
                   onClick={() => setShowBulkModal(true)}
                   leftIcon={<FaFileImport />}
                   className="border-border text-text-secondary hover:bg-surface-hover"
                 >
-                  Bulk Import for Kit
+                  Bulk Import & Update
                 </Button>
                 <Button
                   variant="primary"
@@ -1738,62 +2148,340 @@ export default function PincodeDeliveryCosts({ moduleUniqueId = MODULE_UID }) {
       </Dialog>
 
       {/* ──────────────────────────────────────────────────────────────────────────
-          BULK IMPORT MODAL
+          BULK IMPORT & UPDATE MODAL
           ────────────────────────────────────────────────────────────────────────── */}
       <Dialog
         isOpen={showBulkModal}
         onClose={() => setShowBulkModal(false)}
         title={
           selectedKit && selectedKit !== "default"
-            ? `Bulk Import Pincodes for ${selectedKit.name}`
-            : "Bulk Import Pincode Delivery Rates"
+            ? `Bulk Import & Update Pincodes for ${selectedKit.name}`
+            : "Bulk Import & Update Pincode Delivery Rates"
         }
-        size="md"
+        size="lg"
       >
-        <div className="space-y-4 p-1">
-          {selectedKit && selectedKit !== "default" && (
-            <div className="p-2.5 bg-primary/10 border border-primary/20 rounded-xl text-xs font-bold text-primary flex items-center gap-2">
-              <FaBoxOpen />
-              <span>
-                All imported rows will automatically be linked to: <strong>{selectedKit.name}</strong>
-              </span>
+        <div className="space-y-4 p-1 max-h-[80vh] overflow-y-auto pr-1">
+          {/* Target Product & Upsert Explanation Banner */}
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 text-primary font-bold">
+              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                <FaBoxOpen size={16} />
+              </div>
+              <div>
+                <p className="leading-tight">
+                  Target Product:{" "}
+                  <span className="font-black text-text-primary">
+                    {selectedKit && selectedKit !== "default"
+                      ? selectedKit.name
+                      : "General / Fallback Rate (All Products)"}
+                  </span>
+                </p>
+                <p className="text-[11px] text-text-secondary font-normal mt-0.5">
+                  ⚡ <strong>Automatic Upsert Active:</strong> Existing pincodes for this kit will be updated with new delivery freight; new pincodes will be created automatically.
+                </p>
+              </div>
+            </div>
+
+            {/* Template & Export Quick Buttons */}
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                leftIcon={<FaDownload size={11} />}
+                className="text-[11px] h-8 bg-surface"
+              >
+                Sample CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleExportCurrentRates}
+                loading={isExporting}
+                leftIcon={<FaFileCsv size={11} />}
+                className="text-[11px] h-8 bg-surface"
+              >
+                Export Current CSV
+              </Button>
+            </div>
+          </div>
+
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center gap-2 border-b border-border pb-2">
+            <button
+              type="button"
+              onClick={() => setBulkMode("file")}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                bulkMode === "file"
+                  ? "bg-primary text-white shadow-xs"
+                  : "bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+              }`}
+            >
+              <FaUpload size={12} />
+              <span>Upload CSV / Excel File</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkMode("paste")}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                bulkMode === "paste"
+                  ? "bg-primary text-white shadow-xs"
+                  : "bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+              }`}
+            >
+              <FaFileAlt size={12} />
+              <span>Paste Data (Excel / CSV / Text)</span>
+            </button>
+          </div>
+
+          {/* TAB 1: CSV / EXCEL FILE UPLOAD */}
+          {bulkMode === "file" && (
+            <div className="space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv, .xlsx, .xls, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file);
+                }}
+                className="hidden"
+              />
+
+              {!bulkFile ? (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleFileUpload(file);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-7 text-center cursor-pointer transition-all ${
+                    isDragging
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/60 bg-surface hover:bg-surface-hover/50"
+                  }`}
+                >
+                  <div className="w-12 h-12 mx-auto rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-2.5">
+                    <FaCloudUploadAlt size={26} />
+                  </div>
+                  <h4 className="text-sm font-bold text-text-primary">
+                    Click to browse or drag & drop CSV or Excel file
+                  </h4>
+                  <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
+                    Supports <strong className="text-text-secondary">.CSV</strong>,{" "}
+                    <strong className="text-text-secondary">.XLSX</strong>, and{" "}
+                    <strong className="text-text-secondary">.XLS</strong> files. Columns: State, District, Pincode, DeliveryCost
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-surface border-2 border-primary/30 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                      {bulkFile.name.endsWith(".xlsx") || bulkFile.name.endsWith(".xls") ? (
+                        <FaFileExcel size={22} />
+                      ) : (
+                        <FaFileCsv size={22} />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-text-primary truncate max-w-xs sm:max-w-md">
+                        {bulkFile.name}
+                      </p>
+                      <p className="text-[11px] text-text-muted">
+                        {(bulkFile.size / 1024).toFixed(1)} KB • {bulkParsedItems.length} rows parsed
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBulkFile(null);
+                      setBulkParsedItems([]);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    leftIcon={<FaTimes size={11} />}
+                    className="border-border text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  >
+                    Change File
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
-          <p className="text-xs text-text-secondary leading-relaxed">
-            Paste rows in CSV format: <br />
-            <code className="bg-surface-hover px-1.5 py-0.5 rounded text-primary font-mono text-[11px]">
-              State, District, Pincode, DeliveryCost
-            </code>
-          </p>
+          {/* TAB 2: TEXT PASTE */}
+          {bulkMode === "paste" && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-text-secondary">
+                  Paste rows directly from <strong>Excel / Google Sheets</strong> or CSV:
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBulkText(
+                        `Gujarat, Devbhoomi Dwarka, 361320, 1500\nGujarat, Jamnagar, 361001, 1200\nGujarat, Rajkot, 360001, 2500\nGujarat, Patan, 384265, 15500\nMaharashtra, Pune, 411001, 1400`
+                      )
+                    }
+                    className="text-[11px] text-primary font-bold hover:underline"
+                  >
+                    Load Sample Data
+                  </button>
+                  {bulkText && (
+                    <button
+                      type="button"
+                      onClick={() => setBulkText("")}
+                      className="text-[11px] text-rose-500 font-bold hover:underline ml-2"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
 
-          <textarea
-            rows={8}
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            placeholder={`Gujarat, Devbhoomi Dwarka, 361320, 1500\nGujarat, Jamnagar, 361001, 1200\nGujarat, Ahmedabad, 380001, 800`}
-            className="w-full p-3 bg-surface border-2 border-border focus:border-primary rounded-xl text-xs font-mono text-text-primary outline-none"
-          />
+              <textarea
+                rows={6}
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder={`Gujarat Patan 384265 15500\nGujarat Porbandar 360575 8500\nGujarat Rajkot 360001 2500\nGujarat, Surat, 395003, 17500\nGujarat Vav-Tharad 385565 18500`}
+                className="w-full p-3 bg-surface border-2 border-border focus:border-primary rounded-xl text-xs font-mono text-text-primary outline-none"
+              />
+              <p className="text-[10px] text-text-muted leading-tight">
+                * Delimiters supported: Tabs from Excel (\t), Commas (,), Semicolons (;), or Spaces. Header row is automatically detected and skipped.
+              </p>
+            </div>
+          )}
 
-          <div className="flex items-center justify-between pt-2">
+          {/* LIVE PARSED METRICS & PREVIEW TABLE */}
+          {bulkParsedItems.length > 0 && (
+            <div className="space-y-2.5 pt-2 border-t border-border">
+              {/* Summary Metrics */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                    <FaCheckCircle size={12} />
+                    <span>{validCount} Ready to Import / Update</span>
+                  </span>
+                  {invalidCount > 0 && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                      <FaTimesCircle size={12} />
+                      <span>{invalidCount} Invalid Rows (skipped)</span>
+                    </span>
+                  )}
+                </div>
+
+                {bulkParsedItems.length > 5 && (
+                  <span className="text-[11px] text-text-muted font-bold">
+                    Showing {Math.min(bulkPreviewCount, bulkParsedItems.length)} of {bulkParsedItems.length} rows
+                  </span>
+                )}
+              </div>
+
+              {/* Scrollable Preview Table */}
+              <div className="border border-border rounded-xl overflow-hidden max-h-52 overflow-y-auto bg-surface">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-surface-hover border-b border-border text-[11px] font-bold text-text-secondary sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 w-10">#</th>
+                      <th className="px-3 py-2">State</th>
+                      <th className="px-3 py-2">District</th>
+                      <th className="px-3 py-2">Pincode</th>
+                      <th className="px-3 py-2">Cost (₹)</th>
+                      <th className="px-3 py-2">Days</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {bulkParsedItems.slice(0, bulkPreviewCount).map((row, idx) => (
+                      <tr
+                        key={idx}
+                        className={row.isValid ? "hover:bg-surface-hover/50" : "bg-rose-500/5 hover:bg-rose-500/10"}
+                      >
+                        <td className="px-3 py-2 text-text-muted font-mono text-[11px]">{idx + 1}</td>
+                        <td className="px-3 py-2 font-semibold text-text-primary">{row.state_name || "—"}</td>
+                        <td className="px-3 py-2 text-text-secondary">{row.district_name || "—"}</td>
+                        <td className="px-3 py-2">
+                          <span className="font-mono font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded">
+                            {row.pincode || "—"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-black text-emerald-700 dark:text-emerald-400">
+                          ₹{Number(row.delivery_cost || 0).toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-3 py-2 text-text-muted text-[11px]">
+                          {row.estimated_days_min || 3}-{row.estimated_days_max || 7}d
+                        </td>
+                        <td className="px-3 py-2">
+                          {row.isValid ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                              <FaCheck size={10} /> Ready
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400"
+                              title={row.error}
+                            >
+                              <FaTimes size={10} /> {row.error || "Invalid"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {bulkParsedItems.length > bulkPreviewCount && (
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setBulkPreviewCount((prev) => prev + 25)}
+                    className="text-xs text-primary font-bold hover:underline"
+                  >
+                    View more rows ({bulkParsedItems.length - bulkPreviewCount} remaining)...
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between pt-3 border-t border-border">
             <button
               type="button"
-              onClick={() =>
-                setBulkText(
-                  `Gujarat, Devbhoomi Dwarka, 361320, 1500\nGujarat, Jamnagar, 361001, 1200\nGujarat, Rajkot, 360001, 1000\nMaharashtra, Pune, 411001, 1400`
-                )
-              }
-              className="text-[11px] text-primary font-bold hover:underline"
+              onClick={handleDownloadTemplate}
+              className="text-xs text-primary font-bold hover:underline flex items-center gap-1.5"
             >
-              Load Sample Data
+              <FaDownload size={11} />
+              <span>Download CSV Template</span>
             </button>
 
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowBulkModal(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" loading={bulkLoading} onClick={handleBulkImport}>
-                Import Rates
+              <Button
+                variant="primary"
+                loading={bulkLoading}
+                disabled={validCount === 0 || bulkLoading}
+                onClick={handleBulkImport}
+                leftIcon={<FaCheck size={12} />}
+              >
+                {validCount > 0
+                  ? `Import & Update ${validCount} Rate${validCount === 1 ? "" : "s"}`
+                  : "Import Rates"}
               </Button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
   Plus,
@@ -23,10 +23,18 @@ import {
   RotateCw,
   Target,
   Lock,
+  Unlock,
   Truck,
   Store,
   Zap,
   UserCheck,
+  Copy,
+  ChevronRight,
+  ChevronDown,
+  Calendar,
+  ArrowRight,
+  Percent,
+  Filter,
 } from 'lucide-react';
 import api from '../services/api';
 import { useBdeAuth } from '../context/BdeAuthContext';
@@ -53,10 +61,6 @@ const STATUS_CONFIG = {
   DELIVERED: { label: 'Delivered', bg: 'bg-emerald-50 text-emerald-700 border-emerald-300', icon: CheckCircle2 },
   COMPLETED: { label: 'Completed', bg: 'bg-emerald-50 text-emerald-700 border-emerald-300', icon: CheckCircle2 },
   EXPIRED: { label: 'Expired', bg: 'bg-rose-50 text-rose-700 border-rose-300', icon: Clock },
-  REFUND_REQUESTED: { label: 'Refund Requested', bg: 'bg-amber-50 text-amber-700 border-amber-300', icon: Clock },
-  REFUND_APPROVED: { label: 'Refund Approved', bg: 'bg-blue-50 text-blue-700 border-blue-300', icon: CheckCircle2 },
-  REFUND_SETTLED: { label: 'Refund Settled', bg: 'bg-emerald-50 text-emerald-700 border-emerald-300', icon: DollarSign },
-  REFUND_REJECTED: { label: 'Refund Rejected', bg: 'bg-rose-50 text-rose-700 border-rose-300', icon: X },
   CANCELLED: { label: 'Cancelled', bg: 'bg-rose-50 text-rose-700 border-rose-300', icon: X },
 };
 
@@ -64,14 +68,53 @@ function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.SUBMITTED;
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg}`}>
-      <Icon className="w-3.5 h-3.5" />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border shadow-xs whitespace-nowrap ${cfg.bg}`}>
+      <Icon className="w-3.5 h-3.5 shrink-0" />
       <span>{cfg.label}</span>
     </span>
   );
 }
 
-// ── ESCROW BANK DETAILS ──
+function PoStageStepper({ stepNumber }) {
+  const steps = [
+    { num: 1, label: 'Allocation' },
+    { num: 2, label: 'Token' },
+    { num: 3, label: 'Under Review' },
+    { num: 4, label: 'Active' },
+  ];
+
+  return (
+    <div className="flex items-center gap-1 mt-1.5">
+      {steps.map((s, idx) => {
+        const isDone = stepNumber > s.num;
+        const isCurrent = stepNumber === s.num;
+        return (
+          <React.Fragment key={s.num}>
+            <div
+              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${isDone
+                ? 'bg-emerald-500 text-white shadow-xs'
+                : isCurrent
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-300 scale-105'
+                  : 'bg-slate-200 text-slate-500 border border-slate-300'
+                }`}
+              title={`Stage ${s.num}: ${s.label}`}
+            >
+              {isDone ? <Check className="w-2.5 h-2.5" /> : s.num}
+            </div>
+            {idx < steps.length - 1 && (
+              <div
+                className={`h-0.5 w-2.5 rounded-full transition-all ${stepNumber > s.num ? 'bg-emerald-500' : 'bg-slate-200'
+                  }`}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── ESCROW BANK DETAILS FOR TOKEN BOOKING ──
 const ESCROW_BANK = {
   account_name: 'SolarKits Technologies Pvt Ltd (Escrow Account)',
   bank_name: 'ICICI Bank Corporate Banking',
@@ -81,40 +124,38 @@ const ESCROW_BANK = {
   upi_id: 'solarkits.token@icici',
 };
 
-// ── COMBO KITS CATALOG (Dynamic from API) ──
-const DEFAULT_COMBO_KITS = [];
-
-// ── STORAGE KEY ──
-const SEED_STORAGE_KEY = 'solarkits_bde_po_orders_v1';
-
 export default function BdePoOrders() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useBdeAuth();
 
-  // ── ORDERS STATE ──
-  const [orders, setOrders] = useState(() => {
-    try {
-      const saved = localStorage.getItem(SEED_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to parse saved POs:', e);
-    }
-    return [];
-  });
-
+  // ── CORE DATA STATES ──
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState('card'); // 'card' | 'table'
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [categoryTab, setCategoryTab] = useState('ALL'); // 'ALL' | 'SINGLE_PO' | 'COMBINE_PO'
 
-  // Master Data (Franchisees, EPCs, Kits)
+  // Master Data - Onboarded EPCs & Franchisees
+  const [onboardedEpcs, setOnboardedEpcs] = useState([]);
+  const [epcsLoading, setEpcsLoading] = useState(false);
+  const [selectedEpcFilter, setSelectedEpcFilter] = useState('ALL');
+
   const [franchisees, setFranchisees] = useState([]);
-  const [epcList, setEpcList] = useState([]);
-  const [comboKits, setComboKits] = useState(DEFAULT_COMBO_KITS);
+  const [franchiseesLoading, setFranchiseesLoading] = useState(false);
+  const [selectedFranchiseeFilter, setSelectedFranchiseeFilter] = useState('ALL');
+
+  // Selected EPC & Franchisee for PO Creation
+  const [modalEpcId, setModalEpcId] = useState('');
+  const [modalFranchiseeId, setModalFranchiseeId] = useState('');
+  const [companyKits, setCompanyKits] = useState([]);
+  const [franchiseePlanData, setFranchiseePlanData] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [epcBuyers, setEpcBuyers] = useState([]);
+  const [buyersLoading, setBuyersLoading] = useState(false);
+  const [shopHierarchy, setShopHierarchy] = useState([]);
 
   // Copy Feedback State
   const [copiedField, setCopiedField] = useState('');
@@ -127,993 +168,1564 @@ export default function BdePoOrders() {
   // ── MODAL STATES ──
   // 1. Create Modal
   const [createModal, setCreateModal] = useState(false);
-  const [selectedFranchiseeId, setSelectedFranchiseeId] = useState('');
+  const [selectedKitId, setSelectedKitId] = useState('');
+  const [selectedPoQty, setSelectedPoQty] = useState(200);
   const [poCategory, setPoCategory] = useState('SINGLE_PO');
-  const [singleTargetType, setSingleTargetType] = useState('single_epc'); // 'single_epc' | 'warehouse'
-  const [selectedSingleEpcId, setSelectedSingleEpcId] = useState('');
-  const [singlePoQty, setSinglePoQty] = useState(100);
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState('');
 
   // 2. Allocate Modal (Stage 2)
   const [allocateModal, setAllocateModal] = useState(false);
   const [allocatingOrder, setAllocatingOrder] = useState(null);
-  const [allocateKitId, setAllocateKitId] = useState('');
-  const [allocateSingleTarget, setAllocateSingleTarget] = useState('single_epc');
+  const [allocateSingleTarget, setAllocateSingleTarget] = useState('single_epc'); // 'single_epc' | 'warehouse'
   const [allocateSingleEpcId, setAllocateSingleEpcId] = useState('');
-  const [allocateMultiAllocs, setAllocateMultiAllocs] = useState({}); // { [epcId]: qty }
+  const [allocateAllocations, setAllocateAllocations] = useState({}); // { [epcBuyerId]: quantity }
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
   const [allocateError, setAllocateError] = useState('');
 
   // 3. Token Payment Modal (Stage 3)
   const [tokenModal, setTokenModal] = useState(false);
   const [tokenOrder, setTokenOrder] = useState(null);
+  const [tokenPayingEpcId, setTokenPayingEpcId] = useState('');
+  const [tokenPayAmount, setTokenPayAmount] = useState(0);
   const [tokenUtr, setTokenUtr] = useState('');
-  const [tokenBank, setTokenBank] = useState('');
+  const [tokenBank, setTokenBank] = useState('ICICI Bank Corporate');
   const [tokenDate, setTokenDate] = useState(new Date().toISOString().slice(0, 10));
-  const [tokenRemarks, setTokenRemarks] = useState('');
   const [tokenSubmitting, setTokenSubmitting] = useState(false);
   const [tokenError, setTokenError] = useState('');
+  const [tokenSuccess, setTokenSuccess] = useState(null);
 
   // 4. Detail Modal
   const [detailModal, setDetailModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // 5. Reorder Modal (Stage 4 Drawdown)
+  // 5. Reorder / Drawdown Modal
   const [reorderModal, setReorderModal] = useState(false);
   const [reorderOrder, setReorderOrder] = useState(null);
-  const [reorderQty, setReorderQty] = useState(1);
+  const [reorderQty, setReorderQty] = useState(5);
   const [reorderUtr, setReorderUtr] = useState('');
-  const [reorderBank, setReorderBank] = useState('');
+  const [reorderBank, setReorderBank] = useState('ICICI Bank');
   const [reorderDate, setReorderDate] = useState(new Date().toISOString().slice(0, 10));
   const [reorderSubmitting, setReorderSubmitting] = useState(false);
   const [reorderError, setReorderError] = useState('');
 
-  // 6. Refund Modal
-  const [refundModal, setRefundModal] = useState(false);
-  const [refundOrder, setRefundOrder] = useState(null);
-  const [refundForm, setRefundForm] = useState({
-    account_holder_name: '',
-    bank_name: '',
-    account_number: '',
-    confirm_account_number: '',
-    ifsc_code: '',
-    notes: '',
+  // 6. Validation Action State
+  const [validatingOrderId, setValidatingOrderId] = useState(null);
+
+  // ── Quick Filters for ComboKit Blueprints ──
+  const [quickFilters, setQuickFilters] = useState({
+    industryType: 'all',
+    category: 'all',
+    subCategory: 'all',
+    systemType: 'all',
+    projectRange: 'all',
   });
-  const [refundSubmitting, setRefundSubmitting] = useState(false);
-  const [refundError, setRefundError] = useState('');
 
-  // Persist orders to localStorage
-  useEffect(() => {
+  // ── 1. Fetch Orders from Backend API ──
+  const fetchOrders = useCallback(async (isSilent = false) => {
+    if (!isSilent) setOrdersLoading(true);
     try {
-      localStorage.setItem(SEED_STORAGE_KEY, JSON.stringify(orders));
-    } catch (e) {
-      console.warn('Storage save error:', e);
-    }
-  }, [orders]);
+      let url = '/po/orders';
+      const params = new URLSearchParams();
+      if (selectedEpcFilter !== 'ALL') {
+        params.append('epc_id', selectedEpcFilter);
+      }
+      if (selectedFranchiseeFilter !== 'ALL') {
+        params.append('franchisee_id', selectedFranchiseeFilter);
+      }
+      if (statusFilter !== 'ALL') {
+        params.append('status', statusFilter);
+      }
+      if (categoryTab !== 'ALL') {
+        params.append('po_category', categoryTab);
+      }
+      if (search.trim()) {
+        params.append('search', search.trim());
+      }
+      const qs = params.toString();
+      if (qs) url += `?${qs}`;
 
-  // Load Real Master Data (Franchisees, EPCs, Kits)
-  const fetchMasterData = useCallback(async () => {
-    try {
-      // 1. Franchisees
-      const fRes = await api.get('/franchisees').catch(() => null);
-      if (fRes?.data?.status === 'success') {
-        const raw = fRes.data.data;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.franchisees)
-          ? raw.franchisees
-          : [];
-        if (list.length > 0) setFranchisees(list);
-      }
-      if (franchisees.length === 0) {
-        // Fallback default franchisees in territory
-        setFranchisees([
-          {
-            _id: 'FR-GJ-SUR-01',
-            franchisee_id: 'FR-GJ-SUR-01',
-            company_name: 'Surat Solar Superstore & Service Hub',
-            name: 'Surat Solar Superstore',
-            district: 'Surat',
-            state: 'Gujarat',
-            phone: '+91 98250 11223',
-            plan_name: 'District Master Franchise',
-          },
-          {
-            _id: 'FR-GJ-AHM-02',
-            franchisee_id: 'FR-GJ-AHM-02',
-            company_name: 'Ahmedabad Renewable Power Store',
-            name: 'Ahmedabad Renewable Store',
-            district: 'Ahmedabad',
-            state: 'Gujarat',
-            phone: '+91 97120 44556',
-            plan_name: 'Standard Franchise',
-          },
-          {
-            _id: 'FR-GJ-VAD-03',
-            franchisee_id: 'FR-GJ-VAD-03',
-            company_name: 'Vadodara SunEnergy Store',
-            name: 'Vadodara SunEnergy Store',
-            district: 'Vadodara',
-            state: 'Gujarat',
-            phone: '+91 99090 77889',
-            plan_name: 'District Franchise',
-          },
-        ]);
-      }
-
-      // 2. EPC List
-      const epcRes = await api.get('/quotes/eligible-epcs').catch(() => null);
-      if (epcRes?.data?.status === 'success') {
-        const raw = epcRes.data.data;
-        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.epcs) ? raw.epcs : [];
-        if (list.length > 0) setEpcList(list);
-      }
-      if (epcList.length === 0) {
-        setEpcList([
-          {
-            _id: 'epc-01',
-            company_name: 'Apex Solar Solutions Gujarat',
-            buyer_name: 'Ramesh Patel',
-            phone: '+91 98790 12345',
-            gstin: '24AAAAA0000A1Z5',
-            district: 'Surat',
-          },
-          {
-            _id: 'epc-02',
-            company_name: 'SunPower EPC Infra',
-            buyer_name: 'Vikram Joshi',
-            phone: '+91 94280 23456',
-            gstin: '24BBBBB1111B2Z6',
-            district: 'Ahmedabad',
-          },
-          {
-            _id: 'epc-03',
-            company_name: 'GreenGrid EPC Contractors',
-            buyer_name: 'Anil Desai',
-            phone: '+91 97250 34567',
-            gstin: '24CCCCC2222C3Z7',
-            district: 'Vadodara',
-          },
-          {
-            _id: 'epc-04',
-            company_name: 'Om Solar Power Engineering',
-            buyer_name: 'Kunal Shah',
-            phone: '+91 98980 45678',
-            gstin: '24DDDDD3333D4Z8',
-            district: 'Surat',
-          },
-        ]);
-      }
-
-      // 3. Kits
-      const kitRes = await api.get('/quotes/eligible-kits').catch(() => null);
-      if (kitRes?.data?.status === 'success') {
-        const raw = kitRes.data.data;
-        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.kits) ? raw.kits : [];
-        if (list.length > 0) {
-          const formatted = list.map((k) => ({
-            _id: k._id || k.id,
-            name: k.name || k.kit_name || 'Solar ComboKit',
-            capacity_kw: k.capacity_kw || 3,
-            system_type: k.system_type || 'On-Grid',
-            base_price_paise: k.price_paise || k.base_price_paise || (k.selling_price_cached ? k.selling_price_cached * 100 : 0),
-            token_rate_per_kit_paise: k.token_rate_per_kit_paise || 0,
-            min_po_quantity: k.min_po_quantity || 25,
-            specifications: k.description || 'Tier-1 Approved Components',
-          }));
-          setComboKits(formatted);
-        }
+      const res = await api.get(url);
+      if (res.data?.status === 'success' && Array.isArray(res.data.data)) {
+        setOrders(res.data.data);
       }
     } catch (err) {
-      console.warn('Master data load note:', err);
+      console.error('Failed to load BDE PO orders:', err);
+    } finally {
+      setOrdersLoading(false);
     }
-  }, [franchisees.length, epcList.length]);
+  }, [selectedEpcFilter, selectedFranchiseeFilter, statusFilter, categoryTab, search]);
 
+  // ── 2. Fetch Onboarded EPCs (Onboarded by this BDE) ──
+  const fetchOnboardedEpcs = useCallback(async () => {
+    setEpcsLoading(true);
+    try {
+      const res = await api.get('/po/onboarded-epcs');
+      if (res.data?.status === 'success' && Array.isArray(res.data.data)) {
+        setOnboardedEpcs(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load onboarded EPCs:', err);
+    } finally {
+      setEpcsLoading(false);
+    }
+  }, []);
+
+  // ── 3. Fetch Onboarded Franchisees ──
+  const fetchFranchisees = useCallback(async () => {
+    setFranchiseesLoading(true);
+    try {
+      const res = await api.get('/po/franchisees');
+      if (res.data?.status === 'success' && Array.isArray(res.data.data)) {
+        setFranchisees(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load franchisees:', err);
+    } finally {
+      setFranchiseesLoading(false);
+    }
+  }, []);
+
+  // ── 4. Fetch Shop Hierarchy for Blueprint Taxonomy Filters ──
+  const fetchHierarchy = useCallback(async () => {
+    try {
+      let res = await api.get('/shop-hierarchy').catch(() => null);
+      if (!res?.data?.data) {
+        res = await api.get('/india/v1/shop/hierarchy').catch(() => null);
+      }
+      const data = res?.data?.data;
+      if (Array.isArray(data)) {
+        setShopHierarchy(data);
+      } else if (Array.isArray(data?.shopHierarchy)) {
+        setShopHierarchy(data.shopHierarchy);
+      }
+    } catch (err) {
+      console.warn('Shop hierarchy load failed (non-fatal):', err);
+    }
+  }, []);
+
+
+  // ── 5. Fetch Company ComboKit Blueprints for BDE PO Creation ──
+  const fetchCompanyCombokits = useCallback(async (epcId = null, fId = null) => {
+    setPlanLoading(true);
+    try {
+      const params = {};
+      const targetEpc = epcId || modalEpcId || (selectedEpcFilter !== 'ALL' ? selectedEpcFilter : '');
+      const targetFId = fId || modalFranchiseeId || (selectedFranchiseeFilter !== 'ALL' ? selectedFranchiseeFilter : '');
+      if (targetEpc) params.epc_id = targetEpc;
+      if (targetFId) params.franchisee_id = targetFId;
+
+      let res = await api.get('/po/combokits', { params }).catch(() => null);
+      if (!res?.data?.data?.combo_kits || res.data.data.combo_kits.length === 0) {
+        res = await api.get('/po/franchisee/company/plan-settings').catch(() => null);
+      }
+      if (res?.data?.data?.combo_kits && res.data.data.combo_kits.length > 0) {
+        setCompanyKits(res.data.data.combo_kits);
+        setFranchiseePlanData(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load company combokits:', err);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [modalEpcId, modalFranchiseeId, selectedEpcFilter, selectedFranchiseeFilter]);
+
+  // ── 5b. Fetch Plan Settings for Selected Franchisee (For Network / Buyer Reference) ──
+  const fetchFranchiseePlanSettings = useCallback(async (franchiseeId) => {
+    if (!franchiseeId) return;
+    setPlanLoading(true);
+    try {
+      const res = await api.get(`/po/franchisee/${franchiseeId}/plan-settings`);
+      if (res.data?.status === 'success' && res.data.data) {
+        setFranchiseePlanData(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load franchisee plan settings:', err);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, []);
+
+  // ── 6. Fetch EPC Buyers for Selected Franchisee ──
+  const fetchEpcBuyers = useCallback(async (franchiseeId) => {
+    if (!franchiseeId) return;
+    setBuyersLoading(true);
+    try {
+      const res = await api.get(`/po/franchisee/${franchiseeId}/epc-buyers`);
+      if (res.data?.status === 'success' && Array.isArray(res.data.data)) {
+        setEpcBuyers(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load EPC buyers:', err);
+      setEpcBuyers([]);
+    } finally {
+      setBuyersLoading(false);
+    }
+  }, []);
+
+  // Initial Load
   useEffect(() => {
-    fetchMasterData();
-  }, [fetchMasterData]);
+    fetchOrders();
+    fetchOnboardedEpcs();
+    fetchFranchisees();
+    fetchHierarchy();
+    fetchCompanyCombokits();
+  }, [fetchOrders, fetchOnboardedEpcs, fetchFranchisees, fetchHierarchy, fetchCompanyCombokits]);
 
-  // Handle URL query parameters (e.g. from Franchisees page ?action=create&franchisee_id=...)
+  // Handle URL Query Params (e.g. from EPC Leads / Franchisee page ?action=create&epc_id=...)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'create') {
-      const fId = params.get('franchisee_id');
-      if (fId) setSelectedFranchiseeId(fId);
+    const action = params.get('action');
+    const epcId = params.get('epc_id');
+    const fId = params.get('franchisee_id');
+    if (epcId) {
+      setSelectedEpcFilter(epcId);
+      setModalEpcId(epcId);
+    }
+    if (fId) {
+      setSelectedFranchiseeFilter(fId);
+      setModalFranchiseeId(fId);
+      fetchFranchiseePlanSettings(fId);
+      fetchEpcBuyers(fId);
+    }
+    if (action === 'create') {
       setCreateModal(true);
     }
-  }, [location.search]);
+  }, [location.search, fetchFranchiseePlanSettings, fetchEpcBuyers]);
 
-  // ── REFRESH HANDLER ──
+  // When modal Franchisee changes in Create Modal, load that franchisee's catalog and EPC network
+  useEffect(() => {
+    if (modalFranchiseeId) {
+      fetchFranchiseePlanSettings(modalFranchiseeId);
+      fetchEpcBuyers(modalFranchiseeId);
+    }
+  }, [modalFranchiseeId, fetchFranchiseePlanSettings, fetchEpcBuyers]);
+
+  // Refresh helper
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchMasterData();
-    setTimeout(() => setIsRefreshing(false), 500);
+    await Promise.allSettled([
+      fetchOrders(true),
+      fetchOnboardedEpcs(),
+      fetchFranchisees(),
+      fetchHierarchy(),
+      fetchCompanyCombokits(),
+    ]);
+    setIsRefreshing(false);
   };
 
-  // ── CLEAR PO ORDERS ──
-  const handleResetData = () => {
-    if (window.confirm('Clear all local PO orders?')) {
-      setOrders([]);
-      localStorage.removeItem(SEED_STORAGE_KEY);
+  // ── Available ComboKit Blueprints (Pure Company Blueprints) ──
+  const availableKits = useMemo(() => {
+    const rawKits = companyKits;
+
+    if (rawKits.length > 0) {
+      return rawKits.map((k) => {
+        const orderQtys = Array.isArray(k.order_quantities) && k.order_quantities.length > 0
+          ? k.order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+          : (Array.isArray(k.po_order_pricing) && k.po_order_pricing.length > 0
+            ? k.po_order_pricing.map((p) => Number(p.quantity)).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+            : []);
+        const looseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
+          ? k.loose_order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+          : (Array.isArray(k.loose_order_pricing) && k.loose_order_pricing.length > 0
+            ? k.loose_order_pricing.map((p) => Number(p.quantity)).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+            : []);
+        const price = k.dealer_price || k.selling_price_cached || k.unit_price || k.price || 0;
+        const gstRate = k.gst_rate != null && !isNaN(Number(k.gst_rate))
+          ? Number(k.gst_rate)
+          : (k.tax_pct != null && !isNaN(Number(k.tax_pct))
+            ? Number(k.tax_pct)
+            : (k.gst_pct != null && !isNaN(Number(k.gst_pct))
+              ? Number(k.gst_pct)
+              : (k.common_gst_rate != null && !isNaN(Number(k.common_gst_rate)) ? Number(k.common_gst_rate) : 0)));
+
+        return {
+          _id: (k._id || k.id)?.toString(),
+          id: (k._id || k.id)?.toString(),
+          name: k.name || k.kit_name || 'Solar ComboKit Blueprint',
+          kit_name: k.name || k.kit_name || 'Solar ComboKit Blueprint',
+          capacity_kw: k.capacity_kw || k.capacity || 5,
+          system_type: k.system_type || (k.inverter_mode === 'hybrid' ? 'Hybrid' : k.inverter_mode === 'offgrid' ? 'Off-Grid' : 'On-Grid'),
+          industry_type_name: k.industry_type_name || 'Solar PV',
+          industry_type_id: k.industry_type_id,
+          category_name: k.category_name || 'Residential Solar',
+          category_id: k.category_id,
+          subcategory_name: k.subcategory_name || 'Individual Home',
+          subcategory_id: k.subcategory_id,
+          project_type_name: k.project_type_name || 'Rooftop Solar',
+          project_type_id: k.project_type_id,
+          project_range_label: k.project_range_label || (k.capacity_kw ? `${k.capacity_kw} kW System` : 'Standard Range'),
+          project_range_id: k.project_range_id,
+          min_kw: k.min_kw ?? (k.capacity_kw || 0),
+          max_kw: k.max_kw ?? (k.capacity_kw || 0),
+          dealer_price: price,
+          unit_price: price,
+          price: price,
+          base_price_paise: Math.round(price * 100),
+          token_booking_enabled: k.token_booking_enabled !== false,
+          token_type: k.token_type || 'FIXED_AMOUNT',
+          token_value: k.token_value != null ? Number(k.token_value) : 0,
+          token_rate_per_kit_paise: k.token_rate_per_kit_paise != null ? Number(k.token_rate_per_kit_paise) : 0,
+          gst_rate: gstRate,
+          tax_pct: gstRate,
+          gst_pct: gstRate,
+          common_gst_rate: gstRate,
+          order_quantities: orderQtys,
+          loose_order_quantities: looseQtys,
+          min_po_quantity: orderQtys[0] || (k.min_po_quantity || 0),
+          specifications: k.description || k.specifications || 'High performance solar kit with tier-1 inverter, solar panels, and GI mounting structure.',
+          po_order_pricing: k.po_order_pricing || k.poOrderPricing || [],
+        };
+      });
     }
-  };
+    return [];
+  }, [companyKits, franchiseePlanData]);
 
-  // ── FILTERED ORDERS ──
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      // Category Tab filter
-      if (categoryTab !== 'ALL' && o.po_category !== categoryTab) return false;
-
-      // Status filter
-      if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
-
-      // Search query
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        const poNum = (o.po_number || '').toLowerCase();
-        const fName = (o.customer_details?.company_name || o.customer_details?.name || '').toLowerCase();
-        const kitName = (o.items?.[0]?.item_name || '').toLowerCase();
-        const epcName = (o.items?.[0]?.epc_allocations?.[0]?.company_name || '').toLowerCase();
-        if (!poNum.includes(q) && !fName.includes(q) && !kitName.includes(q) && !epcName.includes(q)) {
-          return false;
-        }
+  // ── Filter Blueprints by QuickFilters ──
+  const filteredComboKits = useMemo(() => {
+    return availableKits.filter((k) => {
+      if (!k) return false;
+      if (quickFilters.industryType !== 'all') {
+        const indVal = quickFilters.industryType.toLowerCase();
+        const kInd = (k.industry_type_name || '').toLowerCase();
+        if (kInd !== indVal && !kInd.includes(indVal)) return false;
+      }
+      if (quickFilters.category !== 'all') {
+        const catVal = quickFilters.category.toLowerCase();
+        const kCat = (k.category_name || '').toLowerCase();
+        if (kCat !== catVal && !kCat.includes(catVal)) return false;
+      }
+      if (quickFilters.subCategory !== 'all') {
+        const subVal = quickFilters.subCategory.toLowerCase();
+        const kSub = (k.subcategory_name || '').toLowerCase();
+        if (kSub !== subVal && !kSub.includes(subVal)) return false;
+      }
+      if (quickFilters.systemType !== 'all') {
+        const sysVal = quickFilters.systemType.toLowerCase();
+        const kSys = (k.system_type || '').toLowerCase();
+        if (kSys !== sysVal && !kSys.includes(sysVal)) return false;
+      }
+      if (quickFilters.projectRange !== 'all') {
+        const rangeVal = quickFilters.projectRange.toLowerCase();
+        const kRange = (k.project_range_label || '').toLowerCase();
+        if (kRange !== rangeVal && !kRange.includes(rangeVal)) return false;
       }
       return true;
     });
-  }, [orders, categoryTab, statusFilter, search]);
+  }, [availableKits, quickFilters]);
 
-  // Territory KPI Summary Calculations
-  const stats = useMemo(() => {
-    const totalCount = orders.length;
-    const validatedCount = orders.filter((o) =>
-      ['VALIDATED', 'CONFIRMED', 'PROCESSING', 'DISPATCHED', 'COMPLETED'].includes(o.status)
-    ).length;
-    const pendingAllocCount = orders.filter((o) => o.status === 'PENDING_ALLOCATION').length;
-    const awaitingTokenCount = orders.filter((o) => o.status === 'AWAITING_TOKEN_PAYMENT').length;
+  // ── Cascading Quick Filter Options derived from shopHierarchy & availableKits ──
+  const industryTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
 
-    const totalBooked = orders.reduce((sum, o) => sum + (o.total_booked_quantity || o.target_committed_quantity || 0), 0);
-    const totalFulfilled = orders.reduce((sum, o) => sum + (o.fulfilled_quantity || 0), 0);
-    const totalRemaining = orders.reduce((sum, o) => sum + (o.remaining_quantity || 0), 0);
-    const totalTokenPaise = orders.reduce((sum, o) => sum + (o.token_paid_paise || 0), 0);
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        const name = ind.name;
+        if (name && !seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          list.push({ value: name, label: name, id: ind.id || ind._id });
+        }
+      });
+    }
 
-    return {
-      totalCount,
-      validatedCount,
-      pendingAllocCount,
-      awaitingTokenCount,
-      totalBooked,
-      totalFulfilled,
-      totalRemaining,
-      totalTokenINR: Math.round(totalTokenPaise / 100),
-    };
-  }, [orders]);
+    availableKits.forEach((kit) => {
+      const name = kit.industry_type_name;
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ value: name, label: name, id: kit.industry_type_id });
+      }
+    });
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STAGE 1: CREATE PO ORDER
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleOpenCreateModal = () => {
+    return [{ value: 'all', label: 'All Industry Types' }, ...list];
+  }, [shopHierarchy, availableKits]);
+
+  const categoryOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (cat.name && !seen.has(cat.name.toLowerCase())) {
+            seen.add(cat.name.toLowerCase());
+            list.push({ value: cat.name, label: cat.name, id: cat.id || cat._id });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === 'all' ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      if (indOk && kit.category_name && !seen.has(kit.category_name.toLowerCase())) {
+        seen.add(kit.category_name.toLowerCase());
+        list.push({ value: kit.category_name, label: kit.category_name, id: kit.category_id });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Categories' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === 'all' ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id || cat._id) === String(quickFilters.category);
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (sub.name && !seen.has(sub.name.toLowerCase())) {
+                seen.add(sub.name.toLowerCase());
+                list.push({ value: sub.name, label: sub.name, id: sub.id || sub._id });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === 'all' ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      const catOk =
+        quickFilters.category === 'all' ||
+        kit.category_name?.toLowerCase() === quickFilters.category.toLowerCase();
+      if (indOk && catOk && kit.subcategory_name && !seen.has(kit.subcategory_name.toLowerCase())) {
+        seen.add(kit.subcategory_name.toLowerCase());
+        list.push({ value: kit.subcategory_name, label: kit.subcategory_name, id: kit.subcategory_id });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Sub-Categories' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category]);
+
+  const systemTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === 'all' ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase();
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              const subOk =
+                quickFilters.subCategory === 'all' ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+              if (subOk) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (mt.name && !seen.has(mt.name.toLowerCase())) {
+                    seen.add(mt.name.toLowerCase());
+                    list.push({ value: mt.name, label: mt.name, id: mt.id || mt.type_id });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === 'all' ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      const catOk =
+        quickFilters.category === 'all' ||
+        kit.category_name?.toLowerCase() === quickFilters.category.toLowerCase();
+      const subOk =
+        quickFilters.subCategory === 'all' ||
+        kit.subcategory_name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+      if (indOk && catOk && subOk) {
+        const sys = kit.system_type || 'On-Grid';
+        if (sys && !seen.has(sys.toLowerCase())) {
+          seen.add(sys.toLowerCase());
+          list.push({ value: sys, label: sys, id: sys });
+        }
+      }
+    });
+
+    return [{ value: 'all', label: 'All System Types' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category, quickFilters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === 'all' ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase();
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              const subOk =
+                quickFilters.subCategory === 'all' ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+              if (subOk) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  const typeOk =
+                    quickFilters.systemType === 'all' ||
+                    mt.name?.toLowerCase() === quickFilters.systemType.toLowerCase() ||
+                    quickFilters.systemType.toLowerCase().includes(mt.name?.toLowerCase());
+                  if (typeOk) {
+                    (mt.ranges || []).forEach((r) => {
+                      const label = r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || 'kW'}`;
+                      if (label && !seen.has(label.toLowerCase())) {
+                        seen.add(label.toLowerCase());
+                        list.push({ value: label, label: label, id: r.id || r._id, min: r.min_value, max: r.max_value });
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const label = kit.project_range_label || (kit.capacity_kw ? `${kit.capacity_kw} kW System` : null);
+      if (label && !seen.has(label.toLowerCase())) {
+        seen.add(label.toLowerCase());
+        list.push({ value: label, label: label, id: kit.project_range_id, min: kit.min_kw, max: kit.max_kw });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Project Ranges' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category, quickFilters.subCategory, quickFilters.systemType]);
+
+  const handleClearMainFilters = () => {
+    setQuickFilters({
+      industryType: 'all',
+      category: 'all',
+      subCategory: 'all',
+      systemType: 'all',
+      projectRange: 'all',
+    });
+  };
+
+  const hasActiveQuickFilters = useMemo(() => {
+    return (
+      quickFilters.industryType !== 'all' ||
+      quickFilters.category !== 'all' ||
+      quickFilters.subCategory !== 'all' ||
+      quickFilters.systemType !== 'all' ||
+      quickFilters.projectRange !== 'all'
+    );
+  }, [quickFilters]);
+
+
+  // Selected Kit in Create Modal
+  const selectedKit = useMemo(() => {
+    return (
+      filteredComboKits.find((k) => String(k._id) === String(selectedKitId)) ||
+      filteredComboKits[0] ||
+      availableKits.find((k) => String(k._id) === String(selectedKitId)) ||
+      availableKits[0]
+    );
+  }, [filteredComboKits, availableKits, selectedKitId]);
+
+  // Auto-sync selectedKitId when list changes
+  useEffect(() => {
+    if (filteredComboKits.length > 0) {
+      const match = filteredComboKits.find((k) => String(k._id) === String(selectedKitId));
+      if (!match) {
+        setSelectedKitId(filteredComboKits[0]._id);
+      }
+    }
+  }, [filteredComboKits, selectedKitId]);
+
+  // Sync selectedPoQty on kit switch
+  useEffect(() => {
+    if (selectedKit) {
+      const defaultQty = selectedKit.order_quantities?.[0] || selectedKit.min_po_quantity || 0;
+      setSelectedPoQty((prev) => (selectedKit.order_quantities?.includes(Number(prev)) ? Number(prev) : defaultQty));
+    }
+  }, [selectedKit?._id, selectedKit?.order_quantities]);
+
+  // Pricing calculations for Create Modal
+  const targetQuantity = Math.max(1, parseInt(selectedPoQty, 10) || selectedKit?.min_po_quantity || 200);
+
+  const kitUnitPrice = useMemo(() => {
+    if (!selectedKit) return 0;
+    const poPricing = selectedKit.po_order_pricing;
+    if (Array.isArray(poPricing) && poPricing.length > 0) {
+      const matchedTier = poPricing.find((t) => Number(t.quantity) === Number(targetQuantity));
+      if (matchedTier && matchedTier.price_per_kit > 0) return matchedTier.price_per_kit;
+      const lowerTiers = poPricing
+        .filter((t) => Number(t.quantity) <= Number(targetQuantity) && t.price_per_kit > 0)
+        .sort((a, b) => Number(b.quantity) - Number(a.quantity));
+      if (lowerTiers.length > 0) return lowerTiers[0].price_per_kit;
+    }
+    return selectedKit.dealer_price || selectedKit.unit_price || 0;
+  }, [selectedKit, targetQuantity]);
+
+  const kitGstRate = useMemo(() => {
+    if (!selectedKit) return 0;
+    const rawRate = selectedKit.gst_rate ?? selectedKit.tax_pct ?? selectedKit.gst_pct ?? selectedKit.common_gst_rate;
+    if (rawRate !== undefined && rawRate !== null && !isNaN(Number(rawRate))) {
+      return Number(rawRate);
+    }
+    return 0;
+  }, [selectedKit]);
+
+  const isTokenBookingActive = selectedKit?.token_booking_enabled !== false && Number(selectedKit?.token_value || selectedKit?.token_rate_per_kit_paise || 0) > 0;
+  const tokenBookingType = selectedKit?.token_type || 'FIXED_AMOUNT';
+  const rawTokenValue = Number(selectedKit?.token_value || (selectedKit?.token_rate_per_kit_paise ? selectedKit.token_rate_per_kit_paise / 100 : 0));
+
+  const estimatedSubtotal = targetQuantity * kitUnitPrice;
+  const estimatedGst = Math.round((estimatedSubtotal * kitGstRate) / 100);
+  const estimatedGrandTotal = estimatedSubtotal + estimatedGst;
+
+  // PO-level Token Deposit: If FIXED_AMOUNT, flat tokenValue (e.g. ₹60,000 for the whole PO). If PERCENTAGE, X% of total PO value.
+  const estimatedTokenDeposit = isTokenBookingActive
+    ? (tokenBookingType === 'PERCENTAGE'
+        ? Math.round(estimatedGrandTotal * (rawTokenValue / 100))
+        : rawTokenValue)
+    : 0;
+
+  // Active Onboarded EPC Object
+  const activeEpcObj = useMemo(() => {
+    if (!modalEpcId) return null;
+    return onboardedEpcs.find((e) => String(e._id || e.id) === String(modalEpcId)) || null;
+  }, [onboardedEpcs, modalEpcId]);
+
+  // Active Franchisee Object
+  const activeFranchiseeObj = useMemo(() => {
+    if (!modalFranchiseeId) return null;
+    return franchisees.find((f) => (f._id || f.id) === modalFranchiseeId) || null;
+  }, [franchisees, modalFranchiseeId]);
+
+  // Combined EPC List (BDE's Onboarded EPCs + Franchisee's Registered EPC Buyers)
+  const combinedEpcList = useMemo(() => {
+    const map = new Map();
+    onboardedEpcs.forEach((e) => {
+      const id = String(e._id || e.id);
+      map.set(id, e);
+    });
+    epcBuyers.forEach((b) => {
+      const id = String(b._id || b.id);
+      if (!map.has(id)) {
+        map.set(id, b);
+      }
+    });
+    return Array.from(map.values());
+  }, [onboardedEpcs, epcBuyers]);
+
+  // Sync Franchisee Store & Plan Settings when modal EPC is selected
+  useEffect(() => {
+    if (activeEpcObj) {
+      const targetFId =
+        activeEpcObj.assigned_franchisee_id ||
+        activeEpcObj.assigned_franchisee?._id ||
+        null;
+
+      if (targetFId !== modalFranchiseeId) {
+        setModalFranchiseeId(targetFId || '');
+      }
+    }
+  }, [activeEpcObj, modalFranchiseeId]);
+
+  // ── Open Create Modal ──
+  const handleOpenCreateModal = (preselectedEpcId = null) => {
     setCreateError('');
-    if (!selectedFranchiseeId && franchisees.length > 0) {
-      setSelectedFranchiseeId(franchisees[0]._id || franchisees[0].franchisee_id);
+    fetchCompanyCombokits();
+    const targetEpcId =
+      preselectedEpcId ||
+      (selectedEpcFilter !== 'ALL' ? selectedEpcFilter : (onboardedEpcs[0]?._id || ''));
+
+    if (targetEpcId) {
+      setModalEpcId(targetEpcId);
+      const epc = onboardedEpcs.find((e) => String(e._id || e.id) === String(targetEpcId));
+      const targetFId =
+        epc?.assigned_franchisee_id ||
+        epc?.assigned_franchisee?._id ||
+        null;
+
+      setModalFranchiseeId(targetFId || '');
+      if (targetFId) {
+        fetchFranchiseePlanSettings(targetFId);
+        fetchEpcBuyers(targetFId);
+      }
+    } else {
+      setModalFranchiseeId('');
     }
-    if (!selectedSingleEpcId && epcList.length > 0) {
-      setSelectedSingleEpcId(epcList[0]._id);
-    }
-    setSinglePoQty(100);
-    setPoCategory('SINGLE_PO');
-    setSingleTargetType('single_epc');
     setCreateModal(true);
   };
 
-  const handleCreateOrder = (e) => {
+  // ── Step 1: Submit PO Creation ──
+  const handleCreateOrder = async (e) => {
     e.preventDefault();
-    if (!selectedFranchiseeId) {
-      setCreateError('Please select a Franchisee.');
+    setCreateError('');
+
+    if (!modalEpcId) {
+      setCreateError('Please select an Onboarded EPC Partner for whom this Purchase Order is being created.');
       return;
     }
-    if (singlePoQty < 25) {
-      setCreateError('Committed Quota must be at least 25 kits.');
+
+    const resolvedFranchiseeId =
+      modalFranchiseeId ||
+      activeEpcObj?.assigned_franchisee_id ||
+      activeEpcObj?.assigned_franchisee?._id ||
+      null;
+
+    if (!selectedKit) {
+      setCreateError('Please select an authorized ComboKit blueprint.');
+      return;
+    }
+    if (targetQuantity <= 0) {
+      setCreateError('Please select a valid PO quota quantity.');
       return;
     }
 
     setCreateSubmitting(true);
-    setTimeout(() => {
-      const selectedFranchiseObj = franchisees.find(
-        (f) => (f._id || f.franchisee_id) === selectedFranchiseeId
-      ) || {
-        franchisee_id: selectedFranchiseeId,
-        company_name: 'Selected Franchisee Store',
-        district: 'Territory District',
-        state: 'Territory State',
+    try {
+      const poTokenPaise = Math.round(estimatedTokenDeposit * 100);
+
+      const itemPayload = {
+        combo_kit_id: selectedKit._id || selectedKit.id,
+        kit_id: selectedKit._id || selectedKit.id,
+        item_name: selectedKit.name || selectedKit.kit_name,
+        quantity: targetQuantity,
+        unit_price_paise: Math.round(kitUnitPrice * 100),
+        token_rate_paise: poTokenPaise,
+        total_price_paise: targetQuantity * Math.round(kitUnitPrice * 100),
+        subtotal_paise: targetQuantity * Math.round(kitUnitPrice * 100),
+        gst_rate: kitGstRate,
+        epc_allocations: [],
       };
 
-      const newPoNumber = `PO-${new Date().getFullYear()}-BDE-${String(orders.length + 1).padStart(3, '0')}`;
-      const tokenPerKitPaise = selectedKitObj?.token_rate_per_kit_paise || 0;
-      const totalTokenPaise = singlePoQty * tokenPerKitPaise;
-
-      const newOrder = {
-        _id: `bde-po-${Date.now()}`,
-        po_number: newPoNumber,
+      const payload = {
+        epc_id: modalEpcId,
+        franchisee_id: resolvedFranchiseeId,
         order_type: 'po_order',
         po_category: poCategory,
-        status: 'PENDING_ALLOCATION',
-        created_by_role: 'BDE',
-        creator_name: user?.full_name || 'BDE Officer',
-        creator_code: user?.bde_id || 'BDE-OFFICER',
-        created_at: new Date().toISOString(),
-        lock_expires_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
-        customer_details: {
-          franchisee_id: selectedFranchiseObj.franchisee_id || selectedFranchiseObj._id,
-          company_name: selectedFranchiseObj.company_name || selectedFranchiseObj.name,
-          district: selectedFranchiseObj.district,
-          state: selectedFranchiseObj.state,
-          phone: selectedFranchiseObj.phone,
-        },
-        target_committed_quantity: singlePoQty,
-        total_booked_quantity: singlePoQty,
-        fulfilled_quantity: 0,
-        remaining_quantity: singlePoQty,
-        token_amount_paise: totalTokenPaise,
-        token_paid_paise: 0,
-        token_payment_status: 'PENDING',
-        token_balance_paise: 0,
-        token_adjusted_total_paise: 0,
-        token_settlement_mode: 'PRO_RATA',
-        items: [],
-        po_settings_snapshot: { po_validity_days: 30, po_lock_days: 30 },
+        target_committed_quantity: targetQuantity,
+        is_token_booking: isTokenBookingActive,
+        token_amount_paise: poTokenPaise,
+        items: [itemPayload],
       };
 
-      setOrders((prev) => [newOrder, ...prev]);
-      setCreateSubmitting(false);
-      setCreateModal(false);
+      const res = await api.post('/po/create', payload);
 
-      // Automatically transition user to Stage 2: Product Allocation
-      handleOpenAllocateModal(newOrder);
-    }, 400);
+      if (res.data?.status === 'success') {
+        setCreateModal(false);
+        await fetchOrders(true);
+        const createdOrder = res.data.data;
+        if (createdOrder) {
+          // Immediately transition into Stage 2: EPC Loose Allocation!
+          handleOpenAllocateModal(createdOrder);
+        }
+      } else {
+        setCreateError(res.data?.message || 'Failed to create Purchase Order.');
+      }
+    } catch (err) {
+      setCreateError(err.response?.data?.message || err.message || 'Failed to create Purchase Order.');
+    } finally {
+      setCreateSubmitting(false);
+    }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STAGE 2: ALLOCATE PRODUCTS & EPCs
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Step 2: Open Allocate Modal (Assign to EPC) ──
   const handleOpenAllocateModal = (order) => {
     setAllocatingOrder(order);
-    setAllocateError('');
-    const defaultKit = comboKits[0];
-    setAllocateKitId(defaultKit?._id || 'kit-01');
+    const existingAllocs = {};
+    if (order.items?.[0]?.epc_allocations?.length > 0) {
+      order.items[0].epc_allocations.forEach((a) => {
+        const bId = a.epc_buyer_id || a.buyer_id;
+        if (bId) existingAllocs[bId] = a.allocated_quantity;
+      });
+    }
+    setAllocateAllocations(existingAllocs);
 
-    const totalQty = order.target_committed_quantity || order.total_booked_quantity || 100;
-    setAllocateSingleQty(totalQty);
-
-    if (order.po_category === 'COMBINE_PO') {
-      // Split between first 2 EPCs by default
-      const initialMap = {};
-      if (epcList.length >= 2) {
-        const half = Math.floor(totalQty / 2);
-        initialMap[epcList[0]._id] = half;
-        initialMap[epcList[1]._id] = totalQty - half;
-      } else if (epcList.length === 1) {
-        initialMap[epcList[0]._id] = totalQty;
-      }
-      setAllocateMultiAllocs(initialMap);
-    } else {
+    const firstAlloc = order.items?.[0]?.epc_allocations?.[0];
+    if (firstAlloc?.epc_buyer_id) {
       setAllocateSingleTarget('single_epc');
-      setAllocateSingleEpcId(epcList[0]?._id || '');
+      setAllocateSingleEpcId(firstAlloc.epc_buyer_id);
+    } else if (order.epc_id) {
+      const epcIdStr = (order.epc_id?._id || order.epc_id)?.toString();
+      setAllocateSingleTarget('single_epc');
+      setAllocateSingleEpcId(epcIdStr);
+    } else {
+      setAllocateSingleTarget(epcBuyers.length > 0 ? 'single_epc' : 'warehouse');
+      setAllocateSingleEpcId(epcBuyers[0]?._id || '');
     }
 
+    // Ensure EPC list is fresh for this order's franchisee
+    const orderFId = order.franchisee_id?._id || order.franchisee_id;
+    if (orderFId) {
+      fetchEpcBuyers(orderFId);
+    }
+
+    setAllocateError('');
     setAllocateModal(true);
   };
 
-  const handleAllocateSubmit = (e) => {
+  const handleAllocateLooseChange = (buyerId, val) => {
+    const qty = Math.max(0, parseInt(val, 10) || 0);
+    setAllocateAllocations((prev) => {
+      const next = { ...prev };
+      if (qty === 0) delete next[buyerId];
+      else next[buyerId] = qty;
+      return next;
+    });
+    setAllocateError('');
+  };
+
+  const handleSubmitAllocate = async (e) => {
     e.preventDefault();
+    setAllocateError('');
     if (!allocatingOrder) return;
 
-    const kitObj = comboKits.find((k) => k._id === allocateKitId) || comboKits[0];
-    const isCombine = allocatingOrder.po_category === 'COMBINE_PO';
-    const totalCommitted = allocatingOrder.target_committed_quantity || allocatingOrder.total_booked_quantity;
+    const totalCommitted = allocatingOrder.target_committed_quantity || allocatingOrder.total_booked_quantity || 200;
+    const allocItem = allocatingOrder.items?.[0];
+    const poTotalTokenPaise = Number(
+      allocatingOrder.token_amount_paise ||
+      allocItem?.token_rate_paise ||
+      (kitObj.token_value ? kitObj.token_value * 100 : (kitObj.token_rate_per_kit_paise || 0))
+    );
 
-    let allocations = [];
+    const isCombine = allocatingOrder.po_category === 'COMBINE_PO';
+    let epcList = [];
+
     if (isCombine) {
-      const sum = Object.values(allocateMultiAllocs).reduce((acc, q) => acc + (parseInt(q, 10) || 0), 0);
+      const sum = Object.values(allocateAllocations).reduce((acc, q) => acc + (parseInt(q, 10) || 0), 0);
       if (sum !== totalCommitted) {
-        setAllocateError(`Allocations sum (${sum}) must equal committed quota (${totalCommitted} kits).`);
+        setAllocateError(`Allocations sum (${sum} kits) must exactly equal committed PO quota (${totalCommitted} kits).`);
         return;
       }
-      allocations = Object.entries(allocateMultiAllocs)
+      epcList = Object.entries(allocateAllocations)
         .filter(([, q]) => parseInt(q, 10) > 0)
-        .map(([epcId, q]) => {
-          const epc = epcList.find((b) => b._id === epcId);
+        .map(([buyerId, qty]) => {
+          const buyer = combinedEpcList.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
+          const allocQ = parseInt(qty, 10);
+          const allocTokenPaise = totalCommitted > 0 ? Math.round(poTotalTokenPaise * (allocQ / totalCommitted)) : 0;
           return {
-            epc_buyer_id: epcId,
-            company_name: epc?.company_name || 'EPC Contractor',
-            buyer_name: epc?.buyer_name || 'Partner',
-            allocated_quantity: parseInt(q, 10),
+            epc_buyer_id: buyerId,
+            buyer_id: buyerId,
+            company_name: buyer?.company_name || buyer?.name || 'EPC Buyer',
+            buyer_name: buyer?.buyer_name || buyer?.name || 'EPC Buyer',
+            gstin: buyer?.gstin || null,
+            allocated_quantity: allocQ,
+            token_amount_paise: allocTokenPaise,
             payment_status: 'PENDING',
           };
         });
     } else {
       if (allocateSingleTarget === 'single_epc') {
-        const epc = epcList.find((b) => b._id === allocateSingleEpcId);
-        allocations = [
+        if (!allocateSingleEpcId) {
+          setAllocateError('Please select an onboarded EPC Partner, or switch to Warehouse Stock.');
+          return;
+        }
+        const buyer = combinedEpcList.find((b) => (b._id || b.id)?.toString() === allocateSingleEpcId?.toString());
+        epcList = [
           {
             epc_buyer_id: allocateSingleEpcId,
-            company_name: epc?.company_name || 'Single EPC Partner',
-            buyer_name: epc?.buyer_name || 'EPC Contractor',
+            company_name: buyer?.company_name || buyer?.name || 'EPC Partner',
+            buyer_name: buyer?.buyer_name || buyer?.name || 'EPC Partner',
+            gstin: buyer?.gstin || null,
             allocated_quantity: totalCommitted,
+            token_amount_paise: poTotalTokenPaise,
             payment_status: 'PENDING',
           },
         ];
       } else {
-        allocations = [
+        epcList = [
           {
             epc_buyer_id: null,
             company_name: 'Franchise Warehouse Stock',
-            buyer_name: allocatingOrder.customer_details?.company_name || 'Warehouse',
+            buyer_name: 'Warehouse Stock',
+            gstin: null,
             allocated_quantity: totalCommitted,
+            token_amount_paise: poTotalTokenPaise,
             payment_status: 'PENDING',
           },
         ];
       }
     }
 
+    const allocGstRate = allocatingOrder.items?.[0]?.gst_rate != null
+      ? Number(allocatingOrder.items[0].gst_rate)
+      : (kitObj?.gst_rate != null ? Number(kitObj.gst_rate) : 0);
+
+    const itemPayload = {
+      kit_id: allocatingOrder.items?.[0]?.kit_id || kitObj._id,
+      item_name: allocatingOrder.items?.[0]?.item_name || kitObj.name,
+      quantity: totalCommitted,
+      unit_price_paise: allocatingOrder.items?.[0]?.unit_price_paise || kitObj.base_price_paise,
+      gst_rate: allocGstRate,
+      token_rate_paise: poTotalTokenPaise,
+      epc_allocations: epcList,
+    };
+
     setAllocateSubmitting(true);
-    setTimeout(() => {
-      const tokenRate = kitObj?.token_rate_per_kit_paise || 0;
-      const totalTokenPaise = totalCommitted * tokenRate;
-
-      const updatedOrder = {
-        ...allocatingOrder,
-        status: 'AWAITING_TOKEN_PAYMENT',
-        token_amount_paise: totalTokenPaise,
-        items: [
-          {
-            kit_id: kitObj._id,
-            item_name: kitObj.name,
-            quantity: totalCommitted,
-            unit_price_paise: kitObj.base_price_paise,
-            token_rate_paise: tokenRate,
-            subtotal_paise: totalCommitted * kitObj.base_price_paise,
-            epc_allocations: allocations,
-          },
-        ],
-      };
-
-      setOrders((prev) => prev.map((o) => (o._id === updatedOrder._id ? updatedOrder : o)));
+    try {
+      const res = await api.put(`/po/${allocatingOrder._id}/allocate`, {
+        items: [itemPayload],
+      });
+      if (res.data?.status === 'success') {
+        setAllocateModal(false);
+        await fetchOrders(true);
+        // Automatically open Stage 3 Token Modal
+        const updated = res.data.data;
+        if (updated) {
+          handleOpenTokenModal(updated);
+        }
+      } else {
+        setAllocateError(res.data?.message || 'Failed to allocate EPC to PO.');
+      }
+    } catch (err) {
+      setAllocateError(err.response?.data?.message || err.message || 'Failed to allocate EPC to PO.');
+    } finally {
       setAllocateSubmitting(false);
-      setAllocateModal(false);
-    }, 400);
+    }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STAGE 3: RECORD TOKEN PAYMENT
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleOpenTokenModal = (order) => {
+  // ── Step 3: Open Token Modal & Submit Token Payment ──
+  const handleOpenTokenModal = (order, epcBuyerId = null) => {
     setTokenOrder(order);
-    setTokenError('');
+    const totalTokenReq = Math.round((order.token_amount_paise || 0) / 100);
+    const tokenPaidSoFar = Math.round((order.token_paid_paise || 0) / 100);
+    const remainingToken = Math.max(0, totalTokenReq - tokenPaidSoFar);
+
+    const defaultEpcId = epcBuyerId || (order.po_category === 'SINGLE_PO' && order.items?.[0]?.epc_allocations?.[0]?.epc_buyer_id) || '';
+    setTokenPayingEpcId(defaultEpcId);
+
+    let targetEpcAmount = 0;
+    if (defaultEpcId && order.items?.[0]?.epc_allocations) {
+      const matchedAlloc = order.items[0].epc_allocations.find(
+        (a) => String(a.epc_buyer_id || a.buyer_id) === String(defaultEpcId)
+      );
+      if (matchedAlloc && matchedAlloc.token_amount_paise != null) {
+        targetEpcAmount = Math.round(matchedAlloc.token_amount_paise / 100);
+      }
+    }
+
+    setTokenPayAmount(targetEpcAmount > 0 ? targetEpcAmount : (remainingToken > 0 ? remainingToken : (totalTokenReq > 0 ? totalTokenReq : 0)));
     setTokenUtr(`ICICI-UTR-${Math.floor(10000000 + Math.random() * 90000000)}`);
-    setTokenBank('ICICI Bank / HDFC Bank');
+    setTokenBank('ICICI Bank Corporate');
     setTokenDate(new Date().toISOString().slice(0, 10));
-    setTokenRemarks('');
+    setTokenError('');
+    setTokenSuccess(null);
     setTokenModal(true);
   };
 
-  const handleTokenSubmit = (e) => {
+  const handleSubmitTokenPayment = async (e) => {
     e.preventDefault();
-    if (!tokenOrder) return;
+    setTokenError('');
     if (!tokenUtr.trim()) {
-      setTokenError('Please enter the Bank UTR / Reference number.');
+      setTokenError('Please enter the UTR / Payment Transaction reference number.');
+      return;
+    }
+    if (!tokenPayAmount || tokenPayAmount <= 0) {
+      setTokenError('Please enter a valid token deposit amount.');
       return;
     }
 
     setTokenSubmitting(true);
-    setTimeout(() => {
-      const tokenPaise = tokenOrder.token_amount_paise || 50000000;
-
-      // Mark all allocations as paid
-      const updatedItems = (tokenOrder.items || []).map((it) => ({
-        ...it,
-        epc_allocations: (it.epc_allocations || []).map((a) => ({
-          ...a,
-          payment_status: 'PAID',
-        })),
-      }));
-
-      const updatedOrder = {
-        ...tokenOrder,
-        status: 'VALIDATED', // Automatically validates once token is verified!
-        token_paid_paise: tokenPaise,
-        token_payment_status: 'PAID',
-        token_balance_paise: tokenPaise,
-        utr_number: tokenUtr,
-        sender_bank_name: tokenBank,
+    try {
+      const payload = {
+        epc_buyer_id: tokenPayingEpcId || null,
+        utr_number: tokenUtr.trim().toUpperCase(),
+        amount_paid: Number(tokenPayAmount),
+        sender_bank_name: tokenBank.trim() || 'Bank Transfer',
         payment_date: tokenDate,
-        payment_remarks: tokenRemarks,
-        items: updatedItems,
       };
-
-      setOrders((prev) => prev.map((o) => (o._id === updatedOrder._id ? updatedOrder : o)));
+      const res = await api.post(`/po/${tokenOrder._id}/pay-token`, payload);
+      if (res.data?.status === 'success') {
+        setTokenSuccess(res.data.data);
+        await fetchOrders(true);
+        setTimeout(() => {
+          setTokenModal(false);
+        }, 1500);
+      } else {
+        setTokenError(res.data?.message || 'Failed to record token payment.');
+      }
+    } catch (err) {
+      setTokenError(err.response?.data?.message || err.message || 'Failed to record token payment.');
+    } finally {
       setTokenSubmitting(false);
-      setTokenModal(false);
-    }, 400);
+    }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STAGE 4: VALIDATE & REORDER DRAWDOWN
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleValidateInstant = (order) => {
-    const updated = {
-      ...order,
-      status: 'VALIDATED',
-    };
-    setOrders((prev) => prev.map((o) => (o._id === order._id ? updated : o)));
+  // ── Step 4: Validate PO Order ──
+  const handleValidateOrder = async (order) => {
+    if (!window.confirm(`Validate Purchase Order ${order.po_number}? This will officially lock in pricing and enable loose kit drawdowns.`)) {
+      return;
+    }
+    setValidatingOrderId(order._id);
+    try {
+      const res = await api.post(`/po/${order._id}/validate`);
+      if (res.data?.status === 'success') {
+        await fetchOrders(true);
+      } else {
+        alert(res.data?.message || 'Failed to validate Purchase Order.');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to validate Purchase Order.');
+    } finally {
+      setValidatingOrderId(null);
+    }
   };
 
+  // ── Step 5: Open Reorder Modal (Drawdown against PO Quota) ──
   const handleOpenReorderModal = (order) => {
     setReorderOrder(order);
-    setReorderError('');
-    setReorderQty(Math.min(10, order.remaining_quantity || 1));
-    setReorderUtr(`REORDER-UTR-${Math.floor(10000000 + Math.random() * 90000000)}`);
+    const booked = order.total_booked_quantity || order.items?.[0]?.quantity || 100;
+    const fulfilled = order.fulfilled_quantity || 0;
+    const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(1, booked - fulfilled);
+
+    setReorderQty(Math.min(5, remaining));
+    setReorderUtr(`DRAWDOWN-UTR-${Math.floor(10000000 + Math.random() * 90000000)}`);
     setReorderBank('ICICI Bank');
     setReorderDate(new Date().toISOString().slice(0, 10));
+    setReorderError('');
     setReorderModal(true);
   };
 
-  const handleReorderSubmit = (e) => {
+  const handleSubmitReorder = async (e) => {
     e.preventDefault();
+    setReorderError('');
     if (!reorderOrder) return;
-    const qty = parseInt(reorderQty, 10) || 0;
-    if (qty <= 0 || qty > reorderOrder.remaining_quantity) {
-      setReorderError(`Quantity must be between 1 and ${reorderOrder.remaining_quantity}.`);
+
+    if (reorderQty <= 0) {
+      setReorderError('Please enter a valid reorder quantity.');
       return;
     }
 
     setReorderSubmitting(true);
-    setTimeout(() => {
-      const newFulfilled = (reorderOrder.fulfilled_quantity || 0) + qty;
-      const newRemaining = Math.max(0, (reorderOrder.total_booked_quantity || 0) - newFulfilled);
-      const isComplete = newRemaining === 0;
-
-      const tokenPerKit = Math.round((reorderOrder.token_amount_paise || 0) / (reorderOrder.total_booked_quantity || 1));
-      const adjustedThis = qty * tokenPerKit;
-      const newAdjusted = (reorderOrder.token_adjusted_total_paise || 0) + adjustedThis;
-      const newBalance = Math.max(0, (reorderOrder.token_paid_paise || 0) - newAdjusted);
-
-      const updated = {
-        ...reorderOrder,
-        fulfilled_quantity: newFulfilled,
-        remaining_quantity: newRemaining,
-        status: isComplete ? 'COMPLETED' : reorderOrder.status,
-        token_adjusted_total_paise: newAdjusted,
-        token_balance_paise: newBalance,
-      };
-
-      setOrders((prev) => prev.map((o) => (o._id === updated._id ? updated : o)));
-      setReorderSubmitting(false);
-      setReorderModal(false);
-    }, 400);
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STAGE 5: REFUND REQUEST
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleOpenRefundModal = (order) => {
-    setRefundOrder(order);
-    setRefundError('');
-    setRefundForm({
-      account_holder_name: order.customer_details?.company_name || '',
-      bank_name: 'HDFC Bank',
-      account_number: '50100445588990',
-      confirm_account_number: '50100445588990',
-      ifsc_code: 'HDFC0001234',
-      notes: 'Token refund on remaining unfulfilled quota.',
-    });
-    setRefundModal(true);
-  };
-
-  const handleRefundSubmit = (e) => {
-    e.preventDefault();
-    if (refundForm.account_number !== refundForm.confirm_account_number) {
-      setRefundError('Account numbers do not match.');
-      return;
-    }
-
-    setRefundSubmitting(true);
-    setTimeout(() => {
-      const updated = {
-        ...refundOrder,
-        status: 'REFUND_REQUESTED',
-        refund_request_snapshot: {
-          requested_at: new Date().toISOString(),
-          status: 'REFUND_REQUESTED',
-          refund_form: refundForm,
+    try {
+      const payload = {
+        quantity: Number(reorderQty),
+        kit_id: reorderOrder.items?.[0]?.kit_id,
+        offline_payment: {
+          utr_number: reorderUtr.trim().toUpperCase(),
+          sender_bank_name: reorderBank,
+          payment_date: reorderDate,
         },
       };
-      setOrders((prev) => prev.map((o) => (o._id === updated._id ? updated : o)));
-      setRefundSubmitting(false);
-      setRefundModal(false);
-    }, 400);
+
+      const res = await api.post(`/po/${reorderOrder._id}/reorder`, payload);
+      if (res.data?.status === 'success') {
+        setReorderModal(false);
+        await fetchOrders(true);
+      } else {
+        setReorderError(res.data?.message || 'Failed to place reorder drawdown.');
+      }
+    } catch (err) {
+      setReorderError(err.response?.data?.message || err.message || 'Failed to place reorder drawdown.');
+    } finally {
+      setReorderSubmitting(false);
+    }
   };
 
+  // ── Step 6: View Details ──
+  const handleOpenDetailModal = (order) => {
+    setSelectedOrder(order);
+    setDetailModal(true);
+  };
+
+  // ── Filtered Orders ──
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      // 1. EPC filter
+      if (selectedEpcFilter !== 'ALL') {
+        const orderEpcId = (o.epc_id?._id || o.epc_id || o.customer_details?.epc_id)?.toString();
+        const allocEpcIds =
+          o.items?.[0]?.epc_allocations?.map((a) => (a.epc_buyer_id || a.buyer_id)?.toString()) || [];
+        if (orderEpcId !== selectedEpcFilter && !allocEpcIds.includes(selectedEpcFilter)) {
+          return false;
+        }
+      }
+      // 2. Franchisee filter
+      if (selectedFranchiseeFilter !== 'ALL') {
+        const orderFId = (o.franchisee_id?._id || o.franchisee_id || o.reseller_id)?.toString();
+        if (orderFId !== selectedFranchiseeFilter) return false;
+      }
+      // 3. Category Tab
+      if (categoryTab !== 'ALL') {
+        if (o.po_category !== categoryTab) return false;
+      }
+      // 4. Status filter
+      if (statusFilter !== 'ALL') {
+        if (o.status !== statusFilter) return false;
+      }
+      // 5. Search query
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        const poNum = (o.po_number || '').toLowerCase();
+        const kitName = (o.items?.[0]?.item_name || '').toLowerCase();
+        const fName = (o.customer_details?.company_name || o.customer_details?.name || o.franchisee_id?.business_name || '').toLowerCase();
+        const epcName = (o.items?.[0]?.epc_allocations?.[0]?.company_name || o.epc_id?.company_name || '').toLowerCase();
+        if (!poNum.includes(q) && !kitName.includes(q) && !fName.includes(q) && !epcName.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [orders, selectedEpcFilter, selectedFranchiseeFilter, categoryTab, statusFilter, search]);
+
+  // Counts for Category Tabs
+  const allOrdersCount = orders.length;
+  const singlePoCount = orders.filter((o) => o.po_category === 'SINGLE_PO').length;
+  const combinePoCount = orders.filter((o) => o.po_category === 'COMBINE_PO').length;
+
   return (
-    <div className="space-y-6 pb-24">
-      {/* ── Top Header Banner (Exact match to Franchise PO design) ── */}
-      <div
-        className="relative rounded-3xl p-6 sm:p-8 text-white shadow-xl overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%)' }}
-      >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-400/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+    <div className="p-4 md:p-6 lg:p-8 space-y-6">
+      {/* ── 1. ROYAL HERO BANNER (Matches Franchise Portal Screenshot Exactly) ── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-900 text-white p-6 md:p-8 shadow-xl">
+        <div className="absolute -right-10 -top-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-amber-400/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
+            {/* Top pill badges */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-white/20 backdrop-blur-md border border-white/20 text-white">
-                <Shield className="w-3.5 h-3.5" /> BDE Field PO & Quota Booking
+              <span className="px-2.5 py-0.5 rounded-md bg-white/15 text-white text-[10px] font-black uppercase tracking-wider border border-white/20 backdrop-blur-xs">
+                FRANCHISEE QUOTA HUB
               </span>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/30 text-amber-200 border border-amber-400/40">
-                ★ Territory Network Management
+              <span className="px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 text-[10px] font-bold border border-amber-400/30">
+                BDE Allocation Engine
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Purchase Orders & Token Booking
+
+            {/* Title with Shopping Cart */}
+            <h1 className="text-2xl md:text-3xl font-extrabold flex items-center gap-3 tracking-tight">
+              <ShoppingCart className="w-8 h-8 text-amber-300 shrink-0" />
+              <span>Purchase Orders &amp; Quota Lock</span>
             </h1>
-            <p className="text-white/80 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Create and manage bulk solar kit quotas on behalf of onboarded franchisees and EPC partners.
-              Lock prices with dynamic token deposits (Single PO or Combine EPC Pool), manage product allocation,
-              and track loose order drawdown.
+
+            {/* Subtitle */}
+            <p className="text-sm md:text-base text-blue-100 max-w-2xl leading-relaxed">
+              Choose configured ComboKit blueprints, lock bulk quotas, and allocate loose orders to your onboarded EPC network.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 self-start md:self-center shrink-0">
             <button
               onClick={handleRefresh}
-              className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
-              title="Refresh Data"
+              disabled={isRefreshing}
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 backdrop-blur-xs transition shadow-xs disabled:opacity-50"
+              title="Refresh Orders"
             >
-              <RotateCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RotateCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
+
             <button
-              onClick={handleOpenCreateModal}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95 cursor-pointer"
+              onClick={() => handleOpenCreateModal()}
+              className="px-5 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl shadow-lg hover:shadow-amber-400/30 transition-all flex items-center gap-2 text-sm"
             >
-              <Plus className="w-4 h-4" />
-              <span>Create Purchase Order</span>
+              <Plus className="w-5 h-5 stroke-[2.5]" />
+              <span> Create Purchase Order</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Monthly Territory Kit Target & Goal Bar ── */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold shrink-0">
-            <Target className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
-                Territory Monthly Fulfillment Goal
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 text-blue-800">
-                {Math.min(100, Math.round((stats.totalFulfilled / Math.max(1, stats.totalBooked)) * 100))}% Fulfilled
-              </span>
+      {/* ── 2. ONBOARDED EPC & FRANCHISEE SELECTOR / CONTEXT BAR ── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* EPC Filter */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <Users className="w-4 h-4 text-blue-600" />
+              <span>Onboarded EPC:</span>
             </div>
-            <div className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">
-              {stats.totalFulfilled} / {stats.totalBooked} Kits Fulfilled
-              <span className="text-xs font-normal text-slate-500 ml-2">
-                ({stats.totalRemaining} kits remaining in active price-locked quotas)
-              </span>
-            </div>
-          </div>
-        </div>
 
-        <div className="w-full md:w-64 space-y-1.5 shrink-0">
-          <div className="flex justify-between text-[11px] font-bold text-slate-500">
-            <span>Quota Drawdown</span>
-            <span>{stats.validatedCount} Validated POs</span>
+            <select
+              value={selectedEpcFilter}
+              onChange={(e) => setSelectedEpcFilter(e.target.value)}
+              className="text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[240px]"
+            >
+              <option value="ALL">All Onboarded EPCs ({onboardedEpcs.length})</option>
+              {onboardedEpcs.map((epc) => (
+                <option key={epc._id || epc.id} value={epc._id || epc.id}>
+                  {epc.company_name} • {epc.district} ({epc.gstin || 'Non-GST'})
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-            <div
-              className="h-full rounded-full bg-blue-600 transition-all duration-500"
-              style={{
-                width: `${Math.min(
-                  100,
-                  Math.max(5, Math.round((stats.totalFulfilled / Math.max(1, stats.totalBooked)) * 100))
-                )}%`,
+
+          {(selectedEpcFilter !== 'ALL' || selectedFranchiseeFilter !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSelectedEpcFilter('ALL');
+                setSelectedFranchiseeFilter('ALL');
               }}
-            />
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 underline"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Quick status summary badge */}
+        <div className="flex items-center gap-3">
+          {selectedFranchiseeFilter !== 'ALL' && (
+            <div className="hidden lg:flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+              <span className="font-semibold text-slate-900">
+                {franchisees.find((f) => (f._id || f.id) === selectedFranchiseeFilter)?.business_name}
+              </span>
+              <span>•</span>
+              <span className="text-emerald-700 font-bold">
+                {franchisees.find((f) => (f._id || f.id) === selectedFranchiseeFilter)?.plan_name || 'Active Hub'}
+              </span>
+            </div>
+          )}
+          <div className="text-xs text-slate-500 font-medium">
+            Showing <span className="font-bold text-slate-900">{filteredOrders.length}</span> of {orders.length} orders
           </div>
         </div>
       </div>
 
-      {/* ── Active Policy & Rules Strip ── */}
-      <div className="rounded-2xl p-4 sm:p-5 border border-slate-200 bg-white shadow-xs">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="space-y-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-blue-600" /> BDE Territory
-            </div>
-            <div className="text-sm font-black text-slate-900">Gujarat Cluster (Surat / Ahm)</div>
-            <div className="text-[11px] font-semibold text-emerald-600">3 Active Franchisees</div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Package className="w-3.5 h-3.5 text-blue-600" /> Min Quota Threshold
-            </div>
-            <div className="text-sm font-black text-slate-900">25 Kits Minimum</div>
-            <div className="text-[11px] text-slate-500">Per Bulk PO Order</div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-blue-600" /> Price Lock Duration
-            </div>
-            <div className="text-sm font-black text-slate-900">30 Days Guaranteed</div>
-            <div className="text-[11px] text-slate-500">Fixed rate lock from token deposit</div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Token Booking Mode
-            </div>
-            <div className="text-sm font-black text-emerald-600">₹5,000 / Kit Flat</div>
-            <div className="text-[11px] text-slate-500">Auto-adjusted on final orders</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Control Bar: Search, Category Tabs, Status Filter, View Mode ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Category Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl w-fit border border-slate-200">
+      {/* ── 3. FILTER & SEARCH BAR (Matches Screenshot Exactly) ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+        {/* Left: Category Tabs */}
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setCategoryTab('ALL')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-              categoryTab === 'ALL'
-                ? 'bg-white text-blue-700 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${categoryTab === 'ALL'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
           >
-            All Orders ({orders.length})
+            All Orders ({allOrdersCount})
           </button>
           <button
             onClick={() => setCategoryTab('SINGLE_PO')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-              categoryTab === 'SINGLE_PO'
-                ? 'bg-white text-blue-700 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${categoryTab === 'SINGLE_PO'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
           >
-            Single PO ({orders.filter((o) => o.po_category === 'SINGLE_PO').length})
+            Single PO ({singlePoCount})
           </button>
           <button
             onClick={() => setCategoryTab('COMBINE_PO')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-              categoryTab === 'COMBINE_PO'
-                ? 'bg-white text-purple-700 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${categoryTab === 'COMBINE_PO'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
           >
-            Combine PO ({orders.filter((o) => o.po_category === 'COMBINE_PO').length})
+            Combine PO ({combinePoCount})
           </button>
         </div>
 
-        {/* Search, Filter & View Toggle */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Search */}
-          <div className="relative min-w-[220px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        {/* Right: Search, Status, and View Mode */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search PO#, Franchise, EPC..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+              placeholder="Search PO#, EPC, Kit..."
+              className="pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 lg:w-64 shadow-2xs"
             />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
 
-          {/* Status Filter */}
+          {/* Status Dropdown */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 shadow-2xs"
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
           >
             <option value="ALL">All Statuses</option>
-            <option value="PENDING_ALLOCATION">1. Pending Allocation</option>
-            <option value="AWAITING_TOKEN_PAYMENT">2. Awaiting Token</option>
-            <option value="PO_STARTED">3. PO Started</option>
-            <option value="VALIDATED">4. Validated ✓</option>
+            <option value="DRAFT">Draft</option>
+            <option value="PENDING_ALLOCATION">Pending Allocation</option>
+            <option value="AWAITING_TOKEN_PAYMENT">Awaiting Token Payment</option>
+            <option value="PO_STARTED">PO Started</option>
+            <option value="VALIDATED">Validated ✓</option>
+            <option value="APPROVED">Approved</option>
+            <option value="PAID">Paid</option>
             <option value="COMPLETED">Completed</option>
-            <option value="REFUND_REQUESTED">Refund Requested</option>
           </select>
 
-          {/* View Toggle */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setViewMode('card')}
-              className={`p-1.5 rounded-lg transition ${
-                viewMode === 'card' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500 hover:text-slate-700'
-              }`}
-              title="Card View"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
             <button
               onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-lg transition ${
-                viewMode === 'table' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className={`p-1.5 rounded-lg transition ${viewMode === 'table' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-400 hover:text-slate-700'
+                }`}
               title="Table View"
             >
               <List className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`p-1.5 rounded-lg transition ${viewMode === 'cards' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-400 hover:text-slate-700'
+                }`}
+              title="Card Grid View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
           </div>
-
-          <button
-            onClick={handleResetData}
-            className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
-            title="Clear local PO orders"
-          >
-            Clear Orders
-          </button>
         </div>
       </div>
 
-      {/* ── Order List: Card View or Table View ── */}
-      {filteredOrders.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl border-2 border-dashed border-slate-200 bg-white space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
-            <ShoppingCart className="w-7 h-7" />
+      {/* ── 4. ORDER LIST / EMPTY STATE ── */}
+      {ordersLoading ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center shadow-xs">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
+          <p className="text-sm font-semibold text-slate-600">Loading purchase orders...</p>
+        </div>
+      ) : filteredOrders.length === 0 ? (
+        /* EXACT EMPTY STATE MATCHING SCREENSHOT */
+        <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 md:p-16 text-center bg-white/60 shadow-2xs">
+          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xs">
+            <ShoppingCart className="w-8 h-8 text-blue-600" />
           </div>
-          <div>
-            <h3 className="text-base font-black text-slate-800">No Purchase Orders Found</h3>
-            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-              No PO orders match your current filter. Create a new bulk PO for your onboarded franchisees or adjust your filters.
-            </p>
-          </div>
+          <h3 className="text-lg font-bold text-slate-800 mb-2">No Purchase Orders Found</h3>
+          <p className="text-xs md:text-sm text-slate-500 max-w-md mx-auto mb-6">
+            No PO orders match your current filter. Create a new purchase order and select an authorized ComboKit blueprint.
+          </p>
           <button
-            onClick={handleOpenCreateModal}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black shadow-md hover:bg-blue-700 transition"
+            onClick={() => handleOpenCreateModal()}
+            className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl shadow-md text-xs inline-flex items-center gap-2 transition"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Purchase Order</span>
+            <span>Create New Purchase Order</span>
           </button>
         </div>
-      ) : viewMode === 'card' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredOrders.map((order) => (
-            <PoCardItem
-              key={order._id}
-              order={order}
-              onSelectOrder={() => {
-                setSelectedOrder(order);
-                setDetailModal(true);
-              }}
-              onOpenAllocate={() => handleOpenAllocateModal(order)}
-              onOpenToken={() => handleOpenTokenModal(order)}
-              onValidateOrder={() => handleValidateInstant(order)}
-              onOpenReorder={() => handleOpenReorderModal(order)}
-              onOpenRefund={() => handleOpenRefundModal(order)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+      ) : viewMode === 'table' ? (
+        /* TABLE VIEW */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4">PO Number & Creator</th>
-                  <th className="py-3 px-4">Franchisee & Beneficiary</th>
-                  <th className="py-3 px-4">Status & Stage</th>
-                  <th className="py-3 px-4">Kit & Committed Quota</th>
-                  <th className="py-3 px-4">Progress</th>
-                  <th className="py-3 px-4">Token Balance</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3.5">PO Number &amp; Date</th>
+                  <th className="px-4 py-3.5">Onboarded EPC &amp; Franchise Hub</th>
+                  <th className="px-4 py-3.5">Blueprint ComboKit</th>
+                  <th className="px-4 py-3.5">Quota &amp; Fulfilled</th>
+                  <th className="px-4 py-3.5">Commercial Value</th>
+                  <th className="px-4 py-3.5">Escrow Token</th>
+                  <th className="px-4 py-3.5">Stage &amp; Status</th>
+                  <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              <tbody className="divide-y divide-slate-100">
                 {filteredOrders.map((order) => {
                   const item = order.items?.[0] || {};
-                  const isCombine = order.po_category === 'COMBINE_PO';
-                  const booked = order.total_booked_quantity || order.target_committed_quantity || 0;
+                  const orderGstRate = item.gst_rate != null ? Number(item.gst_rate) : (order.pricing?.tax_rate != null ? Number(order.pricing.tax_rate) : null);
+                  const totalCommitted = order.target_committed_quantity || order.total_booked_quantity || item.quantity || 100;
                   const fulfilled = order.fulfilled_quantity || 0;
-                  const remaining = order.remaining_quantity ?? Math.max(0, booked - fulfilled);
-                  const progressPct = booked > 0 ? Math.round((fulfilled / booked) * 100) : 0;
-                  const tokenPaidINR = Math.round((order.token_paid_paise || 0) / 100);
+                  const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, totalCommitted - fulfilled);
+                  const grandTotalInr = Math.round((order.grand_total_paise || 0) / 100);
+                  const tokenReqInr = Math.round((order.token_amount_paise || 0) / 100);
+                  const tokenPaidInr = Math.round((order.token_paid_paise || 0) / 100);
+                  const isTokenPaid = order.token_payment_status === 'PAID' || tokenPaidInr >= tokenReqInr;
+                  const stepNum = ['VALIDATED', 'CONFIRMED', 'PAID', 'COMPLETED'].includes(order.status)
+                    ? 4
+                    : ['PO_STARTED', 'VALIDATING'].includes(order.status)
+                      ? 3
+                      : ['AWAITING_TOKEN_PAYMENT'].includes(order.status)
+                        ? 2
+                        : 1;
+
+                  const franchiseeName =
+                    order.customer_details?.company_name ||
+                    order.customer_details?.name ||
+                    order.franchisee_id?.business_name ||
+                    'Franchise Store';
+
+                  const epcName =
+                    order.epc_id?.company_name ||
+                    order.customer_details?.buyer_name ||
+                    order.items?.[0]?.epc_allocations?.[0]?.company_name ||
+                    order.customer_details?.name ||
+                    'Onboarded EPC';
 
                   return (
-                    <tr key={order._id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono font-black text-slate-900">{order.po_number}</div>
-                        <div className="text-[10px] text-amber-600 font-bold mt-0.5">
-                          BDE: {order.creator_name} ({order.creator_code})
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900">
-                          {order.customer_details?.company_name || 'Franchisee Hub'}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {isCombine
-                            ? `Combine Pool (${item.epc_allocations?.length || 0} EPCs)`
-                            : item.epc_allocations?.[0]?.company_name || 'Single EPC Partner'}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <StatusBadge status={order.status} />
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900 truncate max-w-[200px]">
-                          {item.item_name || 'Pending Allocation'}
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {booked} Kits Total
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-600 rounded-full"
-                              style={{ width: `${progressPct}%` }}
-                            />
-                          </div>
-                          <span className="font-bold text-[11px]">{progressPct}%</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {fulfilled} / {booked} (rem: {remaining})
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-black text-emerald-700">₹{tokenPaidINR.toLocaleString('en-IN')}</div>
-                        <div className="text-[10px] text-slate-500 uppercase">{order.token_payment_status || 'PENDING'}</div>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                    <tr key={order._id} className="hover:bg-slate-50/70 transition">
+                      {/* PO Number */}
+                      <td className="px-4 py-3.5">
+                        <div className="font-mono font-bold text-blue-700 flex items-center gap-1.5">
+                          <span>{order.po_number}</span>
                           <button
-                            onClick={() => {
-                              setSelectedOrder(order);
-                              setDetailModal(true);
-                            }}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-                            title="View Details"
+                            onClick={() => handleCopy(order.po_number, `po-${order._id}`)}
+                            className="text-slate-400 hover:text-slate-700"
+                            title="Copy PO Number"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Copy className="w-3 h-3" />
                           </button>
-                          {order.status === 'PENDING_ALLOCATION' && (
-                            <button
-                              onClick={() => handleOpenAllocateModal(order)}
-                              className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-black text-[10px] hover:bg-amber-600"
-                            >
-                              Allocate ⚡
-                            </button>
-                          )}
-                          {order.status === 'AWAITING_TOKEN_PAYMENT' && (
-                            <button
-                              onClick={() => handleOpenTokenModal(order)}
-                              className="px-2.5 py-1 rounded-lg bg-orange-500 text-white font-black text-[10px] hover:bg-orange-600"
-                            >
-                              Token 🔒
-                            </button>
-                          )}
-                          {order.status === 'VALIDATED' && remaining > 0 && (
-                            <button
-                              onClick={() => handleOpenReorderModal(order)}
-                              className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black text-[10px] hover:bg-blue-700"
-                            >
-                              Reorder
-                            </button>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {new Date(order.createdAt || order.order_date).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </div>
+                        <span className="inline-block mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                          {order.po_category === 'COMBINE_PO' ? 'Combine PO' : 'Single PO'}
+                        </span>
+                      </td>
+
+                      {/* Onboarded EPC & Franchise Hub */}
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span className="truncate max-w-[200px]">{epcName}</span>
+                        </div>
+                        <div className="text-[11px] text-indigo-700 font-semibold flex items-center gap-1 mt-0.5">
+                          <Store className="w-3 h-3 text-indigo-500 shrink-0" />
+                          <span className="truncate max-w-[180px]">Hub: {franchiseeName}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {order.customer_details?.district || order.franchisee_id?.address?.district_name || 'Regional'}
+                          {order.customer_details?.gstin ? ` • GST: ${order.customer_details.gstin}` : ''}
+                        </div>
+                      </td>
+
+                      {/* Blueprint Kit */}
+                      <td className="px-4 py-3.5">
+                        <div className="font-semibold text-slate-800">{item.item_name || 'Solar ComboKit'}</div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span>₹{((item.unit_price_paise || 0) / 100).toLocaleString('en-IN')}/kit</span>
+                        </div>
+                      </td>
+
+                      {/* Quota Progress */}
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-slate-900">{totalCommitted} Kits</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          {fulfilled} fulfilled • {remaining} left
+                        </div>
+                        <div className="w-24 bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                          <div
+                            className="bg-emerald-500 h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(100, Math.round((fulfilled / Math.max(1, totalCommitted)) * 100))}%`,
+                            }}
+                          />
+                        </div>
+                      </td>
+
+                      {/* Commercial Value */}
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-slate-900">₹{grandTotalInr.toLocaleString('en-IN')}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {orderGstRate != null ? `Incl. ${orderGstRate}% GST` : 'Incl. GST'}
+                        </div>
+                      </td>
+
+                      {/* Token Deposit */}
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-slate-900">₹{tokenReqInr.toLocaleString('en-IN')}</div>
+                        <div className="text-[11px] mt-0.5">
+                          {isTokenPaid ? (
+                            <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">PAID</span>
+                          ) : (
+                            <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">PENDING</span>
                           )}
                         </div>
+                      </td>
+
+                      {/* Stage & Status */}
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={order.status} />
+                        <PoStageStepper stepNumber={stepNum} />
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3.5 text-right space-x-1 whitespace-nowrap">
+                        {/* Allocate to EPC */}
+                        {['DRAFT', 'PENDING_ALLOCATION', 'AWAITING_TOKEN_PAYMENT'].includes(order.status) && (
+                          <button
+                            onClick={() => handleOpenAllocateModal(order)}
+                            className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition"
+                          >
+                            Allocate EPC
+                          </button>
+                        )}
+
+                        {/* Pay Token */}
+                        {!isTokenPaid && (
+                          <button
+                            onClick={() => handleOpenTokenModal(order)}
+                            className="px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg transition"
+                          >
+                            Pay Token
+                          </button>
+                        )}
+
+                        {/* Validate PO */}
+                        {isTokenPaid && order.status !== 'VALIDATED' && (
+                          <button
+                            onClick={() => handleValidateOrder(order)}
+                            disabled={validatingOrderId === order._id}
+                            className="px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition"
+                          >
+                            {validatingOrderId === order._id ? 'Validating...' : 'Validate PO ✓'}
+                          </button>
+                        )}
+
+                        {/* Drawdown / Reorder */}
+                        {['VALIDATED', 'CONFIRMED', 'PAID', 'PO_STARTED'].includes(order.status) && remaining > 0 && (
+                          <button
+                            onClick={() => handleOpenReorderModal(order)}
+                            className="px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 rounded-lg transition"
+                          >
+                            Drawdown
+                          </button>
+                        )}
+
+                        {/* View Details */}
+                        <button
+                          onClick={() => handleOpenDetailModal(order)}
+                          className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 rounded-lg transition"
+                          title="View PO Details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1122,289 +1734,786 @@ export default function BdePoOrders() {
             </table>
           </div>
         </div>
+      ) : (
+        /* CARDS GRID VIEW */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredOrders.map((order) => {
+            const item = order.items?.[0] || {};
+            const totalCommitted = order.target_committed_quantity || order.total_booked_quantity || item.quantity || 100;
+            const fulfilled = order.fulfilled_quantity || 0;
+            const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, totalCommitted - fulfilled);
+            const grandTotalInr = Math.round((order.grand_total_paise || 0) / 100);
+            const tokenReqInr = Math.round((order.token_amount_paise || 0) / 100);
+            const tokenPaidInr = Math.round((order.token_paid_paise || 0) / 100);
+            const isTokenPaid = order.token_payment_status === 'PAID' || tokenPaidInr >= tokenReqInr;
+            const stepNum = ['VALIDATED', 'CONFIRMED', 'PAID', 'COMPLETED'].includes(order.status)
+              ? 4
+              : ['PO_STARTED', 'VALIDATING'].includes(order.status)
+                ? 3
+                : ['AWAITING_TOKEN_PAYMENT'].includes(order.status)
+                  ? 2
+                  : 1;
+
+            const franchiseeName =
+              order.customer_details?.company_name ||
+              order.customer_details?.name ||
+              order.franchisee_id?.business_name ||
+              'Franchise Store';
+
+            const epcPreviewName =
+              order.items?.[0]?.epc_allocations?.[0]?.company_name ||
+              order.epc_id?.company_name ||
+              'Not Allocated';
+
+            return (
+              <div
+                key={order._id}
+                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-4"
+              >
+                {/* Card Header */}
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <div className="font-mono font-bold text-blue-700 text-sm flex items-center gap-1.5">
+                        <span>{order.po_number}</span>
+                        <button
+                          onClick={() => handleCopy(order.po_number, `po-${order._id}`)}
+                          className="text-slate-400 hover:text-slate-700"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {new Date(order.createdAt || order.order_date).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </div>
+                    </div>
+                    <StatusBadge status={order.status} />
+                  </div>
+
+                  {/* EPC Partner & Franchise Hub */}
+                  <div className="py-2 border-y border-slate-100 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800 truncate max-w-[190px] flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="truncate">{epcPreviewName}</span>
+                      </span>
+                      <span className="font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[10px]">
+                        {order.po_category === 'COMBINE_PO' ? 'Combine PO' : 'Single PO'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-indigo-700 font-semibold flex items-center gap-1">
+                      <Store className="w-3 h-3 text-indigo-500 shrink-0" />
+                      <span className="truncate">Hub: {franchiseeName}</span>
+                    </div>
+                  </div>
+
+                  {/* Blueprint Kit Details */}
+                  <div className="mt-3">
+                    <div className="font-bold text-slate-900 text-sm">{item.item_name || 'Solar ComboKit Blueprint'}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Target Quota: <span className="font-bold text-slate-800">{totalCommitted} Kits</span>
+                    </div>
+                  </div>
+
+                  {/* EPC Allocation preview */}
+                  <div className="mt-2.5 p-2 bg-slate-50 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500">Assigned EPC:</span>
+                    <span className="font-bold text-slate-800 truncate max-w-[170px]">{epcPreviewName}</span>
+                  </div>
+
+                  {/* Quota Progress Bar */}
+                  <div className="mt-3">
+                    <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                      <span>Progress</span>
+                      <span>
+                        {fulfilled} / {totalCommitted} Kits
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-emerald-500 h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.round((fulfilled / Math.max(1, totalCommitted)) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Financials & Token */}
+                  <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 text-xs">
+                    <div>
+                      <div className="text-slate-400 text-[10px] font-bold uppercase">Grand Total</div>
+                      <div className="font-bold text-slate-900 mt-0.5">₹{grandTotalInr.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-[10px] font-bold uppercase">Token Deposit</div>
+                      <div className="font-bold text-slate-900 mt-0.5 flex items-center gap-1.5">
+                        <span>₹{tokenReqInr.toLocaleString('en-IN')}</span>
+                        {isTokenPaid ? (
+                          <span className="text-[9px] font-black text-emerald-600">✓ PAID</span>
+                        ) : (
+                          <span className="text-[9px] font-black text-amber-600">PENDING</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stepper */}
+                  <div className="mt-3">
+                    <PoStageStepper stepNumber={stepNum} />
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => handleOpenDetailModal(order)}
+                    className="p-2 text-slate-500 hover:text-slate-800 bg-slate-100 rounded-xl transition"
+                    title="View Details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    {['DRAFT', 'PENDING_ALLOCATION', 'AWAITING_TOKEN_PAYMENT'].includes(order.status) && (
+                      <button
+                        onClick={() => handleOpenAllocateModal(order)}
+                        className="px-3 py-1.5 text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-xl transition"
+                      >
+                        Allocate EPC
+                      </button>
+                    )}
+
+                    {!isTokenPaid && (
+                      <button
+                        onClick={() => handleOpenTokenModal(order)}
+                        className="px-3 py-1.5 text-xs font-bold text-blue-800 bg-blue-100 hover:bg-blue-200 rounded-xl transition"
+                      >
+                        Pay Token
+                      </button>
+                    )}
+
+                    {isTokenPaid && order.status !== 'VALIDATED' && (
+                      <button
+                        onClick={() => handleValidateOrder(order)}
+                        disabled={validatingOrderId === order._id}
+                        className="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-xl transition"
+                      >
+                        {validatingOrderId === order._id ? 'Validating...' : 'Validate PO ✓'}
+                      </button>
+                    )}
+
+                    {['VALIDATED', 'CONFIRMED', 'PAID', 'PO_STARTED'].includes(order.status) && remaining > 0 && (
+                      <button
+                        onClick={() => handleOpenReorderModal(order)}
+                        className="px-3 py-1.5 text-xs font-bold text-indigo-800 bg-indigo-100 hover:bg-indigo-200 rounded-xl transition"
+                      >
+                        Drawdown
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MODAL 1: CREATE PURCHASE ORDER (STAGE 1)
-      ───────────────────────────────────────────────────────────────────────────── */}
+      {/* ── 5. MODAL 1: CREATE PURCHASE ORDER ── */}
       {createModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-3xl lg:max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-10 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-6 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 text-blue-700 border border-blue-200">
-                    Stage 1 of 4
-                  </span>
-                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <ShoppingCart className="w-5 h-5 text-blue-600" /> Create Purchase Order
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  BDE Field PO Creation • Min Quota MOQ: <strong className="text-emerald-600">25 kits</strong>
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-200 bg-white/10 px-2 py-0.5 rounded">
+                  STAGE 1: BLUEPRINT &amp; PO QUOTA SELECTION
+                </span>
+                <h2 className="text-xl font-bold mt-1">Create Purchase Order for Onboarded EPC</h2>
+                <p className="text-xs text-blue-100 mt-0.5">
+                  Choose your Onboarded EPC partner, select an authorized ComboKit blueprint, and lock bulk quota pricing.
                 </p>
               </div>
               <button
                 onClick={() => setCreateModal(false)}
-                disabled={createSubmitting}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+                className="p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Lifecycle Stage Guide Bar */}
-            <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-[11px] font-bold">
-              <span className="text-blue-600 flex items-center gap-1 font-black">
-                <CheckCircle2 className="w-3.5 h-3.5" /> 1. Create PO Card
-              </span>
-              <span className="text-slate-400">➔ 2. Allocate Product</span>
-              <span className="text-slate-400">➔ 3. Waiting for Token</span>
-              <span className="text-slate-400">➔ 4. Validated</span>
-            </div>
-
-            {/* Modal Form Content */}
-            <form onSubmit={handleCreateOrder} className="flex-1 overflow-y-auto p-6 space-y-5">
+            <form onSubmit={handleCreateOrder} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               {createError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{createError}</span>
                 </div>
               )}
 
-              {/* Franchisee Selector (BDE Specific Addition) */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Select Onboarded Franchisee <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Store className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <select
-                    value={selectedFranchiseeId}
-                    onChange={(e) => setSelectedFranchiseeId(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
-                    required
-                  >
-                    <option value="">-- Choose Franchisee Store --</option>
-                    {franchisees.map((f) => (
-                      <option key={f._id || f.franchisee_id} value={f._id || f.franchisee_id}>
-                        {f.company_name || f.name} • {f.district}, {f.state} ({f.franchisee_id || 'Active'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  This PO will be credited to this franchisee's store quota & targets.
-                </p>
-              </div>
-
-              {/* Section 1: PO Category Selector */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Purchase Order Type <span className="text-rose-500">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    onClick={() => setPoCategory('SINGLE_PO')}
-                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                      poCategory === 'SINGLE_PO'
-                        ? 'border-blue-600 bg-blue-50/50 shadow-xs'
-                        : 'border-slate-200 hover:border-blue-300 bg-white'
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        poCategory === 'SINGLE_PO' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600'
-                      }`}
-                    >
-                      <UserCheck className="w-4 h-4" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="font-black text-xs text-slate-900 flex items-center gap-1">
-                        Single PO
-                        {poCategory === 'SINGLE_PO' && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 leading-tight">
-                        Dedicated to 1 EPC Partner or Franchise Warehouse stock.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    onClick={() => setPoCategory('COMBINE_PO')}
-                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                      poCategory === 'COMBINE_PO'
-                        ? 'border-purple-600 bg-purple-50/50 shadow-xs'
-                        : 'border-slate-200 hover:border-purple-300 bg-white'
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        poCategory === 'COMBINE_PO' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'
-                      }`}
-                    >
-                      <Users className="w-4 h-4" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="font-black text-xs text-slate-900 flex items-center gap-1">
-                        Combine PO (Multi-EPC)
-                        {poCategory === 'COMBINE_PO' && <Check className="w-3.5 h-3.5 text-purple-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 leading-tight">
-                        Pool demand from multiple onboarded EPC contractors.
-                      </p>
-                    </div>
-                  </div>
+              {/* Step 1: Onboarded EPC Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase text-slate-700">
+                    1. Select Onboarded EPC Partner <span className="text-rose-500">*</span>
+                  </label>
+                  {epcsLoading && (
+                    <span className="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Loading EPCs...
+                    </span>
+                  )}
                 </div>
 
-                {/* Single PO Beneficiary Selector */}
-                {poCategory === 'SINGLE_PO' && (
-                  <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50 space-y-2 mt-2">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                      Single PO Destination / Beneficiary
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div
-                        onClick={() => setSingleTargetType('single_epc')}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-                          singleTargetType === 'single_epc'
-                            ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold'
-                            : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                      >
-                        <UserCheck className="w-4 h-4" />
-                        <span className="text-xs">1 Onboarded EPC Partner</span>
+                <select
+                  value={modalEpcId}
+                  onChange={(e) => {
+                    const chosenEpcId = e.target.value;
+                    setModalEpcId(chosenEpcId);
+                    const chosenEpc = onboardedEpcs.find((item) => String(item._id || item.id) === String(chosenEpcId));
+                    const targetFId = chosenEpc?.assigned_franchisee_id || chosenEpc?.assigned_franchisee?._id || '';
+                    setModalFranchiseeId(targetFId);
+                    fetchCompanyCombokits(chosenEpcId, targetFId);
+                    if (targetFId) {
+                      fetchFranchiseePlanSettings(targetFId);
+                      fetchEpcBuyers(targetFId);
+                    }
+                  }}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Choose Onboarded EPC Partner --</option>
+                  {onboardedEpcs.map((epc) => (
+                    <option key={epc._id || epc.id} value={epc._id || epc.id}>
+                      {epc.company_name} {epc.contact_person && epc.contact_person !== epc.company_name ? `(${epc.contact_person})` : ''} • {epc.district}, {epc.state} {epc.gstin ? `• GST: ${epc.gstin}` : ''}
+                    </option>
+                  ))}
+                </select>
+
+                {activeEpcObj && (
+                  <div className="mt-2.5 p-3.5 bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-blue-50/90 border border-blue-200 rounded-xl text-xs text-blue-950 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-blue-700 shrink-0" />
+                        <span className="font-bold text-sm text-blue-900">{activeEpcObj.company_name}</span>
+                        {activeEpcObj.gstin ? (
+                          <span className="bg-blue-100 text-blue-800 font-mono text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200">
+                            GST: {activeEpcObj.gstin}
+                          </span>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200">
+                            Registered EPC Partner
+                          </span>
+                        )}
                       </div>
-                      <div
-                        onClick={() => setSingleTargetType('warehouse')}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-                          singleTargetType === 'warehouse'
-                            ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold'
-                            : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                      >
-                        <Package className="w-4 h-4" />
-                        <span className="text-xs">Warehouse Self-Stock</span>
-                      </div>
+                      <span className="text-[11px] font-semibold text-blue-700 bg-white px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs">
+                        📍 {activeEpcObj.district}, {activeEpcObj.state}
+                      </span>
                     </div>
 
-                    {singleTargetType === 'single_epc' && (
-                      <div className="pt-2 border-t border-slate-200 space-y-1">
-                        <label className="block text-[10px] font-bold uppercase text-slate-500">
-                          Select EPC Contractor:
-                        </label>
-                        <select
-                          value={selectedSingleEpcId}
-                          onChange={(e) => setSelectedSingleEpcId(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
-                        >
-                          <option value="">-- Choose EPC Partner --</option>
-                          {epcList.map((b) => (
-                            <option key={b._id} value={b._id}>
-                              {b.company_name} ({b.buyer_name}) - {b.district || 'Territory'}
-                            </option>
-                          ))}
-                        </select>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-blue-100/90 text-[11px] text-slate-600">
+                      <div>
+                        <span className="text-slate-500">Contact Person:</span>{' '}
+                        <span className="font-semibold text-slate-800">{activeEpcObj.contact_person || activeEpcObj.name}</span>
+                        {activeEpcObj.mobile && (
+                          <span className="ml-1.5 font-mono text-slate-600">({activeEpcObj.mobile})</span>
+                        )}
                       </div>
-                    )}
+
+                      {/* PO Fulfillment: Direct Company Order */}
+                      <div className="flex items-center gap-1.5">
+                        <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="text-slate-500">Order Fulfillment:</span>
+                        <span className="bg-white border border-blue-200 text-blue-800 font-bold px-2.5 py-0.5 rounded-full text-xs shadow-2xs">
+                          SolarKits Direct (Company PO)
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Section 2: Target Committed Quota */}
-              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                    Enter Target Committed Quota (Kits) <span className="text-rose-500">*</span>
-                  </label>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Minimum required commitment: <strong className="text-blue-600">25 kits</strong>.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
+              {/* Step 2: PO Category Selection */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                  2. Purchase Order Category <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setSinglePoQty((prev) => Math.max(25, (parseInt(prev, 10) || 0) - 25))}
-                    className="w-10 h-10 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-black text-base flex items-center justify-center border border-slate-200 cursor-pointer shadow-2xs"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={25}
-                    value={singlePoQty}
-                    onChange={(e) => setSinglePoQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                    className="flex-1 text-center py-2.5 rounded-xl text-base font-black border border-slate-200 bg-white text-slate-900 focus:border-blue-500 outline-none shadow-2xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSinglePoQty((prev) => (parseInt(prev, 10) || 0) + 25)}
-                    className="w-10 h-10 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-black text-base flex items-center justify-center border border-slate-200 cursor-pointer shadow-2xs"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {/* Preset Pills */}
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Quick Presets:
-                  </span>
-                  {[25, 50, 100, 250, 500].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setSinglePoQty(preset)}
-                      className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer border ${
-                        singlePoQty === preset
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    onClick={() => setPoCategory('SINGLE_PO')}
+                    className={`p-3.5 rounded-xl border text-left transition ${poCategory === 'SINGLE_PO'
+                      ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 hover:bg-slate-50'
                       }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900">Single PO</span>
+                      {poCategory === 'SINGLE_PO' && <Check className="w-4 h-4 text-blue-600" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      100% committed quota allocated directly to this onboarded EPC ({activeEpcObj?.company_name || 'Selected EPC'}).
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPoCategory('COMBINE_PO')}
+                    className={`p-3.5 rounded-xl border text-left transition ${poCategory === 'COMBINE_PO'
+                      ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 hover:bg-slate-50'
+                      }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900">Combine PO</span>
+                      {poCategory === 'COMBINE_PO' && <Check className="w-4 h-4 text-blue-600" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Bulk quota distributed and split across multiple onboarded EPC partners.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 3: Blueprint Selection with Taxonomy Filters */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold uppercase text-slate-700">
+                    3. Select ComboKit Blueprint <span className="text-rose-500">*</span>
+                  </label>
+                  {planLoading && (
+                    <span className="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Loading blueprints...
+                    </span>
+                  )}
+                </div>
+
+                {/* ── Quick Filters Bar (Matches Screenshot 1) ── */}
+                <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs mb-4">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                        <Package className="w-4 h-4" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm text-slate-800">Quick Filters</h4>
+                        <span className="text-[11px] font-semibold text-slate-600 px-2 py-0.5 rounded-full bg-white border border-slate-200 shadow-2xs">
+                          {filteredComboKits.length} of {availableKits.length} Kits
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearMainFilters}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline transition cursor-pointer"
                     >
-                      {preset} Kits
+                      Clear Main
                     </button>
-                  ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    {/* 1. Industry Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Industry Type
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.industryType}
+                          onChange={(e) =>
+                            setQuickFilters({
+                              industryType: e.target.value,
+                              category: 'all',
+                              subCategory: 'all',
+                              systemType: 'all',
+                              projectRange: 'all',
+                            })
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {industryTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 2. Category */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Category
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.category}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              category: e.target.value,
+                              subCategory: 'all',
+                              systemType: 'all',
+                              projectRange: 'all',
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {categoryOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 3. Sub Category */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Sub Category
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.subCategory}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              subCategory: e.target.value,
+                              systemType: 'all',
+                              projectRange: 'all',
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {subCategoryOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 4. System Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        System Type
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.systemType}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              systemType: e.target.value,
+                              projectRange: 'all',
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {systemTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 5. Project Range */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Project Range
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.projectRange}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              projectRange: e.target.value,
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {projectRangeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Blueprint Cards */}
+                {availableKits.length === 0 ? (
+                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    <p className="text-xs font-bold text-slate-700">
+                      No active blueprint ComboKits found.
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Please ensure active ComboKit blueprints are configured in the system catalog.
+                    </p>
+                  </div>
+                ) : filteredComboKits.length === 0 ? (
+                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    <p className="text-xs font-bold text-slate-800">
+                      No ComboKits found matching the selected Quick Filters
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Try resetting or adjusting the Industry Type, Category, Sub Category, System Type, or Project Range filters above.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClearMainFilters}
+                      className="mt-1 px-4 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold transition border border-blue-200 cursor-pointer"
+                    >
+                      Clear Quick Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-84 overflow-y-auto p-1 pr-1.5">
+                    {filteredComboKits.map((kit) => {
+                      const isSel = String(kit._id) === String(selectedKitId);
+                      return (
+                        <div
+                          key={kit._id}
+                          onClick={() => {
+                            setSelectedKitId(kit._id);
+                            const firstQty = kit.order_quantities?.[0] || kit.min_po_quantity || 0;
+                            setSelectedPoQty(firstQty);
+                          }}
+                          className={`p-4 sm:p-4.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${isSel
+                            ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-500/20'
+                            : 'border-slate-200 hover:border-blue-300 bg-white hover:shadow-xs'
+                            }`}
+                        >
+                          <div>
+                            {/* Card Header: Selection Circle + Kit Title + kW Badge */}
+                            <div className="flex items-start justify-between gap-2.5">
+                              <div className="flex items-start gap-2.5">
+                                <div
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 transition-colors ${isSel
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'border-2 border-slate-300 text-transparent'
+                                    }`}
+                                >
+                                  {isSel && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-sm text-slate-900 leading-snug">{kit.name}</h4>
+                                  {kit.category_name && (
+                                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                                      {kit.category_name} {kit.subcategory_name ? `• ${kit.subcategory_name}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Capacity kW Pill */}
+                              <div className="shrink-0 text-right">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 font-extrabold text-xs shadow-2xs">
+                                  <Zap className="w-3 h-3 text-blue-600 shrink-0" />
+                                  {kit.capacity_kw} kW
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Taxonomy Badges */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md border border-slate-200">
+                                ☀️ {kit.system_type || 'On-Grid'}
+                              </span>
+                              {kit.project_range_label && (
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-md border border-indigo-200">
+                                  📐 {kit.project_range_label}
+                                </span>
+                              )}
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-md border border-emerald-200">
+                                ✓ Authorized Blueprint
+                              </span>
+                              {kit.gst_rate != null && (
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-md border border-blue-200">
+                                  GST: {kit.gst_rate}%
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Specifications Summary */}
+                            <p className="text-[11px] text-slate-600 mt-2 line-clamp-2 leading-relaxed">
+                              {kit.specifications}
+                            </p>
+                          </div>
+
+                          {/* Card Bottom: Commercials & Pricing Section */}
+                          <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-end justify-between">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Committed Quota Base</span>
+                              <div className="flex items-baseline gap-1 mt-0.5">
+                                <span className="text-base font-extrabold text-slate-900">
+                                  ₹{(kit.dealer_price || 0).toLocaleString('en-IN')}
+                                </span>
+                                <span className="text-[11px] font-bold text-slate-500">/ kit</span>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Token Booking</span>
+                              {kit.token_booking_enabled !== false && (kit.token_value > 0 || kit.token_rate_per_kit_paise > 0) ? (
+                                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 inline-block mt-0.5 shadow-2xs">
+                                  {kit.token_type === 'PERCENTAGE'
+                                    ? `${kit.token_value || 10}% PO Deposit`
+                                    : `₹${Number(kit.token_value || (kit.token_rate_per_kit_paise ? kit.token_rate_per_kit_paise / 100 : 0)).toLocaleString('en-IN')} PO Deposit`}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Workflow Banner */}
-              <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1">
-                <div className="font-black flex items-center gap-1.5">
-                  <Info className="w-4 h-4 text-blue-600" /> What happens next?
+              {/* Step 4: Quota Quantity Tiers */}
+              {selectedKit && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase text-slate-700">
+                      4. Select Committed PO Quota Quantity (Kits) <span className="text-rose-500">*</span>
+                    </label>
+                    {selectedKit.order_quantities?.length > 0 && (
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        Configured MOQ: {selectedKit.order_quantities[0]} Kits
+                      </span>
+                    )}
+                  </div>
+                  {Array.isArray(selectedKit.order_quantities) && selectedKit.order_quantities.length > 0 ? (
+                    <div
+                      className={`grid gap-2.5 ${selectedKit.order_quantities.length === 1
+                        ? 'grid-cols-1 sm:grid-cols-2'
+                        : selectedKit.order_quantities.length === 2
+                          ? 'grid-cols-2'
+                          : selectedKit.order_quantities.length === 3
+                            ? 'grid-cols-3'
+                            : 'grid-cols-2 sm:grid-cols-4'
+                        }`}
+                    >
+                      {selectedKit.order_quantities.map((qty) => {
+                        const isSel = Number(selectedPoQty) === Number(qty);
+                        return (
+                          <button
+                            key={qty}
+                            type="button"
+                            onClick={() => setSelectedPoQty(qty)}
+                            className={`py-3 px-2 rounded-xl border text-center transition ${isSel
+                              ? 'bg-blue-600 text-white font-extrabold border-blue-600 shadow-md shadow-blue-600/25 ring-2 ring-blue-500/20'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 font-bold'
+                              }`}
+                          >
+                            <div className="text-base">{qty}</div>
+                            <div className={`text-[10px] uppercase font-bold ${isSel ? 'text-blue-100' : 'text-slate-400'}`}>
+                              Kits
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
+                      No PO Quota Quantities configured for this kit in Admin. Please configure them under Trial Kits / MOQ.
+                    </div>
+                  )}
                 </div>
-                <p className="text-[11px] leading-relaxed text-blue-800">
-                  Once you submit, a new <strong>PO Order Card</strong> is generated with status{' '}
-                  <strong>Pending Allocation</strong>. The wizard will automatically prompt you to allocate Solar
-                  ComboKits and EPC partners in Stage 2.
-                </p>
-              </div>
+              )}
 
-              {/* Modal Footer */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+              {/* Step 5: Commercial & Financial Summary Card */}
+              {selectedKit && (
+                <div className="p-4 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl shadow-md space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                      Commercial Financial Summary
+                    </span>
+                    <span className="text-xs font-bold bg-white/10 px-2 py-0.5 rounded text-blue-200">
+                      {targetQuantity} Kits Committed
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] text-slate-400 uppercase">Tier Unit Price</div>
+                      <div className="font-bold text-sm text-white mt-0.5">₹{kitUnitPrice.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 uppercase">Subtotal (Excl. Tax)</div>
+                      <div className="font-bold text-sm text-white mt-0.5">₹{estimatedSubtotal.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 uppercase">GST ({kitGstRate}%)</div>
+                      <div className="font-bold text-sm text-white mt-0.5">₹{estimatedGst.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 uppercase">Total PO Value</div>
+                      <div className="font-extrabold text-sm text-emerald-400 mt-0.5">
+                        ₹{estimatedGrandTotal.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 text-amber-200">
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>
+                        Required Escrow Token Deposit ({tokenBookingType === 'PERCENTAGE' ? `${rawTokenValue}% of PO Value` : 'Fixed PO Quota Token'}):
+                      </span>
+                    </div>
+                    <span className="text-base font-black text-amber-300">
+                      ₹{estimatedTokenDeposit.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setCreateModal(false)}
-                  disabled={createSubmitting}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
-                  disabled={createSubmitting || singlePoQty < 25}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50"
+                  disabled={createSubmitting || !modalEpcId || !selectedKit}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-blue-600/25 transition flex items-center gap-2"
                 >
                   {createSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Generating PO Card...</span>
+                      <span>Creating Purchase Order...</span>
                     </>
                   ) : (
                     <>
-                      <Plus className="w-4 h-4" />
-                      <span>Create PO Order (Generate Card) →</span>
+                      <span>Create Purchase Order &amp; Proceed to Allocation</span>
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
@@ -1414,256 +2523,202 @@ export default function BdePoOrders() {
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MODAL 2: PRODUCT & EPC ALLOCATION (STAGE 2)
-      ───────────────────────────────────────────────────────────────────────────── */}
+      {/* ── 6. MODAL 2: ALLOCATE PO TO EPC (Stage 2) ── */}
       {allocateModal && allocatingOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-3xl lg:max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-10 animate-fadeIn">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-amber-600 to-orange-700 text-white flex items-center justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-700 border border-amber-200">
-                    Stage 2 of 4
-                  </span>
-                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-amber-600" /> Allocate Solar ComboKit & EPCs
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  PO: <strong className="font-mono text-slate-800">{allocatingOrder.po_number}</strong> • Franchise:{' '}
-                  <strong className="text-slate-800">{allocatingOrder.customer_details?.company_name}</strong> • Quota:{' '}
-                  <strong className="text-blue-600">
-                    {allocatingOrder.target_committed_quantity || allocatingOrder.total_booked_quantity} Kits
-                  </strong>
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-200 bg-white/10 px-2 py-0.5 rounded">
+                  STAGE 2: PRODUCT &amp; EPC NETWORK ALLOCATION
+                </span>
+                <h2 className="text-xl font-bold mt-1">Allocate PO Quota to EPC Partner(s)</h2>
+                <p className="text-xs text-amber-100 mt-0.5">
+                  Assign this purchase order ({allocatingOrder.po_number}) to your onboarded EPC network.
                 </p>
               </div>
               <button
                 onClick={() => setAllocateModal(false)}
-                disabled={allocateSubmitting}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+                className="p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAllocateSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+            <form onSubmit={handleSubmitAllocate} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               {allocateError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{allocateError}</span>
                 </div>
               )}
 
-              {/* ComboKit Selection */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  1. Choose Authorized Solar ComboKit <span className="text-rose-500">*</span>
-                </label>
-                <div className="grid grid-cols-1 gap-2.5">
-                  {comboKits.map((kit) => {
-                    const isSelected = allocateKitId === kit._id;
-                    const priceRupees = Math.round(kit.base_price_paise / 100);
-                    const tokenRupees = Math.round(kit.token_rate_per_kit_paise / 100);
-
-                    return (
-                      <div
-                        key={kit._id}
-                        onClick={() => setAllocateKitId(kit._id)}
-                        className={`p-3.5 rounded-2xl border-2 transition cursor-pointer flex items-center justify-between gap-3 ${
-                          isSelected
-                            ? 'border-blue-600 bg-blue-50/40 shadow-xs'
-                            : 'border-slate-200 hover:border-blue-300 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
-                              isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            {kit.capacity_kw}kW
-                          </div>
-                          <div>
-                            <div className="font-bold text-xs text-slate-900">{kit.name}</div>
-                            <div className="text-[11px] text-slate-500">{kit.specifications}</div>
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <div className="font-black text-xs text-slate-900">
-                            ₹{priceRupees.toLocaleString('en-IN')}{' '}
-                            <span className="text-[10px] font-normal text-slate-400">/kit</span>
-                          </div>
-                          <div className="text-[10px] text-emerald-600 font-bold">
-                            Token: ₹{tokenRupees.toLocaleString('en-IN')}/kit
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {/* Order Info Badge */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+                <div>
+                  <div className="text-slate-400 text-[10px] uppercase font-bold">Committed PO Quota</div>
+                  <div className="font-extrabold text-base text-slate-900 mt-0.5">
+                    {allocatingOrder.target_committed_quantity || allocatingOrder.total_booked_quantity || 200} Kits
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {allocatingOrder.items?.[0]?.item_name || 'Solar Kit Blueprint'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-800">
+                    {allocatingOrder.po_category === 'COMBINE_PO' ? 'Combine PO' : 'Single PO'}
+                  </span>
                 </div>
               </div>
 
-              {/* Allocation Breakdown */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  2. {allocatingOrder.po_category === 'COMBINE_PO' ? 'EPC Pool Split' : 'Single EPC Allocation'}{' '}
-                  <span className="text-rose-500">*</span>
-                </label>
+              {/* Single PO Allocation */}
+              {allocatingOrder.po_category !== 'COMBINE_PO' ? (
+                <div className="space-y-4">
+                  <label className="block text-xs font-bold uppercase text-slate-700">
+                    Assign Quota Destination
+                  </label>
 
-                {allocatingOrder.po_category === 'COMBINE_PO' ? (
-                  <div className="space-y-2.5">
-                    <p className="text-[11px] text-slate-500">
-                      Assign kit quantities to onboarded EPC partners. The sum must exactly equal{' '}
-                      <strong>{allocatingOrder.target_committed_quantity} kits</strong>.
-                    </p>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                      {epcList.map((epc) => {
-                        const currentVal = allocateMultiAllocs[epc._id] || 0;
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAllocateSingleTarget('single_epc')}
+                      className={`p-3.5 rounded-xl border text-left transition ${allocateSingleTarget === 'single_epc'
+                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 hover:bg-slate-50'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">Onboarded EPC Partner</span>
+                        {allocateSingleTarget === 'single_epc' && <Check className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">Assign to an authorized EPC contractor.</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAllocateSingleTarget('warehouse')}
+                      className={`p-3.5 rounded-xl border text-left transition ${allocateSingleTarget === 'warehouse'
+                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 hover:bg-slate-50'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">Franchise Warehouse Stock</span>
+                        {allocateSingleTarget === 'warehouse' && <Check className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">Keep stock in Franchise Hub.</p>
+                    </button>
+                  </div>
+
+                  {allocateSingleTarget === 'single_epc' && (
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                        Choose EPC Partner <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={allocateSingleEpcId}
+                        onChange={(e) => setAllocateSingleEpcId(e.target.value)}
+                        required
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">-- Select EPC Partner --</option>
+                        {combinedEpcList.map((buyer) => (
+                          <option key={buyer._id || buyer.id} value={buyer._id || buyer.id}>
+                            {buyer.company_name || buyer.name} • GSTIN: {buyer.gstin || 'Unregistered'} (
+                            {buyer.district || 'Regional'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Combine PO Multi-EPC Distribution Table */
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase text-slate-700">
+                      Distribute Quota Across EPC Partners
+                    </label>
+                    <span className="text-xs font-bold text-slate-600">
+                      Total Allocated:{' '}
+                      <span
+                        className={
+                          Object.values(allocateAllocations).reduce((acc, q) => acc + (parseInt(q, 10) || 0), 0) ===
+                            (allocatingOrder.target_committed_quantity || 200)
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
+                        }
+                      >
+                        {Object.values(allocateAllocations).reduce((acc, q) => acc + (parseInt(q, 10) || 0), 0)} /{' '}
+                        {allocatingOrder.target_committed_quantity || 200} Kits
+                      </span>
+                    </span>
+                  </div>
+
+                  {combinedEpcList.length === 0 ? (
+                    <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 text-xs text-slate-500">
+                      No onboarded EPC partners found. Please onboard EPC partners first.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {combinedEpcList.map((buyer) => {
+                        const bId = buyer._id || buyer.id;
+                        const val = allocateAllocations[bId] || '';
                         return (
                           <div
-                            key={epc._id}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200"
+                            key={bId}
+                            className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs"
                           >
                             <div>
-                              <div className="font-bold text-xs text-slate-900">{epc.company_name}</div>
-                              <div className="text-[10px] text-slate-400">
-                                {epc.buyer_name} • {epc.district || 'Territory'}
+                              <div className="font-bold text-slate-900">{buyer.company_name || buyer.name}</div>
+                              <div className="text-[11px] text-slate-400">
+                                GSTIN: {buyer.gstin || 'N/A'} • {buyer.district || 'Regional'}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[11px] font-semibold text-slate-500">Kits:</span>
                               <input
                                 type="number"
-                                min={0}
-                                max={allocatingOrder.target_committed_quantity}
-                                value={currentVal}
-                                onChange={(e) =>
-                                  setAllocateMultiAllocs((prev) => ({
-                                    ...prev,
-                                    [epc._id]: Math.max(0, parseInt(e.target.value, 10) || 0),
-                                  }))
-                                }
-                                className="w-20 text-center py-1 rounded-lg border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                                min="0"
+                                value={val}
+                                onChange={(e) => handleAllocateLooseChange(bId, e.target.value)}
+                                placeholder="0"
+                                className="w-20 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
-                              <span className="text-xs text-slate-500">kits</span>
                             </div>
                           </div>
                         );
                       })}
-                      <div className="pt-2 flex justify-between text-xs font-black text-slate-800">
-                        <span>Total Assigned:</span>
-                        <span
-                          className={
-                            Object.values(allocateMultiAllocs).reduce((a, b) => a + (parseInt(b, 10) || 0), 0) ===
-                            allocatingOrder.target_committed_quantity
-                              ? 'text-emerald-600'
-                              : 'text-rose-600'
-                          }
-                        >
-                          {Object.values(allocateMultiAllocs).reduce((a, b) => a + (parseInt(b, 10) || 0), 0)} /{' '}
-                          {allocatingOrder.target_committed_quantity} Kits
-                        </span>
-                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div
-                        onClick={() => setAllocateSingleTarget('single_epc')}
-                        className={`p-2.5 rounded-xl border text-center cursor-pointer text-xs font-bold transition ${
-                          allocateSingleTarget === 'single_epc'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        Single EPC Partner
-                      </div>
-                      <div
-                        onClick={() => setAllocateSingleTarget('warehouse')}
-                        className={`p-2.5 rounded-xl border text-center cursor-pointer text-xs font-bold transition ${
-                          allocateSingleTarget === 'warehouse'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        Warehouse Self-Stock
-                      </div>
-                    </div>
+                  )}
+                </div>
+              )}
 
-                    {allocateSingleTarget === 'single_epc' && (
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold uppercase text-slate-500">
-                          Select Destination EPC Contractor:
-                        </label>
-                        <select
-                          value={allocateSingleEpcId}
-                          onChange={(e) => setAllocateSingleEpcId(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
-                        >
-                          {epcList.map((epc) => (
-                            <option key={epc._id} value={epc._id}>
-                              {epc.company_name} ({epc.buyer_name})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Commercial Summary Strip */}
-              {(() => {
-                const kitObj = comboKits.find((k) => k._id === allocateKitId) || comboKits[0];
-                const totalCommitted = allocatingOrder.target_committed_quantity || 100;
-                const tokenPerKitINR = kitObj?.token_rate_per_kit_paise ? Math.round(kitObj.token_rate_per_kit_paise / 100) : 0;
-                const totalTokenINR = totalCommitted * tokenPerKitINR;
-                const totalOrderValINR = Math.round((totalCommitted * kitObj.base_price_paise) / 100);
-
-                return (
-                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs space-y-1.5">
-                    <div className="flex justify-between text-slate-700">
-                      <span>Total Committed Quota:</span>
-                      <span className="font-bold text-slate-900">{totalCommitted} Kits</span>
-                    </div>
-                    <div className="flex justify-between text-slate-700">
-                      <span>Total PO Commercial Value:</span>
-                      <span className="font-bold text-slate-900">₹{totalOrderValINR.toLocaleString('en-IN')}</span>
-                    </div>
-                    <div className="flex justify-between pt-1 border-t border-emerald-200 text-emerald-800 font-black text-sm">
-                      <span>Required Token Deposit:</span>
-                      <span>₹{totalTokenINR.toLocaleString('en-IN')} (₹{tokenPerKitINR}/kit)</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setAllocateModal(false)}
-                  disabled={allocateSubmitting}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
                   disabled={allocateSubmitting}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-600 text-white text-xs font-black shadow-md hover:bg-amber-700 transition cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-amber-600/25 transition flex items-center gap-2"
                 >
                   {allocateSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Saving Allocation...</span>
+                      <span>Allocating EPC...</span>
                     </>
                   ) : (
                     <>
-                      <Check className="w-4 h-4" />
-                      <span>Confirm Allocation & Calculate Token →</span>
+                      <span>Confirm Allocation &amp; Proceed to Token Payment</span>
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
@@ -1673,175 +2728,156 @@ export default function BdePoOrders() {
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MODAL 3: RECORD TOKEN PAYMENT (STAGE 3)
-      ───────────────────────────────────────────────────────────────────────────── */}
+      {/* ── 7. MODAL 3: PAY ESCROW TOKEN DEPOSIT (Stage 3) ── */}
       {tokenModal && tokenOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-2xl lg:max-w-3xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-10 animate-fadeIn">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-orange-100 text-orange-700 border border-orange-200">
-                    Stage 3 of 4
-                  </span>
-                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-orange-600" /> Record Token Payment Deposit
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  PO: <strong className="font-mono text-slate-800">{tokenOrder.po_number}</strong> • Deposit Required:{' '}
-                  <strong className="text-emerald-600">
-                    ₹{Math.round((tokenOrder.token_amount_paise || 0) / 100).toLocaleString('en-IN')}
-                  </strong>
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-200 bg-white/10 px-2 py-0.5 rounded">
+                  STAGE 3: ESCROW TOKEN PAYMENT
+                </span>
+                <h2 className="text-xl font-bold mt-1">Record Token Deposit Payment</h2>
+                <p className="text-xs text-blue-100 mt-0.5">
+                  Confirm UTR and transfer details for PO {tokenOrder.po_number}.
                 </p>
               </div>
               <button
                 onClick={() => setTokenModal(false)}
-                disabled={tokenSubmitting}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+                className="p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleTokenSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+            <form onSubmit={handleSubmitTokenPayment} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
               {tokenError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{tokenError}</span>
                 </div>
               )}
 
-              {/* Escrow Bank Account Card */}
-              <div className="p-4 rounded-2xl border border-blue-200 bg-blue-50/50 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-blue-600" /> Escrow Deposit Account
+              {tokenSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>Token deposit recorded successfully! PO Started.</span>
+                </div>
+              )}
+
+              {/* Escrow Bank Instructions Box */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 text-xs">
+                <div className="flex items-center justify-between text-slate-700 font-bold border-b border-slate-200 pb-2">
+                  <span className="flex items-center gap-1.5 text-blue-700">
+                    <Shield className="w-4 h-4" /> Company Escrow Bank Details
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">Verified Escrow</span>
+                  <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded">ICICI Corporate</span>
                 </div>
 
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between items-center py-1 border-b border-blue-100">
-                    <span className="text-slate-500">Beneficiary:</span>
-                    <span className="font-bold text-slate-900">{ESCROW_BANK.account_name}</span>
+                <div className="grid grid-cols-2 gap-2 text-slate-600">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Account Number</span>
+                    <span className="font-mono font-bold text-slate-900">{ESCROW_BANK.account_number}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(ESCROW_BANK.account_number, 'acc')}
+                      className="ml-2 text-blue-600 hover:underline text-[10px]"
+                    >
+                      {copiedField === 'acc' ? 'Copied!' : 'Copy'}
+                    </button>
                   </div>
-                  <div className="flex justify-between items-center py-1 border-b border-blue-100">
-                    <span className="text-slate-500">Bank & Branch:</span>
-                    <span className="font-bold text-slate-900">
-                      {ESCROW_BANK.bank_name} ({ESCROW_BANK.branch})
-                    </span>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">IFSC Code</span>
+                    <span className="font-mono font-bold text-slate-900">{ESCROW_BANK.ifsc_code}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(ESCROW_BANK.ifsc_code, 'ifsc')}
+                      className="ml-2 text-blue-600 hover:underline text-[10px]"
+                    >
+                      {copiedField === 'ifsc' ? 'Copied!' : 'Copy'}
+                    </button>
                   </div>
-                  <div className="flex justify-between items-center py-1 border-b border-blue-100">
-                    <span className="text-slate-500">Account Number:</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-slate-900">{ESCROW_BANK.account_number}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(ESCROW_BANK.account_number, 'acc')}
-                        className="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer"
-                      >
-                        {copiedField === 'acc' ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500">IFSC Code:</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-slate-900">{ESCROW_BANK.ifsc_code}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(ESCROW_BANK.ifsc_code, 'ifsc')}
-                        className="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer"
-                      >
-                        {copiedField === 'ifsc' ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                  <span className="font-bold">UPI ID:</span> {ESCROW_BANK.upi_id}
                 </div>
               </div>
 
-              {/* UTR Entry Form */}
-              <div className="space-y-3">
+              {/* Form Inputs */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                  Token Deposit Amount (INR) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={tokenPayAmount}
+                  onChange={(e) => setTokenPayAmount(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                  Payment UTR / Transaction Reference Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={tokenUtr}
+                  onChange={(e) => setTokenUtr(e.target.value)}
+                  placeholder="e.g. ICICI-UTR-98234821 or UPI Ref"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                    Bank UTR / Transaction Reference Number <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">Sender Bank</label>
                   <input
                     type="text"
-                    value={tokenUtr}
-                    onChange={(e) => setTokenUtr(e.target.value)}
-                    placeholder="e.g. ICICI992823812 or CMS-REF-001"
-                    className="w-full mt-1 px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                    required
+                    value={tokenBank}
+                    onChange={(e) => setTokenBank(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Depositor Bank
-                    </label>
-                    <input
-                      type="text"
-                      value={tokenBank}
-                      onChange={(e) => setTokenBank(e.target.value)}
-                      placeholder="e.g. HDFC Bank"
-                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Payment Date
-                    </label>
-                    <input
-                      type="date"
-                      value={tokenDate}
-                      onChange={(e) => setTokenDate(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                    Verification Notes
-                  </label>
+                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">Payment Date</label>
                   <input
-                    type="text"
-                    value={tokenRemarks}
-                    onChange={(e) => setTokenRemarks(e.target.value)}
-                    placeholder="Optional remarks from franchisee or EPC partner"
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                    type="date"
+                    value={tokenDate}
+                    onChange={(e) => setTokenDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setTokenModal(false)}
-                  disabled={tokenSubmitting}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
                   disabled={tokenSubmitting}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-black shadow-md hover:bg-orange-700 transition cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-blue-600/25 transition flex items-center gap-2"
                 >
                   {tokenSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Verifying Token...</span>
+                      <span>Recording Token Payment...</span>
                     </>
                   ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>Verify & Validate PO (Activate Quota) →</span>
-                    </>
+                    <span>Submit Token Payment Details</span>
                   )}
                 </button>
               </div>
@@ -1850,154 +2886,314 @@ export default function BdePoOrders() {
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MODAL 4: FULL PO DETAIL DRAWER
-      ───────────────────────────────────────────────────────────────────────────── */}
-      {detailModal && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-10 animate-fadeIn">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+      {/* ── 8. MODAL 4: REORDER / DRAWDOWN AGAINST PO ── */}
+      {reorderModal && reorderOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-indigo-700 to-purple-800 text-white flex items-center justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-black text-sm text-slate-900 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200">
-                    {selectedOrder.po_number}
-                  </span>
-                  <StatusBadge status={selectedOrder.status} />
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Franchisee: <strong>{selectedOrder.customer_details?.company_name}</strong> • Created by:{' '}
-                  <strong>
-                    {selectedOrder.creator_name} ({selectedOrder.creator_code})
-                  </strong>
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200 bg-white/10 px-2 py-0.5 rounded">
+                  STAGE 5: LOOSE REORDER / DRAWDOWN
+                </span>
+                <h2 className="text-xl font-bold mt-1">Place Drawdown against PO Quota</h2>
+                <p className="text-xs text-indigo-100 mt-0.5">
+                  Deduct loose quantities against locked PO {reorderOrder.po_number}.
                 </p>
               </div>
               <button
-                onClick={() => setDetailModal(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
+                onClick={() => setReorderModal(false)}
+                className="p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Quota Progress */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-3 gap-4 text-center">
+            <form onSubmit={handleSubmitReorder} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {reorderError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{reorderError}</span>
+                </div>
+              )}
+
+              {/* Quota balance info */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
                 <div>
-                  <div className="text-[10px] font-bold uppercase text-slate-400">Total Booked Quota</div>
-                  <div className="text-lg font-black text-slate-900 mt-0.5">
-                    {selectedOrder.total_booked_quantity || selectedOrder.target_committed_quantity} Kits
+                  <div className="text-slate-400 text-[10px] font-bold uppercase">Locked Quota Remaining</div>
+                  <div className="font-extrabold text-base text-slate-900 mt-0.5">
+                    {reorderOrder.remaining_quantity != null ? reorderOrder.remaining_quantity : 100} Kits Available
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {reorderOrder.items?.[0]?.item_name || 'ComboKit Blueprint'}
                   </div>
                 </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase text-slate-400">Fulfilled to Date</div>
-                  <div className="text-lg font-black text-emerald-600 mt-0.5">
-                    {selectedOrder.fulfilled_quantity || 0} Kits
+                <div className="text-right">
+                  <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">
+                    Price: ₹{((reorderOrder.items?.[0]?.unit_price_paise || 0) / 100).toLocaleString('en-IN')}/kit
+                  </span>
+                </div>
+              </div>
+
+              {/* Reorder Quantity */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                  Drawdown Quantity (Kits) <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  {[5, 10, 15, 20].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setReorderQty(q)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition ${Number(reorderQty) === q
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                        }`}
+                    >
+                      {q} Kits
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max={reorderOrder.remaining_quantity || 100}
+                  value={reorderQty}
+                  onChange={(e) => setReorderQty(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Commercials */}
+              {(() => {
+                const reorderItem = reorderOrder.items?.[0] || {};
+                const reorderGstRate = reorderItem.gst_rate != null ? Number(reorderItem.gst_rate) : 0;
+                const reorderUnitPrice = (reorderItem.unit_price_paise || 0) / 100;
+                const reorderTaxPerKit = Math.round((reorderUnitPrice * reorderGstRate) / 100);
+                const totalPoCommitted = Number(reorderOrder.total_booked_quantity || reorderOrder.target_committed_quantity || reorderItem.quantity || 1);
+                const totalPoTokenInr = Number(reorderOrder.token_amount_paise || reorderOrder.token_paid_paise || 0) / 100;
+                const reorderTokenPerKit = totalPoCommitted > 0 ? Math.round(totalPoTokenInr / totalPoCommitted) : 0;
+                const numQty = Number(reorderQty) || 0;
+                const reorderGrossValue = numQty * reorderUnitPriceWithTax;
+                const reorderEscrowAdj = numQty * reorderTokenPerKit;
+                const reorderNetPayable = Math.max(0, reorderGrossValue - reorderEscrowAdj);
+
+                return (
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1.5">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Gross Value (Incl. {reorderGstRate}% GST):</span>
+                      <span className="font-bold text-slate-900">
+                        ₹{reorderGrossValue.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Pro-rata Token Escrow Adjusted ({numQty} × ₹{reorderTokenPerKit}):</span>
+                      <span className="font-bold">-₹{reorderEscrowAdj.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-900 font-extrabold border-t border-indigo-200 pt-1.5">
+                      <span>Net Payable Amount:</span>
+                      <span className="text-indigo-900 font-black">
+                        ₹{reorderNetPayable.toLocaleString('en-IN')}
+                      </span>
+                    </div>
                   </div>
+                );
+              })()}
+
+              {/* Payment Details */}
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
+                  Drawdown Payment UTR <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={reorderUtr}
+                  onChange={(e) => setReorderUtr(e.target.value)}
+                  placeholder="Drawdown payment UTR"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReorderModal(false)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={reorderSubmitting}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition flex items-center gap-2"
+                >
+                  {reorderSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Placing Drawdown...</span>
+                    </>
+                  ) : (
+                    <span>Confirm Drawdown &amp; Deduct Quota</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── 9. MODAL 5: PO FULL AUDIT & DETAILS ── */}
+      {detailModal && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 bg-white/10 px-2 py-0.5 rounded">
+                  PO AUDIT &amp; ALLOCATION BREAKDOWN
+                </span>
+                <h2 className="text-xl font-bold mt-1 flex items-center gap-2">
+                  <span>{selectedOrder.po_number}</span>
+                  <StatusBadge status={selectedOrder.status} />
+                </h2>
+              </div>
+              <button
+                onClick={() => setDetailModal(false)}
+                className="p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs">
+              {/* Franchisee Details */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Franchisee Store</span>
+                  <span className="font-bold text-slate-900 text-sm">
+                    {selectedOrder.customer_details?.company_name || selectedOrder.franchisee_id?.business_name || 'N/A'}
+                  </span>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase text-slate-400">Remaining Balance</div>
-                  <div className="text-lg font-black text-blue-600 mt-0.5">
-                    {selectedOrder.remaining_quantity || 0} Kits
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Location</span>
+                  <span className="font-semibold text-slate-700">
+                    {selectedOrder.customer_details?.district || selectedOrder.franchisee_id?.address?.district_name || 'Regional'},{' '}
+                    {selectedOrder.customer_details?.state || 'Gujarat'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Created By</span>
+                  <span className="font-bold text-blue-700">
+                    {selectedOrder.creator_name || 'BDE Executive'} ({selectedOrder.created_by_role || 'BDE'})
+                  </span>
+                </div>
+              </div>
+
+              {/* Kit Specifications & Quota */}
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm mb-2">ComboKit Blueprint Specifications</h4>
+                <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-900 text-sm">
+                      {selectedOrder.items?.[0]?.item_name || 'Solar Kit Blueprint'}
+                    </span>
+                    <span className="font-extrabold text-blue-800 text-sm">
+                      {selectedOrder.target_committed_quantity || selectedOrder.total_booked_quantity || 100} Kits Quota
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-slate-600 pt-2 border-t border-blue-200/60">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Unit Price</span>
+                      <span className="font-bold text-slate-900">
+                        ₹{((selectedOrder.items?.[0]?.unit_price_paise || 0) / 100).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Subtotal</span>
+                      <span className="font-bold text-slate-900">
+                        ₹{Math.round((selectedOrder.subtotal_paise || 0) / 100).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Grand Total</span>
+                      <span className="font-bold text-emerald-700">
+                        ₹{Math.round((selectedOrder.grand_total_paise || 0) / 100).toLocaleString('en-IN')}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Items Breakdown */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">Allocated Solar Products</h4>
-                {(selectedOrder.items || []).length === 0 ? (
-                  <div className="p-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 text-amber-800 text-xs">
-                    Pending product allocation. Please click "Allocate Products" to select solar kits.
+              {/* Allocated EPC Partners Table */}
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm mb-2">Allocated EPC Network</h4>
+                {selectedOrder.items?.[0]?.epc_allocations?.length > 0 ? (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-200">
+                        <tr>
+                          <th className="px-3 py-2">EPC Partner Name</th>
+                          <th className="px-3 py-2">Allocated Qty</th>
+                          <th className="px-3 py-2">Token Deposit</th>
+                          <th className="px-3 py-2">Payment Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedOrder.items[0].epc_allocations.map((alloc, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="px-3 py-2 font-bold text-slate-800">{alloc.company_name || alloc.buyer_name}</td>
+                            <td className="px-3 py-2 font-bold text-slate-900">{alloc.allocated_quantity} Kits</td>
+                            <td className="px-3 py-2">₹{Math.round((alloc.token_amount_paise || 0) / 100).toLocaleString('en-IN')}</td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${alloc.payment_status === 'PAID'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                                  }`}
+                              >
+                                {alloc.payment_status || 'PENDING'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
-                  (selectedOrder.items || []).map((it, idx) => (
-                    <div key={idx} className="p-4 rounded-2xl border border-slate-200 bg-white space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-bold text-sm text-slate-900">{it.item_name}</div>
-                          <div className="text-xs text-slate-500">Quantity: {it.quantity} Kits</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-black text-slate-900">
-                            ₹{Math.round((it.subtotal_paise || 0) / 100).toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            ₹{Math.round((it.unit_price_paise || 0) / 100).toLocaleString('en-IN')}/kit
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* EPC Allocations table */}
-                      {(it.epc_allocations || []).length > 0 && (
-                        <div className="pt-2 border-t border-slate-100">
-                          <div className="text-[11px] font-bold text-slate-400 uppercase mb-1.5">
-                            EPC Partner Quota Split
-                          </div>
-                          <div className="space-y-1.5">
-                            {it.epc_allocations.map((a, aIdx) => (
-                              <div
-                                key={aIdx}
-                                className="flex justify-between items-center text-xs p-2 rounded-xl bg-slate-50"
-                              >
-                                <span className="font-bold text-slate-800">
-                                  {a.company_name || a.buyer_name || 'Warehouse Stock'}
-                                </span>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-mono font-bold text-blue-600">
-                                    {a.allocated_quantity} Kits
-                                  </span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                      a.payment_status === 'PAID'
-                                        ? 'bg-emerald-100 text-emerald-800'
-                                        : 'bg-amber-100 text-amber-800'
-                                    }`}
-                                  >
-                                    {a.payment_status || 'PENDING'}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-500">
+                    No EPC allocations recorded yet.
+                  </div>
                 )}
               </div>
 
-              {/* Payment Details */}
-              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-2 text-xs">
-                <div className="font-black uppercase tracking-wider text-slate-500 text-[11px]">
-                  Token & Escrow Settlement Info
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-slate-700">
-                  <div>
-                    <span className="text-slate-400">Token Paid:</span>{' '}
-                    <strong className="text-emerald-700">
-                      ₹{Math.round((selectedOrder.token_paid_paise || 0) / 100).toLocaleString('en-IN')}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Payment Status:</span>{' '}
-                    <strong className="uppercase">{selectedOrder.token_payment_status || 'PENDING'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Bank UTR:</span>{' '}
-                    <strong className="font-mono">{selectedOrder.utr_number || 'N/A'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Payment Date:</span>{' '}
-                    <strong>{selectedOrder.payment_date || 'N/A'}</strong>
+              {/* Audit History Timeline */}
+              {Array.isArray(selectedOrder.status_history) && selectedOrder.status_history.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm mb-2">Status &amp; Audit Trail</h4>
+                  <div className="space-y-2 border-l-2 border-slate-200 pl-4 ml-2">
+                    {selectedOrder.status_history.map((hist, i) => (
+                      <div key={i} className="relative">
+                        <div className="w-2.5 h-2.5 bg-blue-600 rounded-full absolute -left-[21px] top-1" />
+                        <div className="font-bold text-slate-900">{hist.status}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {hist.note} • {new Date(hist.changed_at).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex items-center justify-end">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setDetailModal(false)}
-                className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition"
               >
                 Close
               </button>
@@ -2005,593 +3201,6 @@ export default function BdePoOrders() {
           </div>
         </div>
       )}
-
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MODAL 5: REORDER DRAWDOWN
-      ───────────────────────────────────────────────────────────────────────────── */}
-      {reorderModal && reorderOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-xl lg:max-w-2xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-10 animate-fadeIn">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-blue-600" /> Drawdown Loose Reorder
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Drawdown from PO <strong className="font-mono">{reorderOrder.po_number}</strong> • Remaining:{' '}
-                  <strong className="text-blue-600">{reorderOrder.remaining_quantity} Kits</strong>
-                </p>
-              </div>
-              <button
-                onClick={() => setReorderModal(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleReorderSubmit} className="p-6 space-y-4">
-              {reorderError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{reorderError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Quantity to Drawdown (Kits) <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setReorderQty((prev) => Math.max(1, (parseInt(prev, 10) || 1) - 1))}
-                    className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 font-black text-slate-800"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={reorderOrder.remaining_quantity}
-                    value={reorderQty}
-                    onChange={(e) => setReorderQty(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="flex-1 text-center py-2 rounded-xl text-base font-black border border-slate-200 text-slate-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReorderQty((prev) =>
-                        Math.min(reorderOrder.remaining_quantity, (parseInt(prev, 10) || 1) + 1)
-                      )
-                    }
-                    className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 font-black text-slate-800"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Payment Reference / UTR
-                </label>
-                <input
-                  type="text"
-                  value={reorderUtr}
-                  onChange={(e) => setReorderUtr(e.target.value)}
-                  placeholder="e.g. HDFC-REORDER-9911"
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                    Remitting Bank
-                  </label>
-                  <input
-                    type="text"
-                    value={reorderBank}
-                    onChange={(e) => setReorderBank(e.target.value)}
-                    placeholder="e.g. ICICI Bank"
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                    Drawdown Date
-                  </label>
-                  <input
-                    type="date"
-                    value={reorderDate}
-                    onChange={(e) => setReorderDate(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReorderModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={reorderSubmitting}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black shadow-md hover:bg-blue-700"
-                >
-                  {reorderSubmitting ? 'Processing...' : 'Confirm Reorder Drawdown'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MODAL 6: REFUND REQUEST
-      ───────────────────────────────────────────────────────────────────────────── */}
-      {refundModal && refundOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-xl lg:max-w-2xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-10 animate-fadeIn">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-rose-600" /> Request Token Deposit Refund
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  PO: <strong className="font-mono">{refundOrder.po_number}</strong> • Token Balance:{' '}
-                  <strong className="text-emerald-600">
-                    ₹{Math.round((refundOrder.token_balance_paise || 0) / 100).toLocaleString('en-IN')}
-                  </strong>
-                </p>
-              </div>
-              <button
-                onClick={() => setRefundModal(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleRefundSubmit} className="p-6 space-y-3">
-              {refundError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{refundError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-600">Account Holder Name</label>
-                <input
-                  type="text"
-                  value={refundForm.account_holder_name}
-                  onChange={(e) => setRefundForm({ ...refundForm, account_holder_name: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-slate-600">Bank Name</label>
-                  <input
-                    type="text"
-                    value={refundForm.bank_name}
-                    onChange={(e) => setRefundForm({ ...refundForm, bank_name: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-slate-600">IFSC Code</label>
-                  <input
-                    type="text"
-                    value={refundForm.ifsc_code}
-                    onChange={(e) => setRefundForm({ ...refundForm, ifsc_code: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-600">Account Number</label>
-                <input
-                  type="text"
-                  value={refundForm.account_number}
-                  onChange={(e) => setRefundForm({ ...refundForm, account_number: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-600">Confirm Account Number</label>
-                <input
-                  type="text"
-                  value={refundForm.confirm_account_number}
-                  onChange={(e) => setRefundForm({ ...refundForm, confirm_account_number: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRefundModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={refundSubmitting}
-                  className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-black shadow-md hover:bg-rose-700"
-                >
-                  {refundSubmitting ? 'Submitting...' : 'Submit Refund Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PO CARD ITEM COMPONENT (Matches Franchise PO Card 4-Stage Lifecycle)
-// ─────────────────────────────────────────────────────────────────────────────
-function PoCardItem({
-  order,
-  onSelectOrder,
-  onOpenAllocate,
-  onOpenToken,
-  onValidateOrder,
-  onOpenReorder,
-  onOpenRefund,
-}) {
-  const item = order.items?.[0] || {};
-  const isCombine = order.po_category === 'COMBINE_PO';
-  const singleEpcAlloc = !isCombine && item.epc_allocations?.length === 1 ? item.epc_allocations[0] : null;
-
-  const booked = order.total_booked_quantity || order.target_committed_quantity || item.quantity || 0;
-  const fulfilled = order.fulfilled_quantity || 0;
-  const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
-  const progressPct = booked > 0 ? Math.min(100, Math.round((fulfilled / booked) * 100)) : 0;
-
-  const tokenRequiredINR = Math.round((order.token_amount_paise || 0) / 100);
-  const tokenPaidINR = Math.round((order.token_paid_paise || 0) / 100);
-  const tokenAdjustedINR = Math.round((order.token_adjusted_total_paise || 0) / 100);
-  const tokenBalanceINR =
-    order.token_balance_paise != null
-      ? Math.round(order.token_balance_paise / 100)
-      : Math.max(0, tokenPaidINR - tokenAdjustedINR);
-
-  // Creator Attribution
-  const isBdeCreated = order.created_by_role === 'BDE';
-  const creatorDisplay = isBdeCreated
-    ? `BDE: ${order.creator_name || 'Assigned Officer'}${order.creator_code ? ` (${order.creator_code})` : ''}`
-    : 'Franchisee Direct';
-
-  // Customer / Franchise Details
-  const franchiseName = order.customer_details?.company_name || order.customer_details?.name || 'Franchisee Hub';
-  const franchiseLocation =
-    [order.customer_details?.district, order.customer_details?.state].filter(Boolean).join(', ') || 'Territory Hub';
-
-  // Lifecycle Stage Calculations
-  const hasAllocatedItems = (order.items || []).length > 0 && Boolean(order.items[0]?.item_name);
-  const isPendingAllocation = order.status === 'PENDING_ALLOCATION' || !hasAllocatedItems;
-  const isValidated =
-    order.status === 'VALIDATED' ||
-    ['APPROVED', 'CONFIRMED', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'COMPLETED'].includes(order.status);
-  const allAllocsPaid =
-    (item.epc_allocations || []).length > 0 &&
-    item.epc_allocations.every((a) => a.payment_status === 'PAID' || a.payment_status === 'VERIFIED');
-  const isPoStarted = order.status === 'PO_STARTED' || (allAllocsPaid && !isValidated);
-  const isTokenPaid =
-    order.token_payment_status === 'PAID' ||
-    isPoStarted ||
-    isValidated ||
-    allAllocsPaid ||
-    (tokenPaidINR >= tokenRequiredINR && tokenRequiredINR > 0);
-  const isAwaitingToken =
-    !isPendingAllocation &&
-    !isPoStarted &&
-    !isValidated &&
-    !allAllocsPaid &&
-    (order.status === 'AWAITING_TOKEN_PAYMENT' || !isTokenPaid);
-
-  let step = 1;
-  let stageLabel = '1. PO Created';
-  if (isValidated) {
-    step = 4;
-    stageLabel = '4. Validated ✓';
-  } else if (isPoStarted) {
-    step = 3;
-    stageLabel = '3. PO Started';
-  } else if (isAwaitingToken) {
-    step = 2;
-    stageLabel = '2. Awaiting Token Payment';
-  } else if (!isPendingAllocation) {
-    step = 2;
-    stageLabel = '2. Products Allocated';
-  }
-
-  const isExpired = order.status === 'EXPIRED';
-  const canReorder = remaining > 0 && !isExpired && isValidated && !['CANCELLED', 'REJECTED'].includes(order.status);
-  const canRequestRefund = tokenBalanceINR > 0 && (isExpired || remaining === 0);
-
-  return (
-    <div
-      className="rounded-3xl border-2 p-5 sm:p-6 shadow-xs flex flex-col justify-between gap-5 relative overflow-hidden transition-all hover:shadow-lg bg-white"
-      style={{
-        borderColor: isPendingAllocation
-          ? 'rgba(245, 158, 11, 0.4)'
-          : isAwaitingToken
-          ? 'rgba(249, 115, 22, 0.4)'
-          : isPoStarted
-          ? 'rgba(59, 130, 246, 0.4)'
-          : '#e2e8f0',
-      }}
-    >
-      <div className="space-y-4">
-        {/* Row 1: PO Number, Creator Badge, Category Badge & Status */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono font-black text-sm text-slate-900 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200">
-              {order.po_number}
-            </span>
-
-            {/* Created By Badge */}
-            <span
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
-                isBdeCreated
-                  ? 'bg-amber-500/10 text-amber-700 border-amber-500/30'
-                  : 'bg-blue-500/10 text-blue-700 border-blue-500/30'
-              }`}
-            >
-              {isBdeCreated ? <Users className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
-              {creatorDisplay}
-            </span>
-
-            {isCombine ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-50 text-purple-700 border border-purple-200">
-                <Users className="w-3 h-3" /> Combine PO ({(item.epc_allocations || []).length} EPCs)
-              </span>
-            ) : singleEpcAlloc ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-blue-50 text-blue-700 border border-blue-200">
-                <UserCheck className="w-3 h-3" /> Single PO ({singleEpcAlloc.company_name || '1 EPC'})
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200">
-                <Package className="w-3 h-3" /> Single PO (Warehouse Stock)
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <StatusBadge status={order.status} />
-          </div>
-        </div>
-
-        {/* Row 2: 4-Step Lifecycle Stepper */}
-        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-          <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500">
-            <span>PO Lifecycle Stage</span>
-            <span className="text-blue-600 font-extrabold">{stageLabel}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-1.5 text-center">
-            <div
-              className={`p-1.5 rounded-xl border text-[10px] font-bold ${
-                step >= 1
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
-                  : 'bg-white border-slate-200 text-slate-400'
-              }`}
-            >
-              1. Created ✓
-            </div>
-            <div
-              className={`p-1.5 rounded-xl border text-[10px] font-bold ${
-                step >= 2
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
-                  : step === 1
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 font-black animate-pulse'
-                  : 'bg-white border-slate-200 text-slate-400'
-              }`}
-            >
-              2. Allocate {step >= 2 ? '✓' : '⚡'}
-            </div>
-            <div
-              className={`p-1.5 rounded-xl border text-[10px] font-bold ${
-                step >= 3
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
-                  : step === 2
-                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-700 font-black animate-pulse'
-                  : 'bg-white border-slate-200 text-slate-400'
-              }`}
-            >
-              3. Token Pay {step >= 3 ? '✓' : '🔒'}
-            </div>
-            <div
-              className={`p-1.5 rounded-xl border text-[10px] font-bold ${
-                step >= 4
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
-                  : step === 3
-                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-700 font-black'
-                  : 'bg-white border-slate-200 text-slate-400'
-              }`}
-            >
-              4. Validated {step >= 4 ? '✓' : '⏳'}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 3: Franchisee & EPC Details */}
-        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-              Franchisee & Beneficiary
-            </div>
-            <div className="font-bold text-slate-900 mt-0.5">{franchiseName}</div>
-            <div className="text-[11px] text-slate-500">
-              {franchiseLocation} •{' '}
-              {isCombine
-                ? `${(item.epc_allocations || []).length} Pooled EPCs`
-                : singleEpcAlloc
-                ? `Allocated: ${singleEpcAlloc.company_name}`
-                : 'Direct Warehouse Stock'}
-            </div>
-          </div>
-          <div className="text-left sm:text-right text-[11px] text-slate-400">
-            <div>Created: {new Date(order.created_at).toLocaleDateString('en-IN')}</div>
-            {order.lock_expires_at && (
-              <div className="text-blue-600 font-bold">
-                Lock Valid: {new Date(order.lock_expires_at).toLocaleDateString('en-IN')}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Row 4: Product & Rate Lock Info */}
-        <div className="space-y-1.5">
-          <div className="flex justify-between items-baseline text-xs">
-            <span className="font-bold text-slate-900">
-              {item.item_name || (
-                <span className="text-amber-600 font-bold flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Stage 2: Product Allocation Required
-                </span>
-              )}
-            </span>
-            {item.unit_price_paise && (
-              <span className="font-black text-slate-900">
-                ₹{Math.round(item.unit_price_paise / 100).toLocaleString('en-IN')}
-                <span className="text-[10px] font-normal text-slate-500"> /kit</span>
-              </span>
-            )}
-          </div>
-
-          {isValidated && (
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
-              <Lock className="w-3 h-3 text-emerald-600" /> Guaranteed Price Lock Active (30 Days)
-            </div>
-          )}
-        </div>
-
-        {/* Row 5: Fulfillment Progress Bar */}
-        <div className="space-y-1.5 pt-1">
-          <div className="flex justify-between items-center text-xs font-bold">
-            <span className="text-slate-500">
-              Quota Fulfillment: <strong className="text-slate-900">{fulfilled}</strong> / {booked} Kits
-            </span>
-            <span className="text-blue-600 font-black">{progressPct}%</span>
-          </div>
-          <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                progressPct >= 100 ? 'bg-emerald-500' : 'bg-blue-600'
-              }`}
-              style={{ width: `${Math.min(100, progressPct)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-[11px] text-slate-400">
-            <span>Remaining Drawdown: {remaining} kits</span>
-            <span>Committed: {booked} kits</span>
-          </div>
-        </div>
-
-        {/* Row 6: Token Commercial Breakdown Strip */}
-        <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs">
-          <div>
-            <div className="text-[10px] font-bold uppercase text-slate-400">Token Required</div>
-            <div className="font-black text-slate-800 mt-0.5">₹{tokenRequiredINR.toLocaleString('en-IN')}</div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase text-slate-400">Token Paid</div>
-            <div
-              className={`font-black mt-0.5 ${
-                tokenPaidINR >= tokenRequiredINR && tokenRequiredINR > 0 ? 'text-emerald-600' : 'text-slate-700'
-              }`}
-            >
-              ₹{tokenPaidINR.toLocaleString('en-IN')}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase text-slate-400">Token Balance</div>
-            <div className="font-black text-blue-600 mt-0.5">₹{tokenBalanceINR.toLocaleString('en-IN')}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 7: Action Buttons according to Stage */}
-      <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-        <button
-          onClick={onSelectOrder}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-        >
-          <Eye className="w-3.5 h-3.5 text-slate-500" />
-          <span>Full Details</span>
-        </button>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {isPendingAllocation && (
-            <button
-              onClick={onOpenAllocate}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-black shadow-sm hover:bg-amber-600 transition cursor-pointer animate-pulse"
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Allocate Products (Stage 2) →</span>
-            </button>
-          )}
-
-          {isAwaitingToken && (
-            <button
-              onClick={onOpenToken}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-black shadow-sm hover:bg-orange-700 transition cursor-pointer"
-            >
-              <DollarSign className="w-3.5 h-3.5" />
-              <span>Record Token Payment →</span>
-            </button>
-          )}
-
-          {isPoStarted && !isValidated && (
-            <button
-              onClick={onValidateOrder}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black shadow-sm hover:bg-blue-700 transition cursor-pointer"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Validate PO Now</span>
-            </button>
-          )}
-
-          {canReorder && (
-            <button
-              onClick={onOpenReorder}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black shadow-sm hover:bg-blue-700 transition cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Drawdown Reorder</span>
-            </button>
-          )}
-
-          {canRequestRefund && (
-            <button
-              onClick={onOpenRefund}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-black hover:bg-rose-100 transition cursor-pointer"
-            >
-              <DollarSign className="w-3.5 h-3.5" />
-              <span>Request Refund</span>
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

@@ -29,4 +29,10 @@ router.post('/remove-datasheet', check_auth, check_permissions([{ unique_code: '
 router.post('/india/upload-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }]), upload_to_cloudinary, handler.upload_combokit_datasheet);
 router.post('/india/remove-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }]), handler.remove_combokit_datasheet);
 
+// Combined Kit Datasheet Generation & PDF Download Routes
+router.get('/:id/combined-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }]), handler.get_combined_datasheet);
+router.get('/:id/combined-datasheet-pdf', handler.download_combined_datasheet_pdf);
+router.get('/india/:id/combined-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }]), handler.get_combined_datasheet);
+router.get('/india/:id/combined-datasheet-pdf', handler.download_combined_datasheet_pdf);
+
 module.exports = router;

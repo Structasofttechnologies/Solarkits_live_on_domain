@@ -33,7 +33,7 @@ export default function BdeLayout() {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    // { name: 'Purchase Orders (PO)', path: '/purchase-orders', icon: ShoppingCart },
+    { name: 'Purchase Orders (PO)', path: '/purchase-orders', icon: ShoppingCart },
     { name: 'EPC Leads', path: '/epc-leads', icon: Users },
     { name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
     { name: 'EPC Quotes', path: '/epc-quotes', icon: FileText },
@@ -43,7 +43,6 @@ export default function BdeLayout() {
     { name: 'Leaderboard Ranking', path: '/ranking', icon: Award },
     { name: 'Store Setup', path: '/store-setup', icon: ShoppingBag },
     { name: 'Notifications', path: '/notifications', icon: Bell },
-    // { name: 'My Profile & KYC', path: '/profile', icon: User },
   ];
 
   const handleLogout = async () => {

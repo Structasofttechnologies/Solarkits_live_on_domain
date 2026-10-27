@@ -5,6 +5,7 @@ const { GeoLevel0, GeoLevel1, GeoLevel2, Cluster } = require('../models/geolocat
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
 const { delete_uploaded_files } = require('../utils/upload.files');
 const { sendAdminNotification } = require('../services/admin.notification.service');
+const { getCombinedKitDatasheetData, generateCombinedDatasheetPdf } = require('../utils/datasheet.generator');
 
 const parseJSON = (val, defaultVal = []) => {
     if (!val) return defaultVal;
@@ -1409,6 +1410,34 @@ const remove_combokit_datasheet = async (req, res) => {
     }
 };
 
+const get_combined_datasheet = async (req, res) => {
+    try {
+        const kitId = req.params.id || req.query.id;
+        if (!kitId) {
+            return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
+        }
+        const data = await getCombinedKitDatasheetData(kitId);
+        return res.status(200).json({ status: 'success', data });
+    } catch (error) {
+        console.error("Error in get_combined_datasheet:", error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Internal Server Error' });
+    }
+};
+
+const download_combined_datasheet_pdf = async (req, res) => {
+    try {
+        const kitId = req.params.id || req.query.id;
+        if (!kitId) {
+            return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
+        }
+        const data = await getCombinedKitDatasheetData(kitId);
+        await generateCombinedDatasheetPdf(data, res);
+    } catch (error) {
+        console.error("Error in download_combined_datasheet_pdf:", error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Failed to generate datasheet PDF' });
+    }
+};
+
 module.exports = {
     create_combo_kit,
     get_combo_kits,
@@ -1420,5 +1449,7 @@ module.exports = {
     delete_combo_kit_india,
     get_combo_kit_status,
     upload_combokit_datasheet,
-    remove_combokit_datasheet
+    remove_combokit_datasheet,
+    get_combined_datasheet,
+    download_combined_datasheet_pdf
 };

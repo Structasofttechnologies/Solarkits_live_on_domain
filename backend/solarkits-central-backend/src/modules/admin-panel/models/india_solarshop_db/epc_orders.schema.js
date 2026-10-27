@@ -53,6 +53,12 @@ const schema = new mongoose.Schema({
     default: false,
     index: true,
   },
+  order_type: {
+    type: String,
+    enum: ['po_order', 'loose_order', 'trial_order'],
+    default: 'po_order',
+    index: true,
+  },
   epc_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'epc_accounts',
@@ -154,6 +160,13 @@ const schema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'company_warehouses',
     default: null,
+  },
+  fulfillment_bifurcation: {
+    assigned_warehouse_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'company_warehouses', default: null },
+    assigned_warehouse_code: { type: String, default: null },
+    order_type_matched:      { type: String, default: 'po_order' },
+    matched_level:           { type: String, enum: ['district', 'cluster', 'state', 'fallback_central', null], default: null },
+    matched_reason:          { type: String, default: null },
   },
 
   // ── Supplier Procurement & Material Inward Lifecycle ─────────────────────

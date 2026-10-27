@@ -212,7 +212,15 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
   const formattedPrices = useMemo(() => {
     const ourPriceNum = Number(effectivePrices.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
     const marketPriceNum = Number(effectivePrices.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
-    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
+    const gstRate = Number(
+      currentVariant?.gstRate ??
+      currentVariant?.gst_rate ??
+      kit?.gstRate ??
+      kit?.gst_rate ??
+      kit?.pricing?.gstRate ??
+      kit?.pricing?.gst_rate ??
+      13.8
+    );
     const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
       ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
       : 0;

@@ -10,7 +10,17 @@ import {
   FiLayers,
   FiInfo
 } from "react-icons/fi";
-import { FaSolarPanel, FaBolt, FaBoxOpen } from "react-icons/fa";
+import { FaSolarPanel, FaBolt, FaBoxOpen, FaFilePdf } from "react-icons/fa";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, "");
+
+const resolveStoreImageUrl = (url) => {
+  if (!url || typeof url !== "string" || url.trim() === "") return "";
+  if (url.includes("localhost:3001")) return url.replace("localhost:3001", "localhost:5000");
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${BACKEND_BASE}/${url.startsWith("/") ? url.slice(1) : url}`;
+};
 
 const getComponentIcon = (type = "") => {
   const lower = type.toLowerCase();
@@ -43,7 +53,7 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
         datasheetUrl: kit.datasheet,
         hasDatasheet: true,
         quantity: 1,
-        image: kit.kit_image
+        image: null // System/kit level has no equipment photo
       });
     }
 
@@ -70,7 +80,8 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
         componentType: "Solar Panel",
         datasheetUrl: url,
         hasDatasheet: !!url,
-        quantity: kit.panel.quantity || kit.panel.panelCount || 0
+        quantity: kit.panel.quantity || kit.panel.panelCount || 0,
+        image: kit.panel.image || null
       });
       if (url) seen.add(url);
     }
@@ -84,7 +95,8 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
         componentType: "Solar Inverter",
         datasheetUrl: url,
         hasDatasheet: !!url,
-        quantity: kit.inverter.quantity || 1
+        quantity: kit.inverter.quantity || 1,
+        image: kit.inverter.image || null
       });
       if (url) seen.add(url);
     }
@@ -109,7 +121,8 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
           componentType: comp.actualType === "panel" ? "Solar Panel" : comp.actualType === "inverter" ? "Inverter" : (comp.technologyType || "Balance of System"),
           datasheetUrl: url,
           hasDatasheet: !!url,
-          quantity: comp.quantity || 1
+          quantity: comp.quantity || 1,
+          image: (isPanel || isInverter) ? (comp.image || null) : null
         });
       });
     }
@@ -158,9 +171,22 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 shrink-0">
-            <FiCheckCircle size={15} />
-            <span>MNRE & BIS Compliant</span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+              <FiCheckCircle size={15} />
+              <span>MNRE & BIS Compliant</span>
+            </div>
+            {(kit.id || kit._id) && (
+              <a
+                href={`${API_BASE}/v1/shop/combokit/${kit.id || kit._id}/combined-datasheet-pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+              >
+                <FaFilePdf size={13} />
+                <span>Download Combined PDF</span>
+              </a>
+            )}
           </div>
         </div>
 
@@ -184,15 +210,34 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
             <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-surface">
               {datasheetList.map((item, idx) => {
                 const Icon = getComponentIcon(item.componentType || item.productName);
+                const isSolarEquipment =
+                  item.componentType?.toLowerCase().includes("panel") ||
+                  item.componentType?.toLowerCase().includes("inverter");
+                const hasEquipmentPhoto = isSolarEquipment && item.image;
+                const photoUrl = hasEquipmentPhoto ? resolveStoreImageUrl(item.image) : null;
+
                 return (
                   <div
                     key={item.id || idx}
                     className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
                   >
                     <div className="flex items-start gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-primary-soft text-primary flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon size={18} />
-                      </div>
+                      {photoUrl ? (
+                        <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 border border-border p-1 flex items-center justify-center shrink-0 mt-0.5 overflow-hidden shadow-xs">
+                          <img
+                            src={photoUrl}
+                            alt={item.productName}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-primary-soft text-primary flex items-center justify-center shrink-0 mt-0.5">
+                          <Icon size={18} />
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-text-secondary border border-border">

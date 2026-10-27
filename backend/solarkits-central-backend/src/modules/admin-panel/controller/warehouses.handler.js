@@ -313,7 +313,15 @@ const get_warehouses = async (req, res) => {
         manager,
         due_date: row.due_date,
         rejection_reason: row.rejection_reason || null,
-        profile_completion_percentage: percentage
+        profile_completion_percentage: percentage,
+        order_fulfillment_types: Array.isArray(row.order_fulfillment_types)
+          ? row.order_fulfillment_types
+          : ['po_order', 'loose_order', 'trial_order'],
+        order_fulfillment_config: row.order_fulfillment_config || {
+          po_order:    { is_active: true, max_daily_capacity: 50 },
+          loose_order: { is_active: true, max_daily_capacity: 100 },
+          trial_order: { is_active: true, max_daily_capacity: 20 },
+        }
       };
     });
 
@@ -412,7 +420,15 @@ const get_warehouse = async (req, res) => {
         manager,
         due_date: warehouse.due_date,
         rejection_reason: warehouse.rejection_reason || null,
-        profile_completion_percentage: percentage
+        profile_completion_percentage: percentage,
+        order_fulfillment_types: Array.isArray(warehouse.order_fulfillment_types)
+          ? warehouse.order_fulfillment_types
+          : ['po_order', 'loose_order', 'trial_order'],
+        order_fulfillment_config: warehouse.order_fulfillment_config || {
+          po_order:    { is_active: true, max_daily_capacity: 50 },
+          loose_order: { is_active: true, max_daily_capacity: 100 },
+          trial_order: { is_active: true, max_daily_capacity: 20 },
+        }
       },
     });
   } catch (err) {
@@ -1111,6 +1127,68 @@ const change_warehouse_validation_status = async (req, res) => {
   }
 };
 
+/**
+ * Updates order fulfillment capabilities for a warehouse.
+ * Supported types: 'po_order', 'loose_order', 'trial_order'
+ */
+const update_warehouse_order_fulfillment_types = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { order_fulfillment_types, order_fulfillment_config } = req.body;
+
+    if (!Array.isArray(order_fulfillment_types)) {
+      return res.status(400).json({
+        status: "error",
+        message: "order_fulfillment_types must be an array of strings (po_order, loose_order, trial_order)."
+      });
+    }
+
+    const validTypes = ['po_order', 'loose_order', 'trial_order'];
+    const sanitizedTypes = order_fulfillment_types.filter(t => validTypes.includes(t));
+
+    const warehouse = await CompanyWarehouse.findById(id);
+    if (!warehouse) {
+      return res.status(404).json({ status: "error", message: "Warehouse not found." });
+    }
+
+    const configToSet = (order_fulfillment_config && typeof order_fulfillment_config === 'object')
+      ? {
+          po_order:    order_fulfillment_config.po_order    || warehouse.order_fulfillment_config?.po_order    || { is_active: sanitizedTypes.includes('po_order') },
+          loose_order: order_fulfillment_config.loose_order || warehouse.order_fulfillment_config?.loose_order || { is_active: sanitizedTypes.includes('loose_order') },
+          trial_order: order_fulfillment_config.trial_order || warehouse.order_fulfillment_config?.trial_order || { is_active: sanitizedTypes.includes('trial_order') },
+        }
+      : {
+          po_order:    { is_active: sanitizedTypes.includes('po_order'), max_daily_capacity: 50 },
+          loose_order: { is_active: sanitizedTypes.includes('loose_order'), max_daily_capacity: 100 },
+          trial_order: { is_active: sanitizedTypes.includes('trial_order'), max_daily_capacity: 20 },
+        };
+
+    // Direct update to MongoDB to guarantee immediate persistence
+    await CompanyWarehouse.updateOne(
+      { _id: id },
+      {
+        $set: {
+          order_fulfillment_types: sanitizedTypes,
+          order_fulfillment_config: configToSet
+        }
+      }
+    );
+
+    return res.status(200).json({
+      status: "success",
+      message: "Warehouse order fulfillment capabilities updated successfully.",
+      warehouse: {
+        id: (warehouse._id || warehouse.id)?.toString(),
+        warehouse_code: warehouse.warehouse_code,
+        order_fulfillment_types: sanitizedTypes,
+        order_fulfillment_config: configToSet
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ status: "error", message: "Failed to update order fulfillment types: " + err.message });
+  }
+};
+
 module.exports = {
   add_warehouse,
   get_warehouses,
@@ -1122,5 +1200,6 @@ module.exports = {
   add_warehouse_validation_field,
   set_warehouse_validation_field_statuses,
   get_warehouses_by_district,
-  change_warehouse_validation_status
+  change_warehouse_validation_status,
+  update_warehouse_order_fulfillment_types
 };

@@ -3,7 +3,10 @@ const jwt = require('../utils/jsonwebtoken');
 
 const check_auth = async (req, res, next) => {
   try {
-    const authHeader = req.headers["authorization"];
+    let authHeader = req.headers["authorization"];
+    if (!authHeader && req.query.token) {
+      authHeader = `Bearer ${req.query.token}`;
+    }
     if (!authHeader) {
       return res.status(401).json({ status: "error", message: "Authorization header missing", auth: false });
     }

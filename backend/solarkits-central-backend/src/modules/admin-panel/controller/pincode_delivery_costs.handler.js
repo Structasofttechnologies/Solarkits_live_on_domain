@@ -63,9 +63,11 @@ const get_delivery_costs = async (req, res) => {
       ];
     }
 
+    const isExport = req.query.is_export === 'true' || req.query.export === 'true';
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.max(1, Math.min(200, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
+    const maxLimit = isExport ? 10000 : 200;
+    const limitNum = Math.max(1, Math.min(maxLimit, parseInt(limit, 10) || 20));
+    const skip = isExport ? 0 : (pageNum - 1) * limitNum;
 
     const [items, total] = await Promise.all([
       PincodeDeliveryCost.find(query)

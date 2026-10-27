@@ -129,9 +129,27 @@ export default function AdminOrderApprovalDashboard() {
   const [records, setRecords] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
+  // Filters
+  const [activeTab, setActiveTab] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [orderTypeFilter, setOrderTypeFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Priority Sort: Pending requests always at the top, newest request first
   const sortedRecords = useMemo(() => {
-    return [...records].sort((a, b) => {
+    let filtered = records;
+    if (orderTypeFilter && orderTypeFilter !== "all") {
+      filtered = filtered.filter((r) => {
+        const type =
+          r.order_type ||
+          r.details?.order_type ||
+          r.fulfillment_bifurcation?.order_type ||
+          (r.is_trial_order ? "trial_order" : "po_order");
+        return type === orderTypeFilter;
+      });
+    }
+
+    return [...filtered].sort((a, b) => {
       const isPendingA = a.approval_status === "pending";
       const isPendingB = b.approval_status === "pending";
 
@@ -150,12 +168,7 @@ export default function AdminOrderApprovalDashboard() {
       const timeB = new Date(b.requested_at || 0).getTime();
       return timeB - timeA;
     });
-  }, [records]);
-
-  // Filters
-  const [activeTab, setActiveTab] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  }, [records, orderTypeFilter]);
 
   // Modals
   const [inspectionItem, setInspectionItem] = useState(null);
@@ -700,6 +713,17 @@ export default function AdminOrderApprovalDashboard() {
               <option value="rejected">Rejected</option>
               <option value="returned">Returned</option>
             </select>
+
+            <select
+              value={orderTypeFilter}
+              onChange={(e) => setOrderTypeFilter(e.target.value)}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            >
+              <option value="all">Fulfillment: All Types</option>
+              <option value="po_order">PO Orders (Bulk Combo)</option>
+              <option value="loose_order">Loose Orders (Custom BOM)</option>
+              <option value="trial_order">Trial Orders (Sample)</option>
+            </select>
           </div>
         </div>
 
@@ -756,6 +780,12 @@ export default function AdminOrderApprovalDashboard() {
                             <span className="text-[11px] text-text-muted font-bold ml-1">
                               {item.stage_label}
                             </span>
+                            {item.is_above_benchmark && item.stage === 'pos' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-2xs mt-0.5 animate-pulse">
+                                <FaShieldAlt className="text-amber-600 text-[8px]" />
+                                Exceeds Benchmark
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -794,6 +824,43 @@ export default function AdminOrderApprovalDashboard() {
                               )}
                             </div>
                           )}
+
+                          {/* Order Type & Bifurcated Warehouse Badges */}
+                          {(() => {
+                            const orderType = item.order_type || item.details?.order_type || item.fulfillment_bifurcation?.order_type || (item.is_trial_order ? "trial_order" : "po_order");
+                            const whCode = item.warehouse_code || item.details?.warehouse_code || item.fulfillment_bifurcation?.bifurcated_warehouse_code;
+                            return (
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                {item.is_above_benchmark && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                                    <FaShieldAlt className="text-amber-600 text-[8px]" />
+                                    Benchmark Cost Exceeded
+                                  </span>
+                                )}
+                                {orderType === "po_order" && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[9px] font-black bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                                    PO Order
+                                  </span>
+                                )}
+                                {orderType === "loose_order" && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[9px] font-black bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                                    Loose Order
+                                  </span>
+                                )}
+                                {orderType === "trial_order" && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                    Trial Order
+                                  </span>
+                                )}
+                                {whCode && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border/60">
+                                    <FaWarehouse className="text-primary/70" size={9} />
+                                    {whCode}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Entity / Stakeholder */}
@@ -1039,6 +1106,36 @@ export default function AdminOrderApprovalDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Benchmark Cost Exceeded Alert Banner for PO Stage */}
+              {(inspectionItem.is_above_benchmark || inspectionItem.variance_amount > 0) && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-900 dark:text-amber-200 flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5">
+                    <FaShieldAlt className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black uppercase tracking-wider bg-amber-600 text-white px-2 py-0.5 rounded-md">
+                        ⚠️ Benchmark Cost Exceeded
+                      </span>
+                      {inspectionItem.benchmark_cost_unit > 0 && inspectionItem.entered_unit_rate > 0 && (
+                        <span className="text-xs font-bold font-mono text-text-primary">
+                          Entered: ₹{Number(inspectionItem.entered_unit_rate).toLocaleString("en-IN")}/unit vs Benchmark: ₹{Number(inspectionItem.benchmark_cost_unit).toLocaleString("en-IN")}/unit (+₹{Number(inspectionItem.entered_unit_rate - inspectionItem.benchmark_cost_unit).toLocaleString("en-IN")}/unit)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium leading-relaxed">
+                      This Purchase Order has been flagged for Admin approval because the negotiated unit rate exceeds the approved benchmark pricing limit.
+                      Admin authorization is strictly required before order release to supplier and before 30% advance payment request can be triggered.
+                    </p>
+                    {inspectionItem.details?.po_approval?.remarks && (
+                      <div className="text-[11px] font-semibold text-text-secondary mt-1 bg-surface/70 p-2 rounded-lg border border-border/70">
+                        <strong>Reason / Flagged Remarks:</strong> {inspectionItem.details.po_approval.remarks}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Financial & Benchmark Audit Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -23,6 +23,8 @@ import {
   FaBuilding,
   FaSlidersH,
   FaClock,
+  FaBoxes,
+  FaTruck,
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -44,6 +46,12 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
   const [countryObj, setCountryObj] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [orderFulfillmentTypes, setOrderFulfillmentTypes] = useState([
+    "po_order",
+    "loose_order",
+    "trial_order",
+  ]);
+  const [updatingWhOrderTypes, setUpdatingWhOrderTypes] = useState(false);
 
   // Combo Kits & Customize Kits (master lists from API)
   const [comboKits, setComboKits] = useState([]);
@@ -210,6 +218,9 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const wh = allWarehouses.find((w) => (w.id || w._id)?.toString() === warehouseId?.toString());
       setWarehouse(wh);
+      if (wh && Array.isArray(wh.order_fulfillment_types)) {
+        setOrderFulfillmentTypes(wh.order_fulfillment_types);
+      }
 
       const fetchedCombos = comboRes.data?.data || [];
       const uniqueCombos = [];
@@ -346,6 +357,37 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
       dispatch(setAlert({ type: "error", message: error.response?.data?.message || "Failed to save kit activations" }));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleFulfillmentType = async (type) => {
+    const updated = orderFulfillmentTypes.includes(type)
+      ? orderFulfillmentTypes.filter((t) => t !== type)
+      : [...orderFulfillmentTypes, type];
+
+    setOrderFulfillmentTypes(updated);
+    setUpdatingWhOrderTypes(true);
+    try {
+      const res = await axios.patch(
+        `${API_URL}/warehouses/${warehouseId}/order-fulfillment-types?unique_id=${moduleUniqueId}&req_for=edit`,
+        { order_fulfillment_types: updated },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: `Updated order fulfillment capability: ${type}` }));
+        setWarehouse((prev) => ({ ...prev, order_fulfillment_types: updated }));
+      }
+    } catch (err) {
+      console.error("Error updating order fulfillment type:", err);
+      dispatch(
+        setAlert({
+          type: "error",
+          message: err.response?.data?.message || "Failed to update order fulfillment capability",
+        })
+      );
+      setOrderFulfillmentTypes(warehouse?.order_fulfillment_types || ["po_order", "loose_order", "trial_order"]);
+    } finally {
+      setUpdatingWhOrderTypes(false);
     }
   };
 
@@ -1072,6 +1114,140 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
               Cluster: <strong>{warehouse.cluster || "N/A"}</strong>
             </span>
           </span>
+        </div>
+      </div>
+
+      {/* Warehouse Order Type Fulfillment Capabilities Card */}
+      <div className="bg-surface rounded-2xl border-2 border-border/70 p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
+                <FaBoxes size={14} />
+              </div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-text-primary">
+                Order Type Fulfillment Specialization
+              </h3>
+            </div>
+            <p className="text-xs text-text-secondary mt-1">
+              Select which order categories this warehouse fulfills. State & District EPC orders will bifurcate automatically based on these active capabilities.
+            </p>
+          </div>
+          {updatingWhOrderTypes && (
+            <span className="text-[10px] font-bold text-primary animate-pulse flex items-center gap-1.5 self-start md:self-center">
+              <FaSync className="animate-spin" size={10} /> Updating Routing Matrix...
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          {/* PO Orders */}
+          <div
+            onClick={() => !updatingWhOrderTypes && handleToggleFulfillmentType("po_order")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between ${
+              orderFulfillmentTypes.includes("po_order")
+                ? "bg-blue-500/5 border-blue-500/40 shadow-xs"
+                : "bg-surface-hover/30 border-border opacity-70 hover:opacity-100"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                  <FaTruck size={12} />
+                </span>
+                <div>
+                  <h4 className="text-xs font-black text-text-primary">PO Orders</h4>
+                  <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">
+                    Bulk Project Kits
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer pointer-events-none">
+                <input
+                  type="checkbox"
+                  checked={orderFulfillmentTypes.includes("po_order")}
+                  readOnly
+                  className="sr-only peer"
+                />
+                <div className={`w-8 h-4 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-3 after:w-3 after:transition-all ${orderFulfillmentTypes.includes("po_order") ? "bg-blue-600" : "bg-border"}`} />
+              </label>
+            </div>
+            <p className="text-[11px] text-text-muted mt-3 leading-normal">
+              Fulfills regular Combo Kit purchase orders and large commercial turnkey shipments.
+            </p>
+          </div>
+
+          {/* Loose Orders */}
+          <div
+            onClick={() => !updatingWhOrderTypes && handleToggleFulfillmentType("loose_order")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between ${
+              orderFulfillmentTypes.includes("loose_order")
+                ? "bg-purple-500/5 border-purple-500/40 shadow-xs"
+                : "bg-surface-hover/30 border-border opacity-70 hover:opacity-100"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                  <FaBoxes size={12} />
+                </span>
+                <div>
+                  <h4 className="text-xs font-black text-text-primary">Loose Orders</h4>
+                  <span className="text-[9px] font-bold text-purple-600 uppercase tracking-wider">
+                    Customized BOM
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer pointer-events-none">
+                <input
+                  type="checkbox"
+                  checked={orderFulfillmentTypes.includes("loose_order")}
+                  readOnly
+                  className="sr-only peer"
+                />
+                <div className={`w-8 h-4 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-3 after:w-3 after:transition-all ${orderFulfillmentTypes.includes("loose_order") ? "bg-purple-600" : "bg-border"}`} />
+              </label>
+            </div>
+            <p className="text-[11px] text-text-muted mt-3 leading-normal">
+              Fulfills loose component items and customized partial BOM orders tailored by EPCs.
+            </p>
+          </div>
+
+          {/* Trial Orders */}
+          <div
+            onClick={() => !updatingWhOrderTypes && handleToggleFulfillmentType("trial_order")}
+            className={`p-4 rounded-xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between ${
+              orderFulfillmentTypes.includes("trial_order")
+                ? "bg-amber-500/5 border-amber-500/40 shadow-xs"
+                : "bg-surface-hover/30 border-border opacity-70 hover:opacity-100"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                  <FaCheckCircle size={12} />
+                </span>
+                <div>
+                  <h4 className="text-xs font-black text-text-primary">Trial Orders</h4>
+                  <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">
+                    Pilot & Evaluation
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer pointer-events-none">
+                <input
+                  type="checkbox"
+                  checked={orderFulfillmentTypes.includes("trial_order")}
+                  readOnly
+                  className="sr-only peer"
+                />
+                <div className={`w-8 h-4 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-3 after:w-3 after:transition-all ${orderFulfillmentTypes.includes("trial_order") ? "bg-amber-600" : "bg-border"}`} />
+              </label>
+            </div>
+            <p className="text-[11px] text-text-muted mt-3 leading-normal">
+              Fulfills trial units and sample kits dispatched to EPCs for pilot inspection.
+            </p>
+          </div>
         </div>
       </div>
 

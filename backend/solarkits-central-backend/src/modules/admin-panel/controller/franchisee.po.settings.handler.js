@@ -44,6 +44,7 @@ const add_po_settings = async (req, res) => {
       allowed_combo_kit_ids, allowed_product_ids,
       allowed_territory_levels, po_validity_days, requires_approval,
       token_booking_enabled, token_type, token_value, min_token_amount, po_lock_days,
+      token_settlement_rule, default_penalty_type, default_penalty_rate, penalty_rules,
       payment_terms, advance_percentage,
       credit_period_eligible, credit_period_days, cancellation_rules, amendment_rules,
       contributes_to_monthly_target, effective_from, effective_until } = req.body;
@@ -77,6 +78,14 @@ const add_po_settings = async (req, res) => {
       }
     }
 
+    let normalizedPenaltyType = default_penalty_type;
+    if (default_penalty_type === 'PERCENTAGE') normalizedPenaltyType = 'PERCENTAGE_OF_TOKEN';
+    else if (default_penalty_type === 'FIXED_PER_KIT') normalizedPenaltyType = 'FLAT_PER_UNPURCHASED_KIT';
+    else if (default_penalty_type === 'FULL_FORFEIT') normalizedPenaltyType = 'PERCENTAGE_OF_TOKEN';
+    if (!['FLAT_PER_UNPURCHASED_KIT', 'PERCENTAGE_OF_TOKEN', 'PERCENTAGE_OF_UNPURCHASED_VALUE'].includes(normalizedPenaltyType)) {
+      normalizedPenaltyType = 'FLAT_PER_UNPURCHASED_KIT';
+    }
+
     const doc = await FranchiseePlanPoSetting.create({
       plan_id,
       po_enabled:                  Boolean(po_enabled),
@@ -98,8 +107,8 @@ const add_po_settings = async (req, res) => {
       min_token_amount:            min_token_amount != null ? Number(min_token_amount) : 10000,
       po_lock_days:                po_lock_days != null ? Number(po_lock_days) : (po_validity_days != null ? Number(po_validity_days) : 30),
       token_settlement_rule:       ['PRO_RATA', 'FINAL_ORDER', 'UPFRONT'].includes(token_settlement_rule) ? token_settlement_rule : 'PRO_RATA',
-      default_penalty_type:        ['PERCENTAGE', 'FIXED_PER_KIT', 'FULL_FORFEIT'].includes(default_penalty_type) ? default_penalty_type : 'PERCENTAGE',
-      default_penalty_rate:        default_penalty_rate != null ? Number(default_penalty_rate) : 10,
+      default_penalty_type:        normalizedPenaltyType,
+      default_penalty_rate:        default_penalty_rate != null ? Number(default_penalty_rate) : 500,
       penalty_rules:               Array.isArray(penalty_rules) ? penalty_rules : [],
       requires_approval:           requires_approval !== false,
       payment_terms:               payment_terms || 'FULL_ADVANCE',
@@ -156,12 +165,40 @@ const update_po_settings = async (req, res) => {
       }
     }
 
+    if (fields.default_penalty_type) {
+      let pt = fields.default_penalty_type;
+      if (pt === 'PERCENTAGE') pt = 'PERCENTAGE_OF_TOKEN';
+      else if (pt === 'FIXED_PER_KIT') pt = 'FLAT_PER_UNPURCHASED_KIT';
+      else if (pt === 'FULL_FORFEIT') pt = 'PERCENTAGE_OF_TOKEN';
+      if (['FLAT_PER_UNPURCHASED_KIT', 'PERCENTAGE_OF_TOKEN', 'PERCENTAGE_OF_UNPURCHASED_VALUE'].includes(pt)) {
+        fields.default_penalty_type = pt;
+      } else {
+        fields.default_penalty_type = 'FLAT_PER_UNPURCHASED_KIT';
+      }
+    }
+    if (fields.token_settlement_rule && !['PRO_RATA', 'FINAL_ORDER', 'UPFRONT'].includes(fields.token_settlement_rule)) {
+      fields.token_settlement_rule = 'PRO_RATA';
+    }
+    if (fields.token_type && !['FIXED_AMOUNT', 'PERCENTAGE'].includes(fields.token_type)) {
+      fields.token_type = 'FIXED_AMOUNT';
+    }
+    if (fields.token_value !== undefined && fields.token_value !== null && !isNaN(Number(fields.token_value))) {
+      fields.token_value = Number(fields.token_value);
+    }
+    if (fields.token_booking_enabled !== undefined) {
+      fields.token_booking_enabled = Boolean(fields.token_booking_enabled);
+    }
+    if (fields.po_lock_days !== undefined && fields.po_lock_days !== null && !isNaN(Number(fields.po_lock_days))) {
+      fields.po_lock_days = Number(fields.po_lock_days);
+    }
+
     const before = doc.toObject();
     const allowed = ['po_enabled', 'min_po_quantity', 'max_po_quantity', 'allow_mixed_project_types',
       'max_line_items', 'allowed_industry_type_ids', 'allowed_project_type_ids', 'allowed_category_ids',
       'allowed_subcategory_ids', 'allowed_combo_kit_ids',
       'allowed_product_ids', 'allowed_territory_levels', 'po_validity_days', 'requires_approval',
       'token_booking_enabled', 'token_type', 'token_value', 'min_token_amount', 'po_lock_days',
+      'token_settlement_rule', 'default_penalty_type', 'default_penalty_rate', 'penalty_rules',
       'payment_terms', 'advance_percentage', 'credit_period_eligible', 'credit_period_days',
       'cancellation_rules', 'amendment_rules', 'contributes_to_monthly_target', 'effective_from', 'effective_until', 'is_active'];
 
