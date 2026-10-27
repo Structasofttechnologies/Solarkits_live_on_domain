@@ -45,10 +45,82 @@ async function seed() {
       delivery_method: 'manual',
       kit_preparation_status: 'awaiting_components',
       epcs: [
-        { epc_id: 'EPC-101', epc_name: 'Apex Solar Pune', payment_status: 'paid_50_percent', second_half_received: false, share_percentage: 60 },
-        { epc_id: 'EPC-102', epc_name: 'Mahalaxmi Solar Infra', payment_status: 'paid_50_percent', second_half_received: false, share_percentage: 40 }
+        {
+          epc_id: 'EPC-101',
+          epc_name: 'Apex Solar Pune',
+          solarkit_model: '10kW Commercial SolarKit Package',
+          system_capacity: '10 kW',
+          panels_qty: '20 Panels (540W Mono PERC)',
+          inverter_qty: '1 Inverter (10kW 3-Phase On-Grid)',
+          boskit_qty: '1 BOS Kit (10kW Pre-assembled Enclosure)',
+          structure_qty: '4 Rails (4.2m Aluminum) + 24 Clamps',
+          payment_status: 'Payment Done',
+          share_percentage: 60,
+          contact_phone: '+91 98765 43210',
+          site_location: 'Plot 44, Phase 2, Industrial Estate, Pune',
+          items: [
+            { sku: 'PANEL-540W-MONO', product_name: 'Solar Panels 540W Mono PERC', ordered_qty: 20, category: 'Panels' },
+            { sku: 'INV-10KW-3P-OG', product_name: 'Solar Inverter 10kW On-Grid', ordered_qty: 1, category: 'Inverter' },
+            { sku: 'BOS-KIT-10KW-STD', product_name: 'BOS Kit 10kW (ACDB/DCDB/Cables)', ordered_qty: 1, category: 'BOS Kit' },
+            { sku: 'RAIL-4.2M-AL', product_name: 'Aluminum Mounting Rails 4.2m', ordered_qty: 36, category: 'Structure' },
+            { sku: 'CLAMP-SET-35MM', product_name: 'End & Mid Clamps 35mm Set', ordered_qty: 72, category: 'Fasteners' }
+          ]
+        },
+        {
+          epc_id: 'EPC-102',
+          epc_name: 'Mahalaxmi Solar Infra',
+          solarkit_model: '5kW Residential SolarKit Package',
+          system_capacity: '5 kW',
+          panels_qty: '10 Panels (540W Mono PERC)',
+          inverter_qty: '1 Inverter (5kW Single-Phase On-Grid)',
+          boskit_qty: '1 BOS Kit (5kW Pre-assembled Enclosure)',
+          structure_qty: '2 Rails (3.2m Aluminum) + 12 Clamps',
+          payment_status: 'Payment Done',
+          share_percentage: 40,
+          contact_phone: '+91 97654 88990',
+          site_location: 'Sector 18, Chakan Industrial Estate, Pune',
+          items: [
+            { sku: 'PANEL-540W-MONO', product_name: 'Solar Panels 540W Mono PERC', ordered_qty: 10, category: 'Panels' },
+            { sku: 'INV-5KW-1P-OG', product_name: 'Solar Inverter 5kW Single-Phase', ordered_qty: 1, category: 'Inverter' },
+            { sku: 'BOS-KIT-5KW-STD', product_name: 'BOS Kit 5kW (ACDB/DCDB/Cables)', ordered_qty: 1, category: 'BOS Kit' },
+            { sku: 'RAIL-3.2M-AL', product_name: 'Aluminum Mounting Rails 3.2m', ordered_qty: 24, category: 'Structure' },
+            { sku: 'CLAMP-SET-35MM', product_name: 'End & Mid Clamps 35mm Set', ordered_qty: 48, category: 'Fasteners' }
+          ]
+        }
       ],
       items: [
+        {
+          sku: 'BOS-KIT-10KW-STD',
+          product_name: 'BOS Kit 10kW (Pre-assembled ACDB/DCDB/Cables Package)',
+          category: 'BOS Kit',
+          sourcing_type: 'warehouse_inventory',
+          supply_fulfilment_method: 'warehouse_stock',
+          ordered_qty: 1,
+          received_qty: 0,
+          damaged_qty: 0,
+          missing_qty: 0,
+          pending_qty: 1,
+          available_inventory_stock: 1,
+          allocated_stock: 0,
+          rack_location: 'BAY-BOS-STOCK',
+          qc_status: 'Pending'
+        },
+        {
+          sku: 'BOS-KIT-5KW-STD',
+          product_name: 'BOS Kit 5kW (Pre-assembled ACDB/DCDB/Cables Package)',
+          category: 'BOS Kit',
+          sourcing_type: 'warehouse_inventory',
+          supply_fulfilment_method: 'warehouse_stock',
+          ordered_qty: 1,
+          received_qty: 0,
+          damaged_qty: 0,
+          missing_qty: 0,
+          pending_qty: 1,
+          available_inventory_stock: 4,
+          allocated_stock: 0,
+          rack_location: 'BAY-BOS-STOCK',
+          qc_status: 'Pending'
+        },
         {
           sku: 'BOS-RAIL-4.2M-AL',
           product_name: 'Anodized Aluminum Mounting Rail 4.2m',
@@ -154,6 +226,29 @@ async function seed() {
       delivery_status: 'partially_inwarded',
       delivery_method: 'manual',
       kit_preparation_status: 'awaiting_components',
+      epcs: [
+        {
+          epc_id: 'EPC-201',
+          epc_name: 'Kisan Solar Solutions EPC',
+          solarkit_model: '5kW Rooftop SolarKit Package',
+          system_capacity: '5 kW',
+          panels_qty: '10 Panels (540W Mono PERC)',
+          inverter_qty: '1 Inverter (5kW Hybrid Solar Inverter)',
+          boskit_qty: '1 BOS Kit (5kW Pre-assembled Enclosure)',
+          structure_qty: '4 Rails (3.2m Aluminum) + 16 Clamps',
+          payment_status: 'Payment Done',
+          share_percentage: 100,
+          contact_phone: '+91 97654 11223',
+          site_location: 'Shop No. 12, Agri Market Yard, Nashik',
+          items: [
+            { sku: 'PANEL-540W-MONO', product_name: 'Solar Panels 540W Mono PERC', ordered_qty: 10, category: 'Panels' },
+            { sku: 'INV-5KW-HYBRID', product_name: 'Hybrid Solar Inverter 5kW', ordered_qty: 1, category: 'Inverter' },
+            { sku: 'BOS-KIT-5KW-STD', product_name: 'BOS Kit 5kW Pre-assembled', ordered_qty: 1, category: 'BOS Kit' },
+            { sku: 'RAIL-3.2M-AL', product_name: 'Anodized Aluminum Rail 3.2m', ordered_qty: 40, category: 'Structure' },
+            { sku: 'FASTENER-SS304', product_name: 'SS304 Bolt & Hardware Sets', ordered_qty: 4, category: 'Fasteners' }
+          ]
+        }
+      ],
       discrepancy_details: [
         {
           sku: 'BOS-RAIL-3.2M-AL',
@@ -166,6 +261,22 @@ async function seed() {
         }
       ],
       items: [
+        {
+          sku: 'BOS-KIT-5KW-STD',
+          product_name: 'BOS Kit 5kW (Pre-assembled ACDB/DCDB/Cables Package)',
+          category: 'BOS Kit',
+          sourcing_type: 'warehouse_inventory',
+          supply_fulfilment_method: 'warehouse_stock',
+          ordered_qty: 1,
+          received_qty: 0,
+          damaged_qty: 0,
+          missing_qty: 0,
+          pending_qty: 1,
+          available_inventory_stock: 4,
+          allocated_stock: 0,
+          rack_location: 'BAY-BOS-STOCK',
+          qc_status: 'Pending'
+        },
         {
           sku: 'BOS-RAIL-3.2M-AL',
           product_name: 'Anodized Aluminum Mounting Rail 3.2m',
@@ -240,6 +351,29 @@ async function seed() {
       delivery_status: 'ready_for_dispatch',
       delivery_method: 'manual',
       kit_preparation_status: 'kit_ready',
+      epcs: [
+        {
+          epc_id: 'EPC-301',
+          epc_name: 'GreenSpark Renewable Energy Systems',
+          solarkit_model: '10kW Commercial SolarKit Package',
+          system_capacity: '10 kW',
+          panels_qty: '20 Panels (540W Mono PERC)',
+          inverter_qty: '1 Inverter (10kW On-Grid 3-Phase Inverter)',
+          boskit_qty: '1 BOS Kit (10kW Pre-assembled Enclosure)',
+          structure_qty: '4 Rails (4.2m Aluminum) + 24 Clamps',
+          payment_status: 'Payment Done',
+          share_percentage: 100,
+          contact_phone: '+91 94251 77889',
+          site_location: 'Warehouse #7, Transport Nagar, Indore',
+          items: [
+            { sku: 'PANEL-540W-MONO', product_name: 'Solar Panels 540W Mono PERC', ordered_qty: 20, category: 'Panels' },
+            { sku: 'INV-10KW-3P-OG', product_name: 'On-Grid Inverter 10kW 3-Phase', ordered_qty: 1, category: 'Inverter' },
+            { sku: 'BOS-KIT-10KW-STD', product_name: 'BOS Kit 10kW Pre-assembled', ordered_qty: 1, category: 'BOS Kit' },
+            { sku: 'RAIL-4.2M-AL', product_name: 'Anodized Aluminum Rail 4.2m', ordered_qty: 50, category: 'Structure' },
+            { sku: 'CABLE-6SQMM-100M', product_name: 'Solar DC Cable 6 sq.mm (100m Roll)', ordered_qty: 4, category: 'Cables' }
+          ]
+        }
+      ],
       kit_assembly_details: {
         assembly_status: 'completed',
         qc_status: 'passed',
@@ -248,6 +382,22 @@ async function seed() {
         packed_at: new Date(Date.now() - 5 * 3600 * 1000)
       },
       items: [
+        {
+          sku: 'BOS-KIT-10KW-STD',
+          product_name: 'BOS Kit 10kW (Pre-assembled ACDB/DCDB/Cables Package)',
+          category: 'BOS Kit',
+          sourcing_type: 'warehouse_inventory',
+          supply_fulfilment_method: 'warehouse_stock',
+          ordered_qty: 1,
+          received_qty: 1,
+          damaged_qty: 0,
+          missing_qty: 0,
+          pending_qty: 0,
+          available_inventory_stock: 1,
+          allocated_stock: 1,
+          rack_location: 'BAY-BOS-STOCK',
+          qc_status: 'Passed'
+        },
         {
           sku: 'BOS-RAIL-4.2M-AL',
           product_name: 'Anodized Aluminum Mounting Rail 4.2m',

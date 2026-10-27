@@ -4,14 +4,15 @@ import {
   HiOutlineTruck, HiOutlineDocumentText, HiOutlineCheckCircle,
   HiOutlinePhotograph, HiOutlineShieldCheck, HiOutlineLockClosed,
   HiOutlineArrowRight, HiOutlineRefresh, HiOutlineExclamationCircle,
-  HiOutlineUpload, HiOutlineClock, HiOutlineChevronDown, HiOutlineChevronUp
+  HiOutlineUpload, HiOutlineClock, HiOutlineChevronDown, HiOutlineChevronUp,
+  HiOutlineSearch
 } from 'react-icons/hi';
 import {
   FaTruck, FaBoxes, FaFileInvoice, FaFilePdf, FaCheckCircle,
   FaTimesCircle, FaSpinner, FaPhoneAlt, FaCalendarAlt,
   FaExternalLinkAlt, FaInfoCircle, FaLock, FaCheckDouble, FaUserCheck,
   FaLayerGroup, FaUserMinus, FaMoneyBillWave, FaExclamationTriangle,
-  FaArrowRight, FaShieldAlt, FaTimes, FaArrowLeft
+  FaArrowRight, FaShieldAlt, FaTimes, FaArrowLeft, FaSearch, FaFilter
 } from 'react-icons/fa';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '@/features/alert.slice';
@@ -42,7 +43,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1 to 4 horizontal stepper
 
-  // Multi-EPC Ungrouped Map and Action States
+  // Search and Top Filter Chips
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'ready', 'payment_pending', 'epc_removal_pending', 'gate_pending'
+
+  // Multi-EPC Action States (Defaults permanently to ungrouped view)
   const [ungroupedMap, setUngroupedMap] = useState({});
   const [removingEpcId, setRemovingEpcId] = useState(null);
   const [updatingPaymentEpcId, setUpdatingPaymentEpcId] = useState(null);
@@ -344,8 +349,70 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
   const unpaidEpcs = activeEpcs.filter(e => e.payment_second_half?.status !== 'done');
   const allEpcsPaymentDone = activeEpcs.length > 0 && unpaidEpcs.length === 0;
 
-  // Ungroup state for active order (defaults to true for clear separation of EPCs)
-  const isUngrouped = activeOrderId ? (ungroupedMap[activeOrderId] ?? (activeOrder?.is_ungrouped ?? true)) : true;
+  // Boss Requirement: Default to auto-ungrouped EPC view permanently (no manual toggle required)
+  const isUngrouped = true;
+
+  // Filter and Search Logic
+  const filteredOrders = orders.filter((ord) => {
+    // Search query matching
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchOrderNum = ord.order_number?.toLowerCase().includes(q);
+      const matchDoId = ord.delivery_order_id?.toLowerCase().includes(q);
+      const matchCustomer = ord.customer_name?.toLowerCase().includes(q);
+      const matchPhone = ord.customer_phone?.toLowerCase().includes(q);
+      const matchDistrict = ord.destination?.district?.toLowerCase().includes(q);
+      const matchState = ord.destination?.state?.toLowerCase().includes(q);
+      const matchTransporter = ord.transport_details?.transporter_name?.toLowerCase().includes(q);
+      const matchVehicle = ord.transport_details?.vehicle_number?.toLowerCase().includes(q);
+      const matchEpc = (ord.epcs || []).some(e => e.epc_name?.toLowerCase().includes(q) || e.epc_id?.toLowerCase().includes(q));
+
+      if (!matchOrderNum && !matchDoId && !matchCustomer && !matchPhone && !matchDistrict && !matchState && !matchTransporter && !matchVehicle && !matchEpc) {
+        return false;
+      }
+    }
+
+    // Filter status matching
+    const epcList = ord.epcs || [];
+    const activeList = epcList.filter(e => !e.is_removed_by_account);
+    const unpaid = activeList.filter(e => e.payment_second_half?.status !== 'done');
+    const isAllPaid = activeList.length === 0 || unpaid.length === 0;
+    const hasVehicle = !!ord.transport_details?.vehicle_number;
+    const isEway = ord.eway_bill?.status === 'generated';
+    const hasEvidence = !!(ord.dispatch_evidence?.vehicle_rear_photo && (ord.dispatch_evidence?.docket_doc || ord.transport_details?.docket_number));
+
+    if (filterStatus === 'ready') {
+      return isAllPaid && hasVehicle;
+    }
+    if (filterStatus === 'payment_pending') {
+      return unpaid.length > 0;
+    }
+    if (filterStatus === 'epc_removal_pending') {
+      return unpaid.length > 0;
+    }
+    if (filterStatus === 'gate_pending') {
+      return !isEway || !hasEvidence;
+    }
+
+    return true;
+  });
+
+  // KPI Counts for Filters
+  const countAll = orders.length;
+  const countReady = orders.filter(o => {
+    const act = (o.epcs || []).filter(e => !e.is_removed_by_account);
+    const unp = act.filter(e => e.payment_second_half?.status !== 'done');
+    return (act.length === 0 || unp.length === 0) && !!o.transport_details?.vehicle_number;
+  }).length;
+  const countPaymentPending = orders.filter(o => {
+    const act = (o.epcs || []).filter(e => !e.is_removed_by_account);
+    return act.some(e => e.payment_second_half?.status !== 'done');
+  }).length;
+  const countGatePending = orders.filter(o => {
+    const isEway = o.eway_bill?.status === 'generated';
+    const hasEvidence = !!(o.dispatch_evidence?.vehicle_rear_photo && (o.dispatch_evidence?.docket_doc || o.transport_details?.docket_number));
+    return !isEway || !hasEvidence;
+  }).length;
 
   // Check if conditions for manual dispatch activation are satisfied
   const isEwayValid = activeOrder?.eway_bill?.status === 'generated';
@@ -378,6 +445,62 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
         </button>
       </div>
 
+      {/* ── Top Search Bar & KPI Filter Chips (Boss Requirement) ── */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3 shadow-xs">
+        {/* Search Bar */}
+        <div className="relative">
+          <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted text-base" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by Order #, DO #, EPC Name, Client, District, State, Transporter, Vehicle..."
+            className="w-full pl-10 pr-24 py-2.5 rounded-xl bg-surface-hover/70 border border-border text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary transition-all font-medium"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-text-muted hover:text-text-primary px-2 py-0.5 rounded bg-surface border border-border transition-colors cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Filter Chips */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
+          {[
+            { id: 'all', label: 'All Orders', count: countAll, badgeColor: 'bg-primary/20 text-primary' },
+            { id: 'ready', label: 'Ready to Dispatch', count: countReady, badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+            { id: 'payment_pending', label: '2nd Payment Pending', count: countPaymentPending, badgeColor: 'bg-rose-500/20 text-rose-400' },
+            { id: 'epc_removal_pending', label: 'EPC Removal Pending', count: countPaymentPending, badgeColor: 'bg-amber-500/20 text-amber-400' },
+            { id: 'gate_pending', label: 'Awaiting Gate Clearance', count: countGatePending, badgeColor: 'bg-blue-500/20 text-blue-400' },
+          ].map((chip) => {
+            const isActive = filterStatus === chip.id;
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setFilterStatus(chip.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer border ${
+                  isActive
+                    ? 'gradient-primary text-white border-transparent shadow-sm'
+                    : 'bg-surface hover:bg-surface-hover border-border text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <span>{chip.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-black ${
+                  isActive ? 'bg-white/20 text-white' : chip.badgeColor
+                }`}>
+                  {chip.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {loading ? (
         <div className="p-12 text-center text-text-muted space-y-3 bg-surface border border-border rounded-2xl">
           <FaSpinner className="animate-spin text-3xl text-primary mx-auto" />
@@ -395,12 +518,24 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
         /* ── Full Horizontal Cards List for All Orders Awaiting Dispatch (Boss Requirement 4) ── */
         <div className="space-y-4">
           <div className="text-xs font-black text-text-muted uppercase tracking-wider px-1 flex items-center justify-between">
-            <span>Orders Awaiting Dispatch ({orders.length})</span>
+            <span>Orders Awaiting Dispatch ({filteredOrders.length} of {orders.length})</span>
             <span className="text-[11px] font-normal text-text-muted">Click any order to open horizontal dispatch workflow</span>
           </div>
 
-          <div className="space-y-3">
-            {orders.map((ord) => {
+          {filteredOrders.length === 0 ? (
+            <div className="p-8 text-center text-text-muted space-y-2 bg-surface border border-border rounded-2xl">
+              <FaSearch className="text-3xl text-text-muted opacity-30 mx-auto" />
+              <div className="text-sm font-bold text-text-primary">No orders match the current filter or search query.</div>
+              <button
+                onClick={() => { setSearchQuery(''); setFilterStatus('all'); }}
+                className="text-xs text-primary font-bold hover:underline cursor-pointer"
+              >
+                Reset filters & search
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredOrders.map((ord) => {
               const isReadyToInitiate = ord.delivery_status === 'ready_to_initiate';
               const isAwaitingEwb = ord.delivery_status === 'awaiting_eway_bill';
               const isDispatched = ord.delivery_status === 'in_transit';
@@ -531,6 +666,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
               );
             })}
           </div>
+        )}
         </div>
       )}
 
@@ -640,19 +776,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     </div>
                   </div>
 
-                  {/* Ungroup Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleToggleUngroup(activeOrder._id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
-                      isUngrouped
-                        ? 'gradient-primary text-white shadow-primary/20'
-                        : 'bg-surface-hover text-text-primary border border-border hover:border-primary'
-                    }`}
-                  >
+                  {/* Multi-EPC Auto-Ungrouped Status Badge (Boss Requirement: Default Ungrouped View) */}
+                  <div className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary border border-primary/25 flex items-center gap-1.5 shadow-xs">
                     <FaLayerGroup className="text-xs" />
-                    <span>{isUngrouped ? 'Ungrouped View (Active)' : 'Ungroup EPCs'}</span>
-                  </button>
+                    <span>Auto-Ungrouped ({activeEpcs.length} EPCs)</span>
+                  </div>
                 </div>
 
                 {/* Payment Clearance Status Alert */}
@@ -1204,6 +1332,8 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                         className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
                           isDispatchAllowed
                             ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer animate-pulse'
+                            : unpaidEpcs.length > 0
+                            ? 'bg-rose-500/10 border border-rose-500/40 text-rose-400 cursor-not-allowed opacity-90'
                             : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
                         }`}
                       >
@@ -1211,6 +1341,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                           <>
                             <FaSpinner className="animate-spin text-sm" />
                             <span>Dispatching Order...</span>
+                          </>
+                        ) : unpaidEpcs.length > 0 ? (
+                          <>
+                            <FaLock className="text-xs text-rose-400" />
+                            <span>⚠️ 2nd Payment Pending ({unpaidEpcs.length} EPCs) - Dispatch Blocked</span>
                           </>
                         ) : (
                           <>
@@ -1263,6 +1398,8 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                   className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-md ${
                     isDispatchAllowed
                       ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer'
+                      : unpaidEpcs.length > 0
+                      ? 'bg-rose-500/10 border border-rose-500/40 text-rose-400 cursor-not-allowed opacity-90'
                       : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
                   }`}
                 >
@@ -1270,6 +1407,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     <>
                       <FaSpinner className="animate-spin text-xs" />
                       <span>Dispatching...</span>
+                    </>
+                  ) : unpaidEpcs.length > 0 ? (
+                    <>
+                      <FaLock className="text-xs text-rose-400" />
+                      <span>Dispatch Blocked (2nd Payment Due)</span>
                     </>
                   ) : (
                     <>

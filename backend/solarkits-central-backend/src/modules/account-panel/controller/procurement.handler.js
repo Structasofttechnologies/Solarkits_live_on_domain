@@ -2106,14 +2106,17 @@ exports.warehouse_confirm_inward = async (req, res) => {
       qc_passed = true
     } = req.body;
 
-    if (!pi_id || !customer_order_number || !warehouse_id) {
-      return res.status(400).json({ status: 'error', message: 'pi_id, customer_order_number, and warehouse_id are required.' });
+    if (!pi_id) {
+      return res.status(400).json({ status: 'error', message: 'pi_id is required.' });
     }
 
     const pi = await PurchaseIndent.findById(pi_id);
     if (!pi) {
       return res.status(404).json({ status: 'error', message: 'Purchase Indent not found.' });
     }
+
+    const targetWarehouseId = warehouse_id || pi.destination_warehouse_id || (await CompanyWarehouse.findOne().select('_id'))?._id;
+    const orderNo = customer_order_number || pi.customer_order_number || 'WH-STOCK-PROCUREMENT';
 
     // Generate GRN No
     const count = await WarehouseInward.countDocuments({});
@@ -2135,7 +2138,7 @@ exports.warehouse_confirm_inward = async (req, res) => {
 
     const inwardDoc = new WarehouseInward({
       grn_no: grnNo,
-      warehouse_id,
+      warehouse_id: targetWarehouseId,
       inward_type: 'supplier',
       supplier_name: pi.supplier_name,
       invoice_no: invoice_no || `INV-${pi.pi_number}`,
@@ -2150,7 +2153,7 @@ exports.warehouse_confirm_inward = async (req, res) => {
     // Increment warehouse stock
     for (const it of inwardItems) {
       await WarehouseStock.updateOne(
-        { warehouse_id, sku_code: it.sku_code },
+        { warehouse_id: targetWarehouseId, sku_code: it.sku_code },
         { $inc: { qty: it.qty } },
         { upsert: true }
       ).catch(() => {});
@@ -2172,10 +2175,10 @@ exports.warehouse_confirm_inward = async (req, res) => {
     await pi.save();
 
     // Update linked Customer Order procurement status
-    const isEpc = customer_order_number.toUpperCase().includes('EPC');
+    const isEpc = (orderNo || '').toUpperCase().includes('EPC');
     const OrderModel = isEpc ? EpcOrder : FpoOrder;
     await OrderModel.updateOne(
-      { order_number: customer_order_number },
+      { order_number: orderNo },
       {
         $set: {
           'procurement_status.overall_status': 'inward_completed',

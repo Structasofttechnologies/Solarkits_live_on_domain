@@ -86,7 +86,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                       : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                     }`}
                 >
-                  <div className="flex gap-3 items-center max-w-full">
+                  <div className="flex gap-3 items-center max-w-[calc(100%-36px)]">
                     <span
                       className={`text-xl min-w-6 flex justify-center transition-colors ${isActive ? "text-white" : "text-primary group-hover:scale-110"
                         }`}
@@ -97,6 +97,13 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                       {item.name}
                     </span>
                   </div>
+                  {item.badge !== undefined && item.badge !== null && Number(item.badge) > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black shrink-0 ${
+                      isActive ? "bg-white text-primary shadow-xs" : "bg-primary/15 text-primary border border-primary/25"
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
                 </MotionLink>
               )}
             </li>
