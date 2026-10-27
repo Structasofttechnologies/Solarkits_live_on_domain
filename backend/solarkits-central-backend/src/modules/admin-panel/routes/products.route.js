@@ -37,6 +37,31 @@ router.get(
   handler.get_products
 );
 
+const { upload_any_files } = require("../utils/upload.files");
+const productUpload = upload_any_files("public/uploads/products", 5);
+
+router.put(
+  "/update-specifications",
+  check_auth,
+  check_permissions([{ unique_code: "ADM_SKU", permissions: ["edit"] }]),
+  handler.update_product_specifications
+);
+
+router.post(
+  "/upload-datasheet",
+  check_auth,
+  check_permissions([{ unique_code: "ADM_SKU", permissions: ["edit"] }]),
+  productUpload,
+  handler.upload_product_datasheet
+);
+
+router.post(
+  "/remove-datasheet",
+  check_auth,
+  check_permissions([{ unique_code: "ADM_SKU", permissions: ["edit"] }]),
+  handler.remove_product_datasheet
+);
+
 // ================= SKU =================
 router.post(
   "/add-sku",

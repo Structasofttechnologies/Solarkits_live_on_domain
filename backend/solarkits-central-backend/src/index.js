@@ -88,6 +88,7 @@ adminRouter.use('/solarshop', require('./modules/admin-panel/routes/solarshop.ro
 adminRouter.use('/saas-products', require('./modules/admin-panel/routes/saas_products.route'));
 adminRouter.use('/combo-kits', require('./modules/admin-panel/routes/combo_kits.route'));
 adminRouter.use('/combo-kit-variants', require('./modules/admin-panel/routes/combo_kit_variants.route'));
+adminRouter.use('/datasheet-settings', require('./modules/admin-panel/routes/datasheet_settings.route'));
 adminRouter.use('/pincode-delivery-costs', require('./modules/admin-panel/routes/pincode_delivery_costs.route'));
 adminRouter.use('/best-seller-configs', require('./modules/admin-panel/routes/best_seller_kits.route'));
 adminRouter.use('/product-sku-prices', require('./modules/admin-panel/routes/product_sku_prices.route'));
@@ -208,6 +209,7 @@ app.use('/account-api', accountRouter);
 
 // 7. Solarshop India routes
 app.use('/api/india/v1', require('./modules/solarshop-india/routes/v1.routes'));
+app.use('/api/v1', require('./modules/solarshop-india/routes/v1.routes'));
 
 // 7.1 BDE Self-Service Portal routes
 app.use('/api/bde/v1', require('./modules/solarshop-india/routes/v1.routes/bde.portal.route'));

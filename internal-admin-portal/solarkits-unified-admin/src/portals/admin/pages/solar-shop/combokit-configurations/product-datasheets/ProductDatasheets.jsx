@@ -25,9 +25,15 @@ import {
   FaBolt,
   FaExternalLinkAlt,
   FaTimes,
-  FaFileAlt
+  FaFileAlt,
+  FaPalette,
+  FaDownload,
+  FaTable,
+  FaSlidersH
 } from "react-icons/fa";
 import { FiFileText, FiRefreshCw } from "react-icons/fi";
+import DatasheetDesignSettings from "./DatasheetDesignSettings";
+import CombinedDatasheetPreviewModal from "./CombinedDatasheetPreviewModal";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const DEFAULT_KIT_IMAGE =
@@ -71,6 +77,39 @@ export default function ProductDatasheets({ moduleUniqueId = "ADM_COMBO_KITS" })
   // Delete Confirmation
   const [deleteConfirmKit, setDeleteConfirmKit] = useState(null);
   const [deletingKitId, setDeletingKitId] = useState(null);
+
+  // Active Tab ('kits' | 'design')
+  const [activeTab, setActiveTab] = useState("kits");
+  const [previewCombinedKitId, setPreviewCombinedKitId] = useState(null);
+  const [downloadingPdfKitId, setDownloadingPdfKitId] = useState(null);
+
+  const handleDownloadCombinedPdf = async (kit) => {
+    const targetKitId = kit.id || kit._id;
+    if (!targetKitId || downloadingPdfKitId) return;
+    setDownloadingPdfKitId(targetKitId);
+
+    try {
+      const downloadUrl = `${baseEndpoint}/${targetKitId}/combined-datasheet-pdf`;
+      const res = await axios.get(downloadUrl, {
+        headers: authHeaderObj(),
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${(kit.name || "ComboKit").replace(/[^a-zA-Z0-9_-]/g, "_")}_Combined_Datasheet.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Blob download failed, falling back to direct open:", err);
+      window.open(`${baseEndpoint}/${targetKitId}/combined-datasheet-pdf`, "_blank");
+    } finally {
+      setDownloadingPdfKitId(null);
+    }
+  };
 
   // Hidden file input refs per kit
   const fileInputRefs = useRef({});
@@ -338,7 +377,50 @@ export default function ProductDatasheets({ moduleUniqueId = "ADM_COMBO_KITS" })
         }
       />
 
-      {/* Search & Filter Toolbar */}
+      {/* Modern Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-border/80 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("kits")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === "kits"
+              ? "bg-primary text-white shadow-xs"
+              : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-primary border border-border/60"
+          }`}
+        >
+          <FaFilePdf size={13} />
+          <span>ComboKit Datasheets</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === "kits" ? "bg-white/20 text-white" : "bg-bg text-text-muted"
+            }`}
+          >
+            {totalKits}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("design")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === "design"
+              ? "bg-primary text-white shadow-xs"
+              : "bg-surface hover:bg-surface-hover text-text-muted hover:text-text-primary border border-border/60"
+          }`}
+        >
+          <FaPalette size={13} />
+          <span>Datasheet Table Design Settings</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-500">
+            Live Preview
+          </span>
+        </button>
+      </div>
+
+      {activeTab === "design" ? (
+        <DatasheetDesignSettings />
+      ) : (
+        <>
+          {/* Search & Filter Toolbar */}
       <div className="bg-surface p-4 rounded-2xl border border-border/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
         {/* Search Input */}
         <div className="relative w-full md:w-96">
@@ -537,15 +619,55 @@ export default function ProductDatasheets({ moduleUniqueId = "ADM_COMBO_KITS" })
                 </div>
 
                 {/* Card Bottom: Datasheet Upload & Management Section */}
-                <div className="p-4 pt-0">
-                  <div className="pt-3 border-t border-border/80 space-y-3">
+                <div className="p-4 pt-0 space-y-3">
+                  {/* Auto-Generated Combined Kit Datasheet Section */}
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                        <FaTable size={12} />
+                        Combined Kit Datasheet
+                      </span>
+                      <span className="text-[9px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md">
+                        Auto-Generated
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-text-muted leading-tight">
+                      Aggregates component specifications into a styled table with full layout & design options.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewCombinedKitId(kitId)}
+                        className="flex-1 py-1.5 px-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <FaEye size={11} />
+                        Preview Table
+                      </button>
+                      <button
+                        type="button"
+                        disabled={downloadingPdfKitId === kitId}
+                        onClick={() => handleDownloadCombinedPdf(kit)}
+                        className="py-1.5 px-3 bg-surface hover:bg-surface-hover border border-border hover:border-primary/50 text-text-primary rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-60"
+                        title="Download Generated Combined PDF"
+                      >
+                        {downloadingPdfKitId === kitId ? (
+                          <div className="w-2.5 h-2.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                        ) : (
+                          <FaDownload size={10} className="text-primary" />
+                        )}
+                        PDF
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/80 space-y-2.5">
                     <div className="flex items-center justify-between text-[11px] font-bold text-text-primary">
                       <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
                         <FaFilePdf
                           className={hasDatasheet ? "text-red-500" : "text-text-muted"}
                           size={13}
                         />
-                        Technical Datasheet
+                        Manual Attached PDF
                       </span>
                       {hasDatasheet && (
                         <span className="text-[9px] text-emerald-700 font-black uppercase tracking-wider">
@@ -783,18 +905,28 @@ export default function ProductDatasheets({ moduleUniqueId = "ADM_COMBO_KITS" })
         </Dialog>
       )}
 
-      {/* Delete Confirmation Popup */}
-      {deleteConfirmKit && (
-        <ConfirmationPopup
-          isOpen={Boolean(deleteConfirmKit)}
-          onClose={() => setDeleteConfirmKit(null)}
-          onConfirm={handleRemoveDatasheet}
-          loading={deletingKitId === (deleteConfirmKit.id || deleteConfirmKit._id)}
-          title="Remove Datasheet"
-          message={`Are you sure you want to remove the technical datasheet for "${deleteConfirmKit.name}"? Customers will no longer be able to view or download it on the Solar Store.`}
-          confirmText="Yes, Remove"
-          confirmVariant="danger"
-        />
+          {/* Delete Confirmation Popup */}
+          {deleteConfirmKit && (
+            <ConfirmationPopup
+              isOpen={Boolean(deleteConfirmKit)}
+              onClose={() => setDeleteConfirmKit(null)}
+              onConfirm={handleRemoveDatasheet}
+              loading={deletingKitId === (deleteConfirmKit.id || deleteConfirmKit._id)}
+              title="Remove Datasheet"
+              message={`Are you sure you want to remove the technical datasheet for "${deleteConfirmKit.name}"? Customers will no longer be able to view or download it on the Solar Store.`}
+              confirmText="Yes, Remove"
+              confirmVariant="danger"
+            />
+          )}
+
+          {/* Combined Datasheet Preview Modal */}
+          <CombinedDatasheetPreviewModal
+            isOpen={Boolean(previewCombinedKitId)}
+            onClose={() => setPreviewCombinedKitId(null)}
+            kitId={previewCombinedKitId}
+            isIndia={isIndia}
+          />
+        </>
       )}
     </div>
   );

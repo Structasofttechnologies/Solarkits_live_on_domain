@@ -99,12 +99,16 @@ export default function ProductsTable({
                       </h4>
                       <div className="flex items-center gap-2">
                         {product.datasheet && (
-                          <div
-                            title="Technical Datasheet Attached"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-wider bg-red-500/10 border-red-500/20 text-red-500"
+                          <a
+                            href={product.datasheet}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="View Technical Datasheet (PDF)"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-wider bg-red-500/10 border-red-500/20 text-red-500 hover:bg-red-500/20 transition-colors"
                           >
                             <FaFilePdf size={8} /> PDF
-                          </div>
+                          </a>
                         )}
                         <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-tighter transition-colors duration-500 ${product.sku_count > 0 ? 'bg-primary/10 border-primary/10 text-primary' : 'bg-surface-hover border-border text-text-muted'}`}>
                           <FaTags size={8} /> {product.sku_count || 0} Variants
@@ -141,9 +145,9 @@ export default function ProductsTable({
 
                   {/* Premium Action Cluster */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
-                    <IconButton onClick={(e) => { e.stopPropagation(); onViewProduct(product); }} variant="primary" size="xs" className="rounded-lg h-8 w-8 shadow-sm hover:scale-105 transition-all"><FaEye /></IconButton>
-                    <IconButton onClick={(e) => { e.stopPropagation(); onEditProduct(product); }} variant="success" size="xs" className="rounded-lg h-8 w-8 shadow-sm hover:scale-105 transition-all"><FaEdit /></IconButton>
-                    <IconButton onClick={(e) => { e.stopPropagation(); handleDeleteClick(product, e); }} variant="danger" size="xs" className="rounded-lg h-8 w-8 shadow-sm hover:scale-105 transition-all"><FaTrash /></IconButton>
+                    <IconButton onClick={(e) => { e.stopPropagation(); onViewProduct(product); }} variant="primary" size="xs" title="View Details" className="rounded-lg h-8 w-8 shadow-sm hover:scale-105 transition-all"><FaEye /></IconButton>
+                    <IconButton onClick={(e) => { e.stopPropagation(); onEditProduct(product); }} variant="success" size="xs" title="Edit Model" className="rounded-lg h-8 w-8 shadow-sm hover:scale-105 transition-all"><FaEdit /></IconButton>
+                    <IconButton onClick={(e) => { e.stopPropagation(); handleDeleteClick(product, e); }} variant="danger" size="xs" title="Delete Model" className="rounded-lg h-8 w-8 shadow-sm hover:scale-105 transition-all"><FaTrash /></IconButton>
                     <div className="ml-2 w-6 h-6 flex items-center justify-center text-text-muted opacity-30 group-hover:opacity-100 transition-all">
                       <FaChevronRight size={10} />
                     </div>

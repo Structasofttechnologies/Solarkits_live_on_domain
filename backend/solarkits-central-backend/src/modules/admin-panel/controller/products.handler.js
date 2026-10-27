@@ -346,6 +346,7 @@ const get_products = async (req, res) => {
         scope_ids: p.scope_ids || [],
         sku_count,
         sku_config: p.sku_config,
+        specifications: p.specifications || [],
         attributes: Object.keys(grouped).map(g => ({ group_name: g, attributes: grouped[g] })),
         created_at: p.created_at
       });
@@ -359,7 +360,7 @@ const get_products = async (req, res) => {
 
 const update_product = async (req, res) => {
   try {
-    const { product_id, name, description, features, brand_id, attributes, scope_ids, sku_config, remove_datasheet } = req.body;
+    const { product_id, name, description, features, brand_id, attributes, scope_ids, sku_config, remove_datasheet, specifications } = req.body;
     const parsedAttrs = parseJSON(attributes) || [];
     const parsedScopes = parseJSON(scope_ids) || [];
     const parsedFeatures = parseJSON(features) || [];
@@ -381,18 +382,23 @@ const update_product = async (req, res) => {
       updatedDatasheet = null;
     }
 
-    await Product.updateOne({ _id: product._id }, {
-      $set: {
-        name,
-        description,
-        features: parsedFeatures,
-        brand_id: brand_id || product.brand_id,
-        scope_ids: parsedScopes,
-        image: image ? image.path : product.image,
-        datasheet: updatedDatasheet,
-        sku_config: parsedSkuConfig
-      }
-    });
+    const updateSet = {
+      name,
+      description,
+      features: parsedFeatures,
+      brand_id: brand_id || product.brand_id,
+      scope_ids: parsedScopes,
+      image: image ? image.path : product.image,
+      datasheet: updatedDatasheet,
+      sku_config: parsedSkuConfig
+    };
+
+    if (specifications !== undefined) {
+      const parsedSpecs = parseJSON(specifications) || [];
+      updateSet.specifications = parsedSpecs;
+    }
+
+    await Product.updateOne({ _id: product._id }, { $set: updateSet });
 
     // Automatically update existing SKU codes to match the new length config
     const skus = await ProductSku.find({ product_id: product._id, deleted_at: null });
@@ -886,11 +892,127 @@ const search_skus = async (req, res) => {
   }
 };
 
+const update_product_specifications = async (req, res) => {
+  try {
+    const { product_id, specifications } = req.body;
+    if (!product_id) {
+      return res.status(400).json({ status: "error", message: "Product ID is required." });
+    }
+
+    const parsedSpecs = parseJSON(specifications) || [];
+    const formatted = parsedSpecs.map((s, idx) => ({
+      id: s.id || `spec-${Date.now()}-${idx + 1}`,
+      key: s.key || s.specification || s.name || "",
+      value: s.value !== undefined ? String(s.value).trim() : "",
+      group: s.group || s.category || "General Specifications",
+      order: s.order !== undefined ? Number(s.order) : idx + 1
+    })).filter(s => s.key && s.key.trim() !== "");
+
+    const updated = await Product.findByIdAndUpdate(
+      product_id,
+      { $set: { specifications: formatted } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ status: "error", message: "Product not found." });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Product specifications updated successfully!",
+      data: {
+        id: updated._id,
+        specifications: updated.specifications
+      }
+    });
+  } catch (error) {
+    console.error("Error updating product specifications:", error);
+    return res.status(500).json({ status: "error", message: error.message || "Failed to update specifications" });
+  }
+};
+
+const upload_product_datasheet = async (req, res) => {
+  try {
+    const { product_id } = req.body;
+    if (!product_id) {
+      return res.status(400).json({ status: "error", message: "Product ID is required." });
+    }
+
+    let uploadedUrl = null;
+    if (req.files && req.files.length > 0) {
+      const datasheetFile = req.files.find(f => f.fieldname === "product_datasheet" || f.fieldname === "datasheet") || req.files[0];
+      if (datasheetFile) uploadedUrl = datasheetFile.path;
+    } else if (req.body.datasheet) {
+      uploadedUrl = req.body.datasheet;
+    }
+
+    if (!uploadedUrl) {
+      return res.status(400).json({ status: "error", message: "No PDF datasheet file was provided." });
+    }
+
+    const product = await Product.findById(product_id);
+    if (!product) {
+      return res.status(404).json({ status: "error", message: "Product not found." });
+    }
+
+    const oldDatasheet = product.datasheet;
+    product.datasheet = uploadedUrl;
+    await product.save();
+
+    if (oldDatasheet && oldDatasheet !== uploadedUrl) {
+      delete_uploaded_files([{ path: oldDatasheet }]);
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Product datasheet uploaded successfully!",
+      data: { id: product._id, datasheet: uploadedUrl }
+    });
+  } catch (error) {
+    console.error("Error uploading product datasheet:", error);
+    return res.status(500).json({ status: "error", message: error.message || "Failed to upload datasheet" });
+  }
+};
+
+const remove_product_datasheet = async (req, res) => {
+  try {
+    const { product_id } = req.body;
+    if (!product_id) {
+      return res.status(400).json({ status: "error", message: "Product ID is required." });
+    }
+
+    const product = await Product.findById(product_id);
+    if (!product) {
+      return res.status(404).json({ status: "error", message: "Product not found." });
+    }
+
+    if (product.datasheet) {
+      delete_uploaded_files([{ path: product.datasheet }]);
+    }
+
+    product.datasheet = null;
+    await product.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Product datasheet removed successfully!",
+      data: { id: product._id, datasheet: null }
+    });
+  } catch (error) {
+    console.error("Error removing product datasheet:", error);
+    return res.status(500).json({ status: "error", message: error.message || "Failed to remove datasheet" });
+  }
+};
+
 module.exports = {
   create_product,
   get_products,
   update_product,
   delete_product,
+  update_product_specifications,
+  upload_product_datasheet,
+  remove_product_datasheet,
   add_sku,
   get_skus_by_product,
   update_sku,

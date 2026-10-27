@@ -10,7 +10,9 @@ import {
   FiLayers,
   FiInfo
 } from "react-icons/fi";
-import { FaSolarPanel, FaBolt, FaBoxOpen } from "react-icons/fa";
+import { FaSolarPanel, FaBolt, FaBoxOpen, FaFilePdf } from "react-icons/fa";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const getComponentIcon = (type = "") => {
   const lower = type.toLowerCase();
@@ -158,9 +160,22 @@ export default function DatasheetModal({ isOpen, onClose, kit }) {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 shrink-0">
-            <FiCheckCircle size={15} />
-            <span>MNRE & BIS Compliant</span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+              <FiCheckCircle size={15} />
+              <span>MNRE & BIS Compliant</span>
+            </div>
+            {(kit.id || kit._id) && (
+              <a
+                href={`${API_BASE}/v1/shop/combokit/${kit.id || kit._id}/combined-datasheet-pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+              >
+                <FaFilePdf size={13} />
+                <span>Download Combined PDF</span>
+              </a>
+            )}
           </div>
         </div>
 

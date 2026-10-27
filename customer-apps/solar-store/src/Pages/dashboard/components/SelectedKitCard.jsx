@@ -14,6 +14,7 @@ import { setAlert } from "@/features/alert.slice";
 import { hasPermission } from "@/utils/permissions";
 import TrialKitOrderModal from "./TrialKitOrderModal";
 import DatasheetModal from "@/Components/storefront/DatasheetModal";
+import CombinedKitDatasheetSection from "@/Components/storefront/CombinedKitDatasheetSection";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -1467,6 +1468,9 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
           ))}
         </div>
       </div>
+
+      {/* Combined Kit Technical Datasheet & Specification Table */}
+      <CombinedKitDatasheetSection kit={kit} />
 
       {/* BOS Kit Components Details Dialog */}
       <Dialog
