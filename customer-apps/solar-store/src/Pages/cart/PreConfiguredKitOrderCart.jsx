@@ -20,6 +20,17 @@ import Dropdown from "@/Components/Dropdown";
 import CustomInput from "@/Components/CustomInput";
 import { useNavigate } from "react-router-dom";
 
+const resolveImageUrl = (url) => {
+    if (!url) return "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+    if (url.includes("localhost:3001")) {
+        return url.replace("localhost:3001", "localhost:5000");
+    }
+    if (url.startsWith("/")) {
+        return `http://localhost:5000${url}`;
+    }
+    return url;
+};
+
 export default function PreConfiguredKitOrderCart() {
     const navigate = useNavigate();
     const dispatch = useDispatch();
@@ -177,7 +188,7 @@ export default function PreConfiguredKitOrderCart() {
 
         cart.forEach((kit) => {
             const itemValue = (kit.qty * kit.ourPrice);
-            const itemGstRate = Number(kit.gstRate ?? kit.pricing?.gstRate ?? fallbackRate);
+            const itemGstRate = Number(kit.gstRate ?? kit.gst_rate ?? kit.pricing?.gstRate ?? kit.pricing?.gst_rate ?? kit.tax_pct ?? fallbackRate);
             const itemTaxable = Math.round(itemValue / (1 + (itemGstRate / 100)));
             const itemGst = Math.max(0, itemValue - itemTaxable);
             taxable += itemTaxable;
@@ -207,6 +218,38 @@ export default function PreConfiguredKitOrderCart() {
         const savings = totalMarketPrice - total;
         const totalItems = cart.reduce((sum, kit) => sum + kit.qty, 0);
         const totalKits = cart.length;
+
+        // Calculate by specific Solar Kit
+        const kitBreakdown = cart.reduce((acc, kit) => {
+            const key = kit.cartItemId || kit.id || kit.kitName;
+            const kitName = kit.kitName || kit.name || kit.title || "Solar Kit";
+            const cap = kit.capacityKW || kit.capacity_kw || null;
+            const unitPrice = Number(kit.ourPrice || kit.selling_price_inr || 0);
+            const mPrice = Number(kit.marketPrice || unitPrice);
+            const qty = Number(kit.qty || 1);
+            const tier = kit.productTier || 'Basic';
+            const img = kit.kitImage || kit.image_url || kit.image || (kit.variants?.[kit.variantIndex]?.image) || null;
+
+            if (!acc[key]) {
+                acc[key] = {
+                    id: kit.id,
+                    name: kitName,
+                    capacityKW: cap,
+                    tier: tier,
+                    tierColor: kit.tierColor || null,
+                    systemType: kit.systemType || kit.system_type || "",
+                    image: img,
+                    unitPrice: unitPrice,
+                    count: 0,
+                    total: 0,
+                    savings: 0,
+                };
+            }
+            acc[key].count += qty;
+            acc[key].total += qty * unitPrice;
+            acc[key].savings += Math.max(0, qty * (mPrice - unitPrice));
+            return acc;
+        }, {});
 
         // Calculate by tier
         const tierBreakdown = cart.reduce((acc, kit) => {
@@ -261,6 +304,7 @@ export default function PreConfiguredKitOrderCart() {
             totalItems,
             totalKits,
             avgDiscount,
+            kitBreakdown,
             tierBreakdown,
             usageBreakdown,
             totalDeliverySavings,
@@ -525,54 +569,84 @@ export default function PreConfiguredKitOrderCart() {
                     </h3>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Tier Breakdown */}
+                        {/* Kit Breakdown */}
                         <div className="bg-surface-hover rounded-xl p-4 border border-border">
                             <h4 className="font-semibold text-text-primary dark:text-info mb-3 flex items-center gap-2">
                                 <FiPackage className="text-primary dark:text-info" size={16} />
                                 By Solar Kit
                             </h4>
                             <div className="space-y-3">
-                                {Object.entries(cartTotals.tierBreakdown).map(([tier, data]) => {
+                                {Object.entries(cartTotals.kitBreakdown || {}).map(([key, data]) => {
                                     const hasCustomColor = !!data.tierColor;
                                     return (
                                         <div
-                                            key={tier}
-                                            className={`p-3 rounded-lg border ${hasCustomColor ? '' : getTierColor(tier)}`}
+                                            key={key}
+                                            className={`p-3 rounded-lg border bg-surface ${hasCustomColor ? '' : getTierColor(data.tier?.toLowerCase())}`}
                                             style={hasCustomColor ? {
                                                 borderColor: `${data.tierColor}40`,
                                                 backgroundColor: `${data.tierColor}06`
                                             } : undefined}
                                         >
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    {tier === 'premium' && <FaGem className="text-amber-500" style={hasCustomColor ? { color: data.tierColor } : undefined} size={14} />}
-                                                    {tier === 'standard' && <FiStar className="text-blue-600" style={hasCustomColor ? { color: data.tierColor } : undefined} size={14} />}
-                                                    {tier === 'basic' && <FiHome className="text-text-secondary" style={hasCustomColor ? { color: data.tierColor } : undefined} size={14} />}
-                                                    <span
-                                                        className="font-semibold capitalize"
-                                                        style={hasCustomColor ? { color: data.tierColor } : undefined}
-                                                    >{tier} Solar Kit</span>
+                                            <div className="flex items-start justify-between gap-2 mb-2">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    {data.image ? (
+                                                        <img
+                                                            src={resolveImageUrl(data.image)}
+                                                            alt={data.name}
+                                                            className="w-10 h-10 object-contain rounded-lg border border-border/60 bg-white dark:bg-slate-800 shrink-0 p-1"
+                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                                            <FiPackage className="text-primary" size={18} />
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <h5 className="font-bold text-xs sm:text-sm text-text-primary dark:text-info truncate" title={data.name}>
+                                                            {data.name}
+                                                        </h5>
+                                                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-text-secondary mt-0.5">
+                                                            {data.capacityKW && (
+                                                                <span className="font-bold text-primary dark:text-info bg-primary/10 px-1.5 py-0.5 rounded text-[10px]">
+                                                                    {data.capacityKW} KW
+                                                                </span>
+                                                            )}
+                                                            {data.tier && (
+                                                                <span className="capitalize px-1.5 py-0.5 bg-surface rounded text-[10px] border border-border/70 font-semibold">
+                                                                    {data.tier} Tier
+                                                                </span>
+                                                            )}
+                                                            {data.unitPrice > 0 && (
+                                                                <span className="text-text-muted">₹{data.unitPrice.toLocaleString("en-IN")}/unit</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    className="text-sm font-bold bg-surface px-2 py-1 rounded-full"
+                                                    className="text-xs font-bold bg-surface px-2.5 py-1 rounded-full shrink-0 border border-border text-text-primary dark:text-info"
                                                     style={hasCustomColor ? { color: data.tierColor, borderColor: `${data.tierColor}30`, borderWidth: '1px' } : undefined}
                                                 >
-                                                    {data.count} items
+                                                    {data.count} {data.count === 1 ? 'Kit' : 'Kits'}
                                                 </span>
                                             </div>
-                                        <div className="grid grid-cols-2 gap-2 text-sm">
-                                            <div>
-                                                <span className="text-text-secondary">Value:</span>
-                                                <span className="font-medium ml-1 text-text-primary dark:text-info">₹{data.total.toLocaleString("en-IN")}</span>
-                                            </div>
-                                            {data.savings > 0 && (
+                                            <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/40">
                                                 <div>
-                                                    <span className="text-text-secondary">Save:</span>
-                                                    <span className="font-medium ml-1 text-success">₹{data.savings.toLocaleString("en-IN")}</span>
+                                                    <span className="text-text-secondary">Value:</span>
+                                                    <span className="font-bold ml-1 text-text-primary dark:text-info">₹{data.total.toLocaleString("en-IN")}</span>
                                                 </div>
-                                            )}
+                                                {data.savings > 0 ? (
+                                                    <div>
+                                                        <span className="text-text-secondary">Save:</span>
+                                                        <span className="font-bold ml-1 text-success">₹{data.savings.toLocaleString("en-IN")}</span>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <span className="text-text-secondary">Pricing:</span>
+                                                        <span className="font-medium ml-1 text-text-muted">Special Price</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
                                     );
                                 })}
                             </div>
@@ -587,7 +661,7 @@ export default function PreConfiguredKitOrderCart() {
                                 </h4>
                                 <div className="space-y-3">
                                     {Object.entries(cartTotals.usageBreakdown).map(([type, data]) => (
-                                        <div key={type} className={`p-3 rounded-lg border ${getUsageTypeColor(type)}`}>
+                                        <div key={type} className={`p-3 rounded-lg border bg-surface ${getUsageTypeColor(type)}`}>
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="font-semibold capitalize">{type}</span>
                                                 <span className="text-sm font-bold bg-surface px-2 py-1 rounded-full">
@@ -612,68 +686,58 @@ export default function PreConfiguredKitOrderCart() {
                             </div>
                         )}
 
-                        {/* Savings Summary */}
-                        {cartTotals.totalSavings > 0 && (
-                            <div className="bg-gradient-success-soft rounded-xl p-4 border border-success/30">
-                                <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
-                                    <FiAward className="text-success" size={16} />
-                                    Your Savings Breakdown
+                        {/* Order Value & Financial Breakdown */}
+                        <div className="bg-surface-hover rounded-xl p-4 border border-border flex flex-col justify-between">
+                            <div>
+                                <h4 className="font-semibold text-text-primary dark:text-info mb-3 flex items-center gap-2">
+                                    <FiAward className="text-primary dark:text-info" size={16} />
+                                    Order Value Breakdown
                                 </h4>
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex justify-between items-center text-sm mb-2">
-                                            <span className="text-text-secondary">Market Price (Incl. GST):</span>
-                                            <span className="font-medium line-through">₹{cartTotals.totalMarketPrice.toLocaleString("en-IN")}</span>
+                                <div className="space-y-2.5 text-xs sm:text-sm">
+                                    {cartTotals.totalMarketPrice > cartTotals.total && (
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-text-secondary">Market Value (Incl. GST):</span>
+                                            <span className="font-medium line-through text-text-muted">₹{cartTotals.totalMarketPrice.toLocaleString("en-IN")}</span>
                                         </div>
-                                        <div className="flex justify-between items-center text-sm mb-2 border-b border-border pb-2">
-                                            <span className="text-text-secondary">Items Total (Excl. GST):</span>
-                                            <span className="font-semibold text-text-primary">₹{cartTotals.subtotalExcludingGst.toLocaleString("en-IN")}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm mb-2 border-b border-border pb-2">
-                                            <span className="text-text-secondary">GST ({cartTotals.gstRate}%):</span>
-                                            <span className="font-semibold text-text-primary">₹{cartTotals.gstAmount.toLocaleString("en-IN")}</span>
-                                        </div>
-                                        {cartTotals.totalDeliveryFreight > 0 && (
-                                            <div className="flex justify-between items-center text-sm mb-2 border-b border-border pb-2">
-                                                <span className="text-text-secondary flex items-center gap-1.5">
-                                                    <FiTruck className="text-primary dark:text-info" size={14} />
-                                                    <span>Delivery Charge {cart.find(k => k.delivery_pincode)?.delivery_pincode ? `(PIN ${cart.find(k => k.delivery_pincode).delivery_pincode})` : ''}:</span>
-                                                </span>
-                                                <span className="font-semibold text-primary dark:text-info">₹{cartTotals.totalDeliveryFreight.toLocaleString("en-IN")}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between items-center text-sm mb-2">
-                                            <span className="text-text-secondary font-bold">Your Price (Incl. GST):</span>
-                                            <span className="font-black text-primary dark:text-info text-base">₹{cartTotals.total.toLocaleString("en-IN")}</span>
-                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-text-secondary">Items Subtotal (Excl. GST):</span>
+                                        <span className="font-semibold text-text-primary dark:text-info">₹{cartTotals.subtotalExcludingGst.toLocaleString("en-IN")}</span>
                                     </div>
-
-                                    <div className="border-t border-success/20 pt-3">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="font-semibold text-success">Direct Savings:</span>
-                                            <span className="font-bold text-success">₹{cartTotals.savings.toLocaleString("en-IN")}</span>
-                                        </div>
-                                        {cartTotals.totalDeliverySavings > 0 && (
-                                            <div className="bg-white/50 rounded-lg">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <FiTruck className="text-success" size={14} />
-                                                        <span className="text-sm text-text-secondary">Free Delivery Savings:</span>
-                                                    </div>
-                                                    <span className="font-semibold text-success">₹{cartTotals.totalDeliverySavings.toLocaleString("en-IN")}</span>
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-text-secondary">GST ({cartTotals.gstRate}%):</span>
+                                        <span className="font-semibold text-text-primary dark:text-info">₹{cartTotals.gstAmount.toLocaleString("en-IN")}</span>
                                     </div>
-                                    <div className="border-t border-success/20 pt-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-semibold text-success">Total Savings:</span>
-                                            <span className="font-bold text-success text-xl">₹{cartTotals.totalSavings.toLocaleString("en-IN")}</span>
+                                    {cartTotals.totalDeliveryFreight > 0 && (
+                                        <div className="flex justify-between items-center border-t border-border/50 pt-1.5">
+                                            <span className="text-text-secondary flex items-center gap-1.5">
+                                                <FiTruck className="text-primary dark:text-info" size={14} />
+                                                <span>Delivery Charge {cart.find(k => k.delivery_pincode)?.delivery_pincode ? `(PIN ${cart.find(k => k.delivery_pincode).delivery_pincode})` : ''}:</span>
+                                            </span>
+                                            <span className="font-semibold text-primary dark:text-info">₹{cartTotals.totalDeliveryFreight.toLocaleString("en-IN")}</span>
                                         </div>
+                                    )}
+                                    <div className="flex justify-between items-center border-t border-border pt-2 text-sm font-bold">
+                                        <span className="text-text-primary dark:text-info">Total Payable (Incl. GST):</span>
+                                        <span className="font-black text-primary dark:text-info text-base sm:text-lg">₹{cartTotals.total.toLocaleString("en-IN")}</span>
                                     </div>
                                 </div>
                             </div>
-                        )}
+
+                            {cartTotals.totalSavings > 0 ? (
+                                <div className="mt-3 pt-2.5 border-t border-success/30 bg-emerald-500/10 p-2.5 rounded-lg flex items-center justify-between text-xs">
+                                    <span className="font-bold text-success flex items-center gap-1">
+                                        <FiPercent size={14} /> Direct Savings:
+                                    </span>
+                                    <span className="font-black text-success text-sm">₹{cartTotals.totalSavings.toLocaleString("en-IN")}</span>
+                                </div>
+                            ) : (
+                                <div className="mt-3 pt-2 border-t border-border/50 text-[11px] text-text-muted flex items-center gap-1.5">
+                                    <FiShield className="text-primary" size={13} />
+                                    <span>All kits include standard warranty & verified Tier-1 equipment</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

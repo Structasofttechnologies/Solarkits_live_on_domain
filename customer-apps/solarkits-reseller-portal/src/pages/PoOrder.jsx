@@ -2322,7 +2322,10 @@ export default function PoOrder() {
                           Configured PO Qty Options:
                         </span>
                         <div className="flex flex-wrap gap-2">
-                          {selectedKit?.order_quantities?.map((qty) => (
+                          {(selectedKit?.order_quantities && selectedKit.order_quantities.length > 0
+                            ? selectedKit.order_quantities
+                            : [selectedKit?.min_po_quantity || 200]
+                          ).map((qty) => (
                             <button
                               key={qty}
                               type="button"
@@ -2335,22 +2338,6 @@ export default function PoOrder() {
                               {qty} KITS
                             </button>
                           ))}
-                        </div>
-                      </div>
-
-                      {/* Custom Quota Input */}
-                      <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-3">
-                        <span className="text-[11px] text-text-muted">Or enter custom quota:</span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min={1}
-                            value={selectedPoQty || ""}
-                            onChange={(e) => setSelectedPoQty(Math.max(1, parseInt(e.target.value, 10) || 0))}
-                            className="w-28 px-3 py-1.5 rounded-lg text-xs font-black text-center border text-text-primary focus:border-primary outline-none"
-                            style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
-                          />
-                          <span className="text-xs font-bold text-text-muted">Kits</span>
                         </div>
                       </div>
                     </div>

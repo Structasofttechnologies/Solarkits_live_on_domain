@@ -71,7 +71,7 @@ export default function CheckOut() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [expiryTime, setExpiryTime] = useState(null);
 
-  // Checkout Settings
+  // Checkout Settings (dynamic from API with fallback)
   const [checkoutSettings, setCheckoutSettings] = useState({
     enable_checkout_timer: true,
     checkout_timer_duration: 20,
@@ -84,6 +84,37 @@ export default function CheckOut() {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState("");
   const [showCouponInput, setShowCouponInput] = useState(false); // collapsed by default
+
+  // Fetch dynamic Checkout Settings (GST rate, timer, etc.)
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/india/v1/shop/checkout-settings`);
+        if (res.data?.success && res.data.data) {
+          setCheckoutSettings(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load checkout settings:", err);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Fetch dynamic Active Offers
+  useEffect(() => {
+    const fetchActiveOffers = async () => {
+      try {
+        const distId = selectedDistrict?._id || selectedDistrict?.id || "";
+        const res = await axios.get(`${API_URL}/india/v1/shop/active-offers?district_id=${distId}`);
+        if (res.data?.success) {
+          setActiveOffers(res.data.data || []);
+        }
+      } catch (error) {
+        console.error("Error loading offers in checkout:", error);
+      }
+    };
+    fetchActiveOffers();
+  }, [selectedDistrict]);
 
   // Submission State
   const [submitting, setSubmitting] = useState(false);
@@ -459,7 +490,7 @@ export default function CheckOut() {
 
     cart.forEach((item) => {
       const itemValue = item.qty * item.ourPrice;
-      const itemGstRate = Number(item.gstRate ?? item.pricing?.gstRate ?? fallbackRate);
+      const itemGstRate = Number(item.gstRate ?? item.gst_rate ?? item.pricing?.gstRate ?? item.pricing?.gst_rate ?? item.tax_pct ?? fallbackRate);
       const itemTaxable = Math.round(itemValue / (1 + itemGstRate / 100));
       const itemGst = Math.max(0, itemValue - itemTaxable);
       taxable += itemTaxable;
@@ -591,11 +622,11 @@ export default function CheckOut() {
     }
 
     const totalDeliveryFreight = cart.reduce((sum, item) => sum + (Number(item.delivery_cost) || 0), 0);
-    const fallbackRate = Number(checkoutSettings.gst_rate ?? 13.8);
-    const taxableSubtotal = Math.max(0, subtotal - appliedDiscountValue);
-    // Align with backend calculateCheckoutPrice: subtotal + GST
-    const computedGst = Math.round(taxableSubtotal * (fallbackRate / 100));
-    const finalTotal = taxableSubtotal + computedGst + totalDeliveryFreight;
+    const discountedSubtotal = Math.max(0, subtotal - appliedDiscountValue);
+
+    // Selling price (ourPrice) is already GST-inclusive, extract exact base and GST amounts
+    const { taxable: baseSubtotalExclGst, gstAmount: computedGst, gstRate: dynamicGstRate } = getTaxBreakdown(discountedSubtotal);
+    const finalTotal = discountedSubtotal + totalDeliveryFreight;
 
     return {
       discountAmount: appliedDiscountValue,
@@ -603,8 +634,10 @@ export default function CheckOut() {
       offerName: activeOfferName,
       offerType: activeOfferType,
       totalDeliveryFreight,
+      discountedSubtotal,
+      baseSubtotalExclGst,
       computedGst,
-      gstRate: fallbackRate,
+      gstRate: dynamicGstRate,
       finalTotal,
     };
   }, [cart, totalKitsQuantity, totalCapacityKW, appliedCoupon, activeOffers, subtotal, checkoutSettings]);
@@ -749,7 +782,7 @@ export default function CheckOut() {
         description: item.description || null,
         quantity: item.qty || 1,
         ourPrice: item.ourPrice,
-        gstRate: item.gstRate,
+        gstRate: Number(item.gstRate ?? item.gst_rate ?? item.pricing?.gstRate ?? item.pricing?.gst_rate ?? checkoutSettings.gst_rate ?? 13.8),
         districtId: item.districtId,
         is_trial_kit: Boolean(item.is_trial_kit),
         delivery_cost: Number(item.delivery_cost || 0),
@@ -1728,7 +1761,7 @@ export default function CheckOut() {
               <div className="flex justify-between text-text-secondary">
                 <span>Items Base Subtotal (Excl. GST):</span>
                 <span className="font-semibold text-text-primary dark:text-white">
-                  ₹{subtotal.toLocaleString("en-IN")}
+                  ₹{(calculatedDiscounts.baseSubtotalExclGst || 0).toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary">
@@ -1740,7 +1773,7 @@ export default function CheckOut() {
               <div className="flex justify-between text-text-secondary border-t border-border pt-2">
                 <span>Subtotal (Incl. GST):</span>
                 <span className="font-black text-text-primary dark:text-white">
-                  ₹{(subtotal + (calculatedDiscounts.computedGst || 0)).toLocaleString("en-IN")}
+                  ₹{(calculatedDiscounts.discountedSubtotal || 0).toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary">
