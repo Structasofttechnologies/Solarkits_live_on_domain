@@ -97,6 +97,10 @@ const schema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  benchmark_total_cost: {
+    type: Number,
+    default: 0
+  },
   requires_admin_approval: {
     type: Boolean,
     default: false

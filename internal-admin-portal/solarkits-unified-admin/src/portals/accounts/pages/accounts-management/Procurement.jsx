@@ -1117,10 +1117,17 @@ export default function Procurement() {
                                 </span>
                               )}
                               {pi.is_above_benchmark && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20 inline-flex items-center gap-1">
-                                  <FaShieldAlt className="text-[8px]" />
-                                  Exceeds Benchmark (Admin Approval Required)
-                                </span>
+                                pi.po_approval?.status === "approved" ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-500/20 inline-flex items-center gap-1">
+                                    <FaCheckCircle className="text-[8px]" />
+                                    Admin Approved (Rate Exceeded Benchmark)
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20 inline-flex items-center gap-1 animate-pulse">
+                                    <FaShieldAlt className="text-[8px]" />
+                                    Exceeds Benchmark (Admin Approval Required)
+                                  </span>
+                                )
                               )}
                             </div>
                             <span className="text-[10px] text-text-muted block mt-0.5">

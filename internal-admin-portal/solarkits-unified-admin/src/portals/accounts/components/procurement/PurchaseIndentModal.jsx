@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   FaFileInvoice, FaBuilding, FaTruck, FaWarehouse, FaTimes,
   FaCheckCircle, FaCalendarAlt, FaShieldAlt, FaInfoCircle, FaBoxes, FaListUl,
@@ -49,6 +49,24 @@ export default function PurchaseIndentModal({
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [partnerFilter, setPartnerFilter] = useState("all"); // 'all' | 'oem' | 'supplier' | 'mapped'
   const [partnerSearch, setPartnerSearch] = useState("");
+  const [selectedBrandFilter, setSelectedBrandFilter] = useState("all");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    if (isDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   // Multi-item support for Complete BOS Kit (all items under 1 PI)
   const [multiItems, setMultiItems] = useState([]);
@@ -77,7 +95,11 @@ export default function PurchaseIndentModal({
 
   // Existing Benchmark Cost configured in Admin
   const benchmarkCost = useMemo(() => {
-    return bomItem?.benchmark_cost || bomItem?.unit_rate || (bomItem?.component_type === "panel" ? 6875 : bomItem?.component_type === "inverter" ? 32000 : 30000);
+    if (bomItem?.benchmark_cost) return bomItem.benchmark_cost;
+    if (bomItem?.sub_items && bomItem.sub_items.length > 0) {
+      return bomItem.sub_items.reduce((acc, sub) => acc + (Number(sub.benchmark_cost || sub.unit_rate) || 0) * (Number(sub.qty_per_kit) || 1), 0);
+    }
+    return bomItem?.unit_rate || (bomItem?.component_type === "panel" ? 6875 : bomItem?.component_type === "inverter" ? 32000 : 0);
   }, [bomItem]);
 
   // Combine API partners with bomItem eligible partners
@@ -144,22 +166,69 @@ export default function PurchaseIndentModal({
     return list;
   }, [bomItem, sourcingPartners]);
 
-  // Group partners for the dropdown optgroups
+  // Group partners for mapped filter
   const mappedPartners = useMemo(() => {
     return combinedPartners.filter((p) => p.is_warehouse_mapped);
   }, [combinedPartners]);
 
-  const oemPartnersList = useMemo(() => {
-    return combinedPartners.filter((p) => p.is_oem && !p.is_warehouse_mapped);
+  // Extract distinct brand names for clean brand filter chips
+  const distinctBrands = useMemo(() => {
+    const brandMap = new Map();
+    combinedPartners.forEach((p) => {
+      let b = (p.brand_name || p.name || "").trim();
+      if (p.is_oem) {
+        b = "SOLARKITS (OEM)";
+      } else {
+        b = b.replace(/\s+(llp|private limited|pvt ltd|pvt\. ltd\.|limited|ltd)\.?$/i, "").trim();
+      }
+      if (b) {
+        brandMap.set(b, (brandMap.get(b) || 0) + 1);
+      }
+    });
+
+    const sorted = Array.from(brandMap.keys()).sort((a, b) => {
+      if (a.includes("SOLARKITS")) return -1;
+      if (b.includes("SOLARKITS")) return 1;
+      return a.localeCompare(b);
+    });
+
+    return sorted;
   }, [combinedPartners]);
 
-  const supplierPartnersList = useMemo(() => {
-    return combinedPartners.filter((p) => !p.is_oem && p.category === "supplier" && !p.is_warehouse_mapped);
-  }, [combinedPartners]);
+  // Unified, filtered partner list based on Category tab, Brand chip, and Search query
+  const filteredPartners = useMemo(() => {
+    return combinedPartners.filter((p) => {
+      // 1. Category tab filter
+      if (partnerFilter === "mapped" && !p.is_warehouse_mapped) return false;
+      if (partnerFilter === "oem" && !p.is_oem) return false;
+      if (partnerFilter === "supplier" && p.is_oem) return false;
 
-  const catalogBrandsList = useMemo(() => {
-    return combinedPartners.filter((p) => p.category === "catalog_brand" && !p.is_warehouse_mapped);
-  }, [combinedPartners]);
+      // 2. Brand chip filter
+      if (selectedBrandFilter !== "all") {
+        if (selectedBrandFilter === "SOLARKITS (OEM)") {
+          if (!p.is_oem && !(p.brand_name || "").toLowerCase().includes("solarkits")) return false;
+        } else {
+          const brandText = `${p.brand_name || ""} ${p.name || ""}`.toLowerCase();
+          if (!brandText.includes(selectedBrandFilter.toLowerCase())) return false;
+        }
+      }
+
+      // 3. Search query
+      if (partnerSearch.trim()) {
+        const q = partnerSearch.toLowerCase().trim();
+        const matchName = (p.name || "").toLowerCase().includes(q);
+        const matchBrand = (p.brand_name || "").toLowerCase().includes(q);
+        const matchGst = (p.gst_number || "").toLowerCase().includes(q);
+        if (!matchName && !matchBrand && !matchGst) return false;
+      }
+
+      return true;
+    });
+  }, [combinedPartners, partnerFilter, selectedBrandFilter, partnerSearch]);
+
+  const filteredMapped = useMemo(() => filteredPartners.filter((p) => p.is_warehouse_mapped), [filteredPartners]);
+  const filteredOem = useMemo(() => filteredPartners.filter((p) => p.is_oem && !p.is_warehouse_mapped), [filteredPartners]);
+  const filteredSuppliers = useMemo(() => filteredPartners.filter((p) => !p.is_oem && !p.is_warehouse_mapped), [filteredPartners]);
 
   useEffect(() => {
     if (bomItem) {
@@ -169,7 +238,7 @@ export default function PurchaseIndentModal({
         : Math.max(1, (bomItem.required_quantity || 1) - (bomItem.deducted_warehouse_stock || 0));
 
       setProcureQuantity(kitQty);
-      setUnitRate(bomItem.unit_rate || (bomItem.component_type === "panel" ? 6875 : bomItem.component_type === "inverter" ? 32000 : 30000));
+      setUnitRate(bomItem.unit_rate || bomItem.benchmark_cost || (bomItem.component_type === "panel" ? 6875 : bomItem.component_type === "inverter" ? 32000 : 0));
 
       // Synchronize TAT and Transport Cost strictly from Admin configuration
       if (procurementSettings) {
@@ -186,11 +255,12 @@ export default function PurchaseIndentModal({
         setMultiItems(
           bomItem.sub_items.map((sub) => {
             const itemQty = (sub.qty_per_kit || 1) * kitQty;
-            const rate = sub.unit_rate || 0;
+            const rate = (sub.unit_rate !== undefined && sub.unit_rate > 0) ? sub.unit_rate : (sub.benchmark_cost || 0);
             const subtotal = itemQty * rate;
             const gst = 13.8;
             const tax = Math.round((subtotal * gst) / 100);
             return {
+              sku_id: sub.sku_id || null,
               sku_code: sub.sku_code,
               product_name: sub.product_name,
               category: sub.category,
@@ -275,20 +345,13 @@ export default function PurchaseIndentModal({
     if (partner.address && !supplierWarehouseAddress) {
       setSupplierWarehouseAddress(partner.address);
     }
+    setIsDropdownOpen(false);
   };
 
-  const handleDropdownChange = (e) => {
-    const val = e.target.value;
-    if (val === "__custom__") {
-      setSelectedPartnerId("__custom__");
-      return;
-    }
-    const found = combinedPartners.find(
-      (p) => String(p.id) === String(val) || p.name === val
-    );
-    if (found) {
-      handlePartnerSelect(found);
-    }
+  const handleSelectCustom = () => {
+    setSelectedPartnerId("__custom__");
+    setIsOemPartner(false);
+    setIsDropdownOpen(false);
   };
 
   const subtotal = useMemo(() => {
@@ -374,6 +437,7 @@ export default function PurchaseIndentModal({
       items: payloadItems,
       is_above_benchmark: isAboveBenchmark,
       benchmark_cost: Number(benchmarkCost) || 0,
+      benchmark_total_cost: Math.round((Number(benchmarkCost) || 0) * procureQuantity * (1 + ((Number(gstRate) || 13.8) / 100))),
       requires_admin_approval: isAboveBenchmark,
       fulfilment: {
         method: fulfilmentMethod,
@@ -471,9 +535,9 @@ export default function PurchaseIndentModal({
               </div>
 
               {/* Itemized breakdown table */}
-              <div className="overflow-x-auto border border-border rounded-xl">
+              <div className="overflow-x-auto max-h-96 overflow-y-auto border border-border rounded-xl">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-bg/60 text-[10px] uppercase font-black tracking-wider text-text-muted border-b border-border">
+                  <thead className="sticky top-0 z-10 bg-surface/95 backdrop-blur-xs text-[10px] uppercase font-black tracking-wider text-text-muted border-b border-border shadow-xs">
                     <tr>
                       <th className="py-2.5 px-3">BOS Component Name</th>
                       <th className="py-2.5 px-2 text-center">SKU Code</th>
@@ -631,7 +695,7 @@ export default function PurchaseIndentModal({
             </div>
           </div>
 
-          {/* Sourcing Partner Selection Dropdown */}
+          {/* 1. Category / Partner Type Tabs */}
           <div className="space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <label className="text-[11px] font-black text-text-primary uppercase tracking-wide flex items-center gap-1.5">
@@ -643,200 +707,382 @@ export default function PurchaseIndentModal({
                 )}
               </label>
 
-              {/* Quick Filter Badges */}
-              <div className="flex items-center gap-1 text-[10px] flex-wrap">
+              {/* Category Segmented Tabs */}
+              <div className="inline-flex items-center p-1 bg-surface-hover/80 border border-border rounded-xl text-xs gap-1 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setPartnerFilter("all")}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                     partnerFilter === "all"
                       ? "bg-primary text-white shadow-xs"
-                      : "bg-surface border border-border text-text-muted hover:text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   All ({combinedPartners.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPartnerFilter("oem")}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                    partnerFilter === "oem"
-                      ? "bg-purple-600 text-white shadow-xs"
-                      : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20"
-                  }`}
-                >
-                  OEM ({combinedPartners.filter(p => p.is_oem).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPartnerFilter("supplier")}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-all ${
-                    partnerFilter === "supplier"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20"
-                  }`}
-                >
-                  Suppliers ({combinedPartners.filter(p => !p.is_oem).length})
                 </button>
                 {mappedPartners.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setPartnerFilter("mapped")}
-                    className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
                       partnerFilter === "mapped"
                         ? "bg-emerald-600 text-white shadow-xs"
-                        : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
                     }`}
                   >
-                    Mapped ({mappedPartners.length})
+                    <FaStar className="text-[9px]" /> Mapped ({mappedPartners.length})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPartnerFilter("oem")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    partnerFilter === "oem"
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                  }`}
+                >
+                  <FaIndustry className="text-[9px]" /> OEM ({combinedPartners.filter(p => p.is_oem).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPartnerFilter("supplier")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    partnerFilter === "supplier"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+                  }`}
+                >
+                  <FaTruck className="text-[9px]" /> Suppliers ({combinedPartners.filter(p => !p.is_oem).length})
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Brand Filter Carousel / Chips */}
+            {distinctBrands.length > 1 && (
+              <div className="bg-bg/60 border border-border/80 rounded-xl p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold text-text-muted uppercase tracking-wider flex items-center gap-1">
+                    <FaTag className="text-primary text-[9px]" /> Filter by Brand:
+                  </span>
+                  {selectedBrandFilter !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBrandFilter("all")}
+                      className="text-primary font-bold hover:underline cursor-pointer"
+                    >
+                      Clear Brand Filter (Show All)
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBrandFilter("all")}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
+                      selectedBrandFilter === "all"
+                        ? "bg-primary text-white shadow-2xs"
+                        : "bg-surface border border-border text-text-secondary hover:border-primary/40"
+                    }`}
+                  >
+                    All Brands
+                  </button>
+                  {distinctBrands.map((brand) => {
+                    const isSelected = selectedBrandFilter === brand;
+                    const isOem = brand.includes("SOLARKITS");
+                    return (
+                      <button
+                        key={brand}
+                        type="button"
+                        onClick={() => setSelectedBrandFilter(isSelected ? "all" : brand)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer border ${
+                          isSelected
+                            ? isOem
+                              ? "bg-purple-600 text-white border-purple-600 shadow-2xs"
+                              : "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                            : isOem
+                            ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20 hover:bg-purple-500/20"
+                            : "bg-surface text-text-secondary border-border hover:border-primary/50 hover:text-text-primary"
+                        }`}
+                      >
+                        {isOem ? <FaIndustry size={9} /> : <FaTag size={8} />}
+                        <span>{brand}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Search & Interactive Custom Selector Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <div className="space-y-2">
+              {/* Live Search Input */}
+              <div className="relative">
+                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none" />
+                <input
+                  type="text"
+                  value={partnerSearch}
+                  onChange={(e) => {
+                    setPartnerSearch(e.target.value);
+                    if (!isDropdownOpen) setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  placeholder="Type to search partner, brand name, or GSTIN (e.g. Waaree, Adani, Sahjanand)..."
+                  className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-border focus:border-primary bg-surface text-xs font-medium text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-2xs"
+                />
+                {partnerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPartnerSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-1 cursor-pointer text-xs"
+                    title="Clear search"
+                  >
+                    <FaTimes />
                   </button>
                 )}
               </div>
-            </div>
 
-            {/* Dropdown Select Box */}
-            <div className="relative">
-              <select
-                value={
-                  selectedPartnerId ||
-                  combinedPartners.find((p) => p.name === supplierName)?.id ||
-                  (supplierName ? "__custom__" : "")
-                }
-                onChange={handleDropdownChange}
-                className="w-full border-2 border-border focus:border-primary rounded-xl px-3.5 py-2.5 text-xs font-semibold bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-xs hover:border-primary/50"
+              {/* Selector Trigger Button (Displays Current Selection) */}
+              <div
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className={`w-full p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-3 shadow-xs ${
+                  isDropdownOpen
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : supplierName
+                    ? "border-primary/40 bg-surface hover:border-primary"
+                    : "border-border bg-surface hover:border-primary/50"
+                }`}
               >
-                <option value="" disabled>
-                  -- Choose Supplier / OEM Partner ({combinedPartners.length} Available) --
-                </option>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 ${
+                    isOemPartner
+                      ? "bg-purple-500/15 text-purple-600"
+                      : supplierName
+                      ? "bg-blue-500/15 text-blue-600"
+                      : "bg-surface-hover text-text-muted"
+                  }`}>
+                    {isOemPartner ? <FaIndustry size={14} /> : <FaBuilding size={14} />}
+                  </div>
 
-                {/* 1. Mapped / Recommended Partners */}
-                {(partnerFilter === "all" || partnerFilter === "mapped") && mappedPartners.length > 0 && (
-                  <optgroup label="⭐ Warehouse Mapped / Recommended Partners">
-                    {mappedPartners.map((p) => (
-                      <option key={p.id || p.name} value={p.id || p.name}>
-                        ⭐ {p.name} — {p.is_oem ? "OEM (SOLARKITS Brand)" : "Supplier (Own Brand)"}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {/* 2. OEM Partners */}
-                {(partnerFilter === "all" || partnerFilter === "oem") && oemPartnersList.length > 0 && (
-                  <optgroup label="🏭 OEM Partners (SOLARKITS Manufacturing Network)">
-                    {oemPartnersList.map((p) => (
-                      <option key={p.id || p.name} value={p.id || p.name}>
-                        🏭 {p.name} — OEM Partner (Brand: SOLARKITS)
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {/* 3. Registered Suppliers & Verified Brands */}
-                {(partnerFilter === "all" || partnerFilter === "supplier") && supplierPartnersList.length > 0 && (
-                  <optgroup label="🚚 Approved Supplier Partners (Own Brand)">
-                    {supplierPartnersList.map((p) => (
-                      <option key={p.id || p.name} value={p.id || p.name}>
-                        🚚 {p.name} {p.gst_number ? `(GST: ${p.gst_number})` : ""} — Supplier
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {/* 4. Catalog Brands */}
-                {(partnerFilter === "all" || partnerFilter === "supplier") && catalogBrandsList.length > 0 && (
-                  <optgroup label="🏷️ Other Solar Manufacturers & Catalog Brands">
-                    {catalogBrandsList.map((p) => (
-                      <option key={p.id || p.name} value={p.id || p.name}>
-                        🏷️ {p.name} — Solar Brand / Vendor
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {/* 5. Custom Manual Entry */}
-                <optgroup label="✏️ Other Options">
-                  <option value="__custom__">✏️ Custom / Other Supplier (Enter Manually)...</option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
-
-          {/* Quick-select cards for Warehouse-Mapped Eligible Partners */}
-          {mappedPartners.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider flex items-center justify-between">
-                <span>Eligible Partners Mapped to this Warehouse & Product:</span>
-                <span className="text-[9px] text-text-muted font-normal">Click any card to select</span>
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {mappedPartners.map((partner) => {
-                  const isSelected = supplierName === partner.name;
-                  return (
-                    <div
-                      key={partner.id || partner.name}
-                      onClick={() => handlePartnerSelect(partner)}
-                      className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start justify-between gap-2.5 ${
-                        isSelected
-                          ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
-                          : "bg-surface border-border hover:border-primary/40 hover:bg-surface-hover"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-black text-text-primary truncate">{partner.name}</span>
-                          {partner.is_oem ? (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                              OEM (SOLARKITS)
+                  <div className="min-w-0 text-left">
+                    {supplierName ? (
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-xs text-text-primary truncate">{supplierName}</span>
+                          {isOemPartner ? (
+                            <span className="text-[9px] px-2 py-0.5 rounded font-black uppercase bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                              OEM Partner (Brand: SOLARKITS)
                             </span>
                           ) : (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                              Supplier (Own Brand)
+                            <span className="text-[9px] px-2 py-0.5 rounded font-black uppercase bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              Supplier (Brand: {supplierBrand || supplierName})
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-text-muted mt-0.5">
-                          Brand: <strong className="text-text-primary">{partner.brand_name || partner.name}</strong>
-                          {partner.gst_number && (
-                            <span className="ml-2 font-mono text-[9px] text-text-secondary">GST: {partner.gst_number}</span>
-                          )}
-                        </p>
+                        <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-2 flex-wrap">
+                          {supplierGst && <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">GST: {supplierGst}</span>}
+                          {supplierWarehouseAddress && <span className="truncate max-w-[280px]">• {supplierWarehouseAddress}</span>}
+                        </div>
                       </div>
-                      {isSelected && <FaCheckCircle className="text-primary mt-1 text-sm flex-shrink-0" />}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                    ) : (
+                      <span className="text-xs font-semibold text-text-muted">
+                        -- Click to Browse &amp; Select Supplier / OEM Partner ({filteredPartners.length} Available) --
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-          {/* Selected Partner Status Card (When Selected) */}
-          {supplierName && (
-            <div className="p-2.5 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between gap-3 text-xs flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-text-muted text-[11px]">Selected Sourcing:</span>
-                <span className="font-black text-primary">{supplierName}</span>
-                {isOemPartner ? (
-                  <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-wider bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                    OEM Partner (SOLARKITS Brand)
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                    {filteredPartners.length} Available
                   </span>
-                ) : (
-                  <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-wider bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-                    Supplier Partner (Own Brand)
-                  </span>
-                )}
-                {supplierBrand && supplierBrand !== supplierName && (
-                  <span className="text-[10px] text-text-muted">
-                    Brand: <strong className="text-text-primary">{supplierBrand}</strong>
-                  </span>
-                )}
+                  <FaChevronDown className={`text-text-muted text-xs transition-transform duration-200 ${isDropdownOpen ? "rotate-180 text-primary" : ""}`} />
+                </div>
               </div>
-              {supplierGst && (
-                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
-                  GST: {supplierGst}
-                </span>
-              )}
             </div>
-          )}
+
+            {/* Custom Dropdown Menu with Categorized Groups */}
+            {isDropdownOpen && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-surface border-2 border-border/80 rounded-2xl shadow-2xl z-40 max-h-80 overflow-y-auto p-2 space-y-3.5 divide-y divide-border/40 animate-in fade-in slide-in-from-top-1">
+                {/* 1. Mapped / Recommended Section */}
+                {filteredMapped.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between px-2 text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <FaStar className="text-amber-500" />
+                        Warehouse Mapped / Recommended Partners ({filteredMapped.length})
+                      </span>
+                      <span className="text-[9px] font-normal text-text-muted">Pre-approved for this cluster</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {filteredMapped.map((p) => {
+                        const isSelected = supplierName === p.name;
+                        return (
+                          <div
+                            key={p.id || p.name}
+                            onClick={() => handlePartnerSelect(p)}
+                            className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                              isSelected
+                                ? "bg-emerald-500/10 border-emerald-500 text-text-primary ring-1 ring-emerald-500/40"
+                                : "bg-bg/40 border-border/60 hover:bg-surface-hover hover:border-emerald-500/40"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-xs text-text-primary">{p.name}</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                                  ⭐ Mapped {p.is_oem ? "OEM" : "Supplier"}
+                                </span>
+                                {p.brand_name && (
+                                  <span className="text-[10px] text-text-muted font-medium">Brand: {p.brand_name}</span>
+                                )}
+                              </div>
+                              {p.gst_number && (
+                                <span className="text-[9px] font-mono text-text-secondary block mt-0.5">GST: {p.gst_number}</span>
+                              )}
+                            </div>
+                            {isSelected ? (
+                              <FaCheckCircle className="text-emerald-600 shrink-0 text-sm" />
+                            ) : (
+                              <button type="button" className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/20">
+                                Select
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. OEM Manufacturing Network Section */}
+                {filteredOem.length > 0 && (
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between px-2 text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <FaIndustry className="text-purple-600" />
+                        OEM Partners (SOLARKITS Manufacturing Network) ({filteredOem.length})
+                      </span>
+                      <span className="text-[9px] font-normal text-text-muted">Standard Solarkits Brand Output</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {filteredOem.map((p) => {
+                        const isSelected = supplierName === p.name;
+                        return (
+                          <div
+                            key={p.id || p.name}
+                            onClick={() => handlePartnerSelect(p)}
+                            className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                              isSelected
+                                ? "bg-purple-500/10 border-purple-500 text-text-primary ring-1 ring-purple-500/40"
+                                : "bg-bg/40 border-border/60 hover:bg-surface-hover hover:border-purple-500/40"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-xs text-text-primary">{p.name}</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                  OEM Partner (Brand: SOLARKITS)
+                                </span>
+                              </div>
+                              {p.gst_number && (
+                                <span className="text-[9px] font-mono text-text-secondary block mt-0.5">GST: {p.gst_number}</span>
+                              )}
+                            </div>
+                            {isSelected ? (
+                              <FaCheckCircle className="text-purple-600 shrink-0 text-sm" />
+                            ) : (
+                              <button type="button" className="text-[10px] font-bold text-purple-600 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/20">
+                                Select
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Approved Supplier Partners (Own Brand) Section */}
+                {filteredSuppliers.length > 0 && (
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between px-2 text-[10px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <FaTruck className="text-blue-600" />
+                        Approved Supplier Partners (Brand Sourcing) ({filteredSuppliers.length})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {filteredSuppliers.map((p) => {
+                        const isSelected = supplierName === p.name;
+                        return (
+                          <div
+                            key={p.id || p.name}
+                            onClick={() => handlePartnerSelect(p)}
+                            className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                              isSelected
+                                ? "bg-blue-500/10 border-blue-500 text-text-primary ring-1 ring-blue-500/40"
+                                : "bg-bg/40 border-border/60 hover:bg-surface-hover hover:border-blue-500/40"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-xs text-text-primary">{p.name}</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black uppercase bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                  Brand: {p.brand_name || p.name}
+                                </span>
+                              </div>
+                              {p.gst_number && (
+                                <span className="text-[9px] font-mono text-text-secondary block mt-0.5">GST: {p.gst_number}</span>
+                              )}
+                            </div>
+                            {isSelected ? (
+                              <FaCheckCircle className="text-blue-600 shrink-0 text-sm" />
+                            ) : (
+                              <button type="button" className="text-[10px] font-bold text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded border border-blue-500/20">
+                                Select
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {filteredPartners.length === 0 && (
+                  <div className="p-4 text-center text-xs text-text-muted space-y-2">
+                    <p>No supplier or OEM partner matches your search/brand filter.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPartnerFilter("all");
+                        setSelectedBrandFilter("all");
+                        setPartnerSearch("");
+                      }}
+                      className="text-xs font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Reset All Filters
+                    </button>
+                  </div>
+                )}
+
+                {/* Custom Manual Entry Footer */}
+                <div className="pt-2 px-1">
+                  <button
+                    type="button"
+                    onClick={handleSelectCustom}
+                    className="w-full py-2 px-3 rounded-xl border border-dashed border-border hover:border-primary/60 text-xs font-bold text-text-secondary hover:text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-bg/50 hover:bg-primary/5"
+                  >
+                    <span>✏️ Other / Unlisted Partner (Enter Details Manually Below)</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Form Inputs for Name and GST */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">

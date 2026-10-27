@@ -8,7 +8,8 @@ import {
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
   FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
   FaStore, FaBoxes, FaInfoCircle,
-  FaTruck, FaWarehouse, FaArrowRight, FaCheckDouble, FaSyncAlt, FaClock, FaPaperPlane
+  FaTruck, FaWarehouse, FaArrowRight, FaCheckDouble, FaSyncAlt, FaClock, FaPaperPlane,
+  FaLock, FaShieldAlt
 } from "react-icons/fa";
 import {
   getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder,
@@ -5267,6 +5268,8 @@ export default function Payments() {
                                 const isBalRejected = balApproval.status === "rejected";
 
                                 const isBusyThisPi = requestingPaymentPiId === (pi._id || pi.pi_number);
+                                const isPoPendingApproval = (Boolean(pi.is_above_benchmark) || Boolean(pi.requires_admin_approval)) &&
+                                  (pi.po_approval?.status === "pending" || pi.po_approval?.status === "Submitted" || pi.pi_status === "Pending Admin Price Approval" || payStatus === "Awaiting Admin Approval");
 
                                 // Detect component type
                                 const cType = (pi.component_type || "").toLowerCase();
@@ -5294,6 +5297,12 @@ export default function Payments() {
                                           <span>{compIcon}</span>
                                           <span>{compLabel}</span>
                                         </span>
+                                        {isPoPendingApproval && (
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1 animate-pulse">
+                                            <FaShieldAlt size={8} className="text-amber-600" />
+                                            Exceeds Benchmark
+                                          </span>
+                                        )}
                                       </div>
                                       <span className="font-black font-mono text-primary text-sm mt-1 block">{pi.pi_number}</span>
                                       <span className="block text-[10px] text-gray-400 mt-0.5">
@@ -5393,6 +5402,8 @@ export default function Payments() {
                                           isBalApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
                                           isBalRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
                                           "bg-amber-50 text-amber-800 border-amber-300 font-extrabold"
+                                        ) : isPoPendingApproval ? (
+                                          "bg-amber-100 text-amber-900 border-amber-300 font-black animate-pulse"
                                         ) : (
                                           isAdvApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
                                           isAdvRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
@@ -5404,6 +5415,11 @@ export default function Payments() {
                                            isBalApproved ? "70% Balance Approved" :
                                            isBalRequested ? "70% Bal Awaiting Approval" :
                                            "70% Balance Due"
+                                         ) : isPoPendingApproval ? (
+                                           <>
+                                             <FaShieldAlt className="text-amber-700 text-[9px]" />
+                                             PO Approval Pending (Exceeds Benchmark)
+                                           </>
                                          ) : (
                                            isAdvApproved ? "30% Advance Approved" :
                                            isAdvRequested ? "30% Adv Awaiting Approval" :
@@ -5483,6 +5499,18 @@ export default function Payments() {
                                             title="View Advance UTR & History"
                                           >
                                             UTR
+                                          </button>
+                                        </div>
+                                      ) : isPoPendingApproval ? (
+                                        <div className="flex items-center justify-end">
+                                          <button
+                                            type="button"
+                                            disabled
+                                            className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50/90 text-amber-800 border border-amber-300/90 flex items-center gap-1.5 cursor-not-allowed opacity-90 shadow-2xs"
+                                            title="Rate exceeds benchmark cost. Admin must approve this Purchase Order (PO) in Order Approvals before 30% advance can be requested."
+                                          >
+                                            <FaLock size={10} className="text-amber-600" />
+                                            <span>Locked (PO Approval Pending)</span>
                                           </button>
                                         </div>
                                       ) : (

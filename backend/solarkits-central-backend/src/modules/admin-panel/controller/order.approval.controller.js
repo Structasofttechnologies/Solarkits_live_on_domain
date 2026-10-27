@@ -580,7 +580,24 @@ const formatFpoOrderDetails = (fpo) => {
         const poStatus = poApproval.status || 'pending';
         const piDate = pi.created_at || pi.createdAt || pi.po_date;
         const tat = enrichTat(poApproval.requested_at || piDate, 'po_approval');
-        const rateDiff = (pi.total_pi_value || 0) - (pi.benchmark_total_cost || pi.total_pi_value || 0);
+
+        let benchTotal = Number(pi.benchmark_total_cost) || 0;
+        if (!benchTotal && (Number(pi.benchmark_cost) > 0 || pi.is_above_benchmark)) {
+          const totalQty = (pi.items || []).reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) || 1;
+          const gst = (pi.items?.[0]?.gst_rate != null ? Number(pi.items[0].gst_rate) : 13.8);
+          const unitBench = Number(pi.benchmark_cost) || 0;
+          if (unitBench > 0) {
+            benchTotal = Math.round(unitBench * totalQty * (1 + gst / 100));
+          }
+        }
+        if (!benchTotal) {
+          benchTotal = pi.total_pi_value || 0;
+        }
+
+        const rateDiff = Math.max(0, (pi.total_pi_value || 0) - benchTotal);
+        const isBenchmarkExceeded = Boolean(pi.is_above_benchmark || rateDiff > 0);
+        const unitRate = pi.items?.[0]?.unit_rate || 0;
+        const benchUnitRate = pi.benchmark_cost || 0;
         const customerOrder = orderLookup[pi.customer_order_number] || null;
 
         queueItems.push({
@@ -593,9 +610,15 @@ const formatFpoOrderDetails = (fpo) => {
           entity_name: pi.supplier_name || 'Procurement Supplier',
           partner_name: pi.is_oem_partner ? 'OEM Partner (SolarKits Brand)' : (pi.supplier_brand || 'Supplier Partner'),
           requested_amount: pi.total_pi_value || 0,
-          benchmark_amount: pi.benchmark_total_cost || pi.total_pi_value || 0,
-          variance_amount: Math.max(0, rateDiff),
-          variance_percentage: pi.benchmark_total_cost > 0 ? Number(((rateDiff / pi.benchmark_total_cost) * 100).toFixed(2)) : 0,
+          benchmark_amount: benchTotal,
+          variance_amount: rateDiff,
+          variance_percentage: benchTotal > 0 && rateDiff > 0 ? Number(((rateDiff / benchTotal) * 100).toFixed(2)) : 0,
+          is_above_benchmark: isBenchmarkExceeded,
+          benchmark_cost_unit: benchUnitRate,
+          entered_unit_rate: unitRate,
+          approval_reason: isBenchmarkExceeded 
+            ? `Rate (₹${Number(unitRate).toLocaleString('en-IN')}) exceeds Benchmark Cost (₹${Number(benchUnitRate).toLocaleString('en-IN')})` 
+            : 'Standard PO Approval',
           approval_status: poStatus,
           requested_at: poApproval.requested_at || piDate || new Date(0).toISOString(),
           requested_by_name: poApproval.requested_by_name || 'Procurement Manager',
