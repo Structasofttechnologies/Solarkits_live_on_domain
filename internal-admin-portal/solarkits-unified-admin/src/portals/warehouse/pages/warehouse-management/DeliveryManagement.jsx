@@ -53,6 +53,7 @@ export default function DeliveryManagement() {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedZone, setSelectedZone] = useState('All');
   const [selectedEpc, setSelectedEpc] = useState('All');
+  const [selectedOrderType, setSelectedOrderType] = useState('All');
 
   const [selectedPincode, setSelectedPincode] = useState("All Pincodes");
 
@@ -108,6 +109,8 @@ export default function DeliveryManagement() {
             panels: o.panels !== undefined ? o.panels : 10,
             kws: o.combo_kit_id?.capacity || 3,
             kitName: o.combo_kit_id?.name || "Solar Combo Kit",
+            order_type: o.order_type || o.fulfillment_bifurcation?.order_type || (o.is_trial_order ? "trial_order" : "po_order"),
+            fulfillment_bifurcation: o.fulfillment_bifurcation || null,
             status: o.status,
             lat: o.delivery_address?.lat || null,
             lng: o.delivery_address?.lng || null,
@@ -668,6 +671,11 @@ export default function DeliveryManagement() {
     if (selectedEpc !== 'All') {
       list = list.filter(o => o.customer_id?.toString() === selectedEpc);
     }
+
+    // Order Type filter
+    if (selectedOrderType !== 'All') {
+      list = list.filter(o => o.order_type === selectedOrderType);
+    }
     
     // Pincode select filter
     if (selectedPincode !== "All Pincodes") {
@@ -686,7 +694,7 @@ export default function DeliveryManagement() {
     }
     
     return list;
-  }, [orders, selectedZone, selectedPincode, selectedEpc, warehouseType]);
+  }, [orders, selectedZone, selectedPincode, selectedEpc, selectedOrderType, warehouseType]);
 
   const groupedOrdersByBuyer = useMemo(() => {
     const groups = {};
@@ -1136,6 +1144,33 @@ export default function DeliveryManagement() {
                   </div>
                 </div>
               )}
+
+              {/* Order Fulfillment Type Filter */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-black text-text-secondary uppercase tracking-wider flex items-center gap-1">
+                  <FaBoxes className="text-primary" size={9} /> Order Type:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: "All", label: "All Types" },
+                    { value: "po_order", label: "PO Orders" },
+                    { value: "loose_order", label: "Loose Orders" },
+                    { value: "trial_order", label: "Trial Orders" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setSelectedOrderType(opt.value)}
+                      className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                        selectedOrderType === opt.value
+                          ? "bg-primary border-primary text-white shadow-sm"
+                          : "bg-bg text-text-secondary border-border hover:border-primary/20"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <p className="text-xs text-text-secondary">
@@ -1215,6 +1250,21 @@ export default function DeliveryManagement() {
                                 {hasOutOfStock && (
                                   <span className="bg-danger-soft text-danger text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
                                     <FaExclamationTriangle className="animate-pulse" /> Insufficient Stock
+                                  </span>
+                                )}
+                                {o.order_type === "po_order" && (
+                                  <span className="bg-blue-500/10 text-blue-600 border border-blue-500/20 text-[9px] font-black px-2 py-0.5 rounded">
+                                    PO Order
+                                  </span>
+                                )}
+                                {o.order_type === "loose_order" && (
+                                  <span className="bg-purple-500/10 text-purple-600 border border-purple-500/20 text-[9px] font-black px-2 py-0.5 rounded">
+                                    Loose Order
+                                  </span>
+                                )}
+                                {o.order_type === "trial_order" && (
+                                  <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[9px] font-black px-2 py-0.5 rounded">
+                                    Trial Order
                                   </span>
                                 )}
                                 {o.status && (

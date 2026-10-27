@@ -12,17 +12,22 @@ import {
   FaTimesCircle,
   FaCogs,
   FaSync,
+  FaSlidersH,
+  FaBoxes,
+  FaCheck,
+  FaBoxOpen,
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
 import CustomTable from "@/components/CustomTable";
 import Dropdown from "@/components/Dropdown";
 import Loader from "@/components/Loader";
+import Dialog from "@/components/Dialog";
 import { authHeaderObj } from "@/app/authHeader";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-export default function WarehouseKitActivations({ moduleUniqueId }) {
+export default function WarehouseKitActivations({ moduleUniqueId = "ADM_WH_KIT_ACT" }) {
   const { countryName } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -43,6 +48,12 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
   const [stateFilter, setStateFilter] = useState("");
   const [clusterFilter, setClusterFilter] = useState("");
   const [kitTypeFilter, setKitTypeFilter] = useState("all"); // all / combo / customize
+  const [orderTypeFilter, setOrderTypeFilter] = useState("all"); // all / po_order / loose_order / trial_order
+
+  // Order Fulfillment Capabilities Modal State
+  const [selectedWarehouseForOrderType, setSelectedWarehouseForOrderType] = useState(null);
+  const [modalOrderTypes, setModalOrderTypes] = useState(["po_order", "loose_order", "trial_order"]);
+  const [savingOrderTypes, setSavingOrderTypes] = useState(false);
 
   const fetchClustersForState = async (stateId) => {
     if (!stateId) {
@@ -206,15 +217,56 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
       const whClusterId = (w.cluster_id || w.cluster?.id || w.cluster?._id)?.toString();
       const whClusterName = (typeof w.cluster === "string" ? w.cluster : w.cluster?.name)?.toLowerCase();
       const selectedClusterObj = clusters.find((c) => c.id?.toString() === clusterFilter?.toString());
-      const selectedClusterName = selectedClusterObj?.name?.toLowerCase();
-
       const idMatches = whClusterId && whClusterId === clusterFilter?.toString();
       const nameMatches = whClusterName && selectedClusterName && whClusterName === selectedClusterName;
 
       if (!idMatches && !nameMatches) return false;
     }
+
+    if (orderTypeFilter && orderTypeFilter !== "all") {
+      const whTypes = w.order_fulfillment_types && w.order_fulfillment_types.length > 0
+        ? w.order_fulfillment_types
+        : ['po_order', 'loose_order', 'trial_order'];
+      if (!whTypes.includes(orderTypeFilter)) return false;
+    }
     return true;
   });
+
+  // Save updated order fulfillment capabilities
+  const handleSaveOrderTypes = async () => {
+    if (!selectedWarehouseForOrderType) return;
+    setSavingOrderTypes(true);
+    try {
+      const whId = selectedWarehouseForOrderType.id || selectedWarehouseForOrderType._id;
+      const res = await axios.patch(
+        `${API_URL}/warehouses/${whId}/order-fulfillment-types?unique_id=${moduleUniqueId || "ADM_WH_KIT_ACT"}&req_for=edit`,
+        { order_fulfillment_types: modalOrderTypes },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: "Warehouse order fulfillment capabilities updated successfully!" }));
+        setWarehouses((prev) =>
+          prev.map((wh) => {
+            if ((wh.id || wh._id)?.toString() === whId.toString()) {
+              return { ...wh, order_fulfillment_types: modalOrderTypes };
+            }
+            return wh;
+          })
+        );
+        setSelectedWarehouseForOrderType(null);
+      }
+    } catch (err) {
+      console.error("Error updating order fulfillment types:", err);
+      dispatch(
+        setAlert({
+          type: "error",
+          message: err.response?.data?.message || "Failed to update order fulfillment capabilities",
+        })
+      );
+    } finally {
+      setSavingOrderTypes(false);
+    }
+  };
 
   // For each warehouse, compute activation stats
   const getWarehouseActivationStats = (warehouseId) => {
@@ -263,6 +315,7 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
     { key: "location", label: "State & Cluster" },
     { key: "combo_status", label: "Combo Kits", align: "center" },
     { key: "customize_status", label: "Customize Kits", align: "center" },
+    { key: "order_fulfillment", label: "Order Type Fulfillment", align: "center" },
     { key: "store_display", label: "Store Display & Regions", align: "center" },
     { key: "actions", label: "Actions", align: "right" },
   ];
@@ -428,12 +481,27 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
                 options={clusters.map((c) => ({ value: c.id, text: c.name }))}
               />
             </div>
-            {(stateFilter || clusterFilter) && (
+            <div className="flex-1 w-full">
+              <Dropdown
+                label="Filter by Order Type"
+                value={orderTypeFilter}
+                onChange={setOrderTypeFilter}
+                placeholder="All Order Types"
+                options={[
+                  { value: "all", text: "All Order Types" },
+                  { value: "po_order", text: "PO Order Fulfillment" },
+                  { value: "loose_order", text: "Loose Order Fulfillment" },
+                  { value: "trial_order", text: "Trial Order Fulfillment" },
+                ]}
+              />
+            </div>
+            {(stateFilter || clusterFilter || orderTypeFilter !== "all") && (
               <Button
                 variant="secondary"
                 onClick={() => {
                   setStateFilter("");
                   setClusterFilter("");
+                  setOrderTypeFilter("all");
                 }}
                 className="mt-6 md:mt-0 rounded-xl"
               >
@@ -521,6 +589,54 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
+                        {(() => {
+                          const fulfillmentTypes = Array.isArray(warehouse.order_fulfillment_types)
+                            ? warehouse.order_fulfillment_types
+                            : ["po_order", "loose_order", "trial_order"];
+                          return (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <div className="flex items-center justify-center flex-wrap gap-1 max-w-[200px]">
+                                {fulfillmentTypes.includes("po_order") && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                                    PO Order
+                                  </span>
+                                )}
+                                {fulfillmentTypes.includes("loose_order") && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                                    Loose Order
+                                  </span>
+                                )}
+                                {fulfillmentTypes.includes("trial_order") && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                    Trial Order
+                                  </span>
+                                )}
+                                {fulfillmentTypes.length === 0 && (
+                                  <span className="text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">
+                                    None Assigned
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedWarehouseForOrderType(warehouse);
+                                  setModalOrderTypes(
+                                    Array.isArray(warehouse.order_fulfillment_types)
+                                      ? warehouse.order_fulfillment_types
+                                      : ["po_order", "loose_order", "trial_order"]
+                                  );
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline hover:text-primary-hover transition-colors"
+                              >
+                                <FaSlidersH size={10} />
+                                Change Types
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 text-center">
                         {stats.activeCombos > 0 || stats.activeCustomizes > 0 ? (
                           <div className="flex flex-col items-center gap-0.5">
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-primary/10 text-primary border border-primary/20">
@@ -553,6 +669,115 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
               />
             </div>
           </div>
+
+          {/* Order Fulfillment Types Dialog Modal */}
+          <Dialog
+            isOpen={Boolean(selectedWarehouseForOrderType)}
+            onClose={() => setSelectedWarehouseForOrderType(null)}
+            title={
+              <div className="flex items-center gap-2">
+                <FaBoxes className="text-primary" />
+                <span>Configure Order Fulfillment Types — {selectedWarehouseForOrderType?.warehouse_code}</span>
+              </div>
+            }
+            size="md"
+            footer={
+              <div className="flex items-center justify-end gap-3 w-full">
+                <Button
+                  variant="secondary"
+                  onClick={() => setSelectedWarehouseForOrderType(null)}
+                  disabled={savingOrderTypes}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveOrderTypes}
+                  disabled={savingOrderTypes}
+                  leftIcon={<FaCheck />}
+                >
+                  {savingOrderTypes ? "Saving Changes..." : "Save Fulfillment Types"}
+                </Button>
+              </div>
+            }
+          >
+            <div className="p-6 space-y-5">
+              <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
+                <h4 className="text-xs font-black uppercase tracking-wider text-text-primary mb-1">
+                  Warehouse Order Routing Rules
+                </h4>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  Define which order categories (PO Orders, Loose Orders, or Trial Kits) this warehouse is authorized to fulfill for its designated State and Cluster districts. Incoming EPC orders are automatically bifurcated based on these flags.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  {
+                    id: "po_order",
+                    label: "PO Orders (Bulk Project / Combo Kits)",
+                    desc: "Fulfill complete standard Combo Kits and commercial project purchase orders.",
+                    badgeBg: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+                  },
+                  {
+                    id: "loose_order",
+                    label: "Loose Orders (Customized / Partial BOM Kits)",
+                    desc: "Fulfill customized component orders with loose/partial BOM line items.",
+                    badgeBg: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+                  },
+                  {
+                    id: "trial_order",
+                    label: "Trial Orders (Sample / Evaluation Kits)",
+                    desc: "Fulfill trial and sample evaluation orders dispatched to test or pilot EPCs.",
+                    badgeBg: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                  },
+                ].map((ot) => {
+                  const isChecked = modalOrderTypes.includes(ot.id);
+                  return (
+                    <div
+                      key={ot.id}
+                      onClick={() => {
+                        if (isChecked) {
+                          setModalOrderTypes(modalOrderTypes.filter((t) => t !== ot.id));
+                        } else {
+                          setModalOrderTypes([...modalOrderTypes, ot.id]);
+                        }
+                      }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        isChecked
+                          ? "border-primary bg-primary/5 shadow-xs"
+                          : "border-border hover:border-border-hover bg-surface"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        className="mt-1 h-4 w-4 rounded text-primary focus:ring-primary border-gray-300 pointer-events-none"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-text-primary">{ot.label}</span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${ot.badgeBg}`}>
+                            {ot.id}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-muted mt-1 leading-normal">
+                          {ot.desc}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {modalOrderTypes.length === 0 && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs font-bold flex items-center gap-2">
+                  <FaTimesCircle />
+                  At least one order type should normally be selected to prevent this warehouse from rejecting orders.
+                </div>
+              )}
+            </div>
+          </Dialog>
         </>
       )}
     </div>

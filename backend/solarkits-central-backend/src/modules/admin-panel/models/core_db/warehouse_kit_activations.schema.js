@@ -6,6 +6,11 @@ const schema = new mongoose.Schema({
   combo_kit_id: { type: mongoose.Schema.Types.ObjectId, ref: 'pc_comobo_kit', required: true },
   is_combokit_active: { type: Boolean, default: false },
   is_customize_kit_active: { type: Boolean, default: false },
+  allowed_order_types: {
+    type: [String],
+    enum: ['po_order', 'loose_order', 'trial_order'],
+    default: ['po_order', 'loose_order', 'trial_order']
+  },
   base_price_cached: { type: Number, default: 0 },
   selling_price_cached: { type: Number, default: 0 },
   is_active: { type: Boolean, default: true },

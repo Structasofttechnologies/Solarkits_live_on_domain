@@ -173,7 +173,7 @@ router.get("/combokit/:id/combined-datasheet", async (req, res) => {
 router.get("/combokit/:id/combined-datasheet-pdf", async (req, res) => {
   try {
     const data = await getCombinedKitDatasheetData(req.params.id);
-    generateCombinedDatasheetPdf(data, res);
+    await generateCombinedDatasheetPdf(data, res);
   } catch (err) {
     return res.status(500).json({ status: "error", message: err.message });
   }

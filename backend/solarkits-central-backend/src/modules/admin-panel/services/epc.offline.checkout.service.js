@@ -462,24 +462,21 @@ async function createEpcOfflineOrder({
     }
   }
 
-  // Lookup warehouse matching delivery address state or default company warehouse
-  let assignedWarehouseId = null;
-  const stateName = delivery_address?.state_name;
-  if (stateName) {
-    const stateWh = await CompanyWarehouse.findOne({
-      $or: [
-        { state: new RegExp(stateName, 'i') },
-        { 'address.state': new RegExp(stateName, 'i') },
-        { warehouse_code: new RegExp(stateName.slice(0, 2), 'i') }
-      ],
-      is_active: true,
-    }).lean();
-    if (stateWh) assignedWarehouseId = stateWh._id;
-  }
-  if (!assignedWarehouseId) {
-    const defaultWh = await CompanyWarehouse.findOne({ is_active: true }).lean();
-    if (defaultWh) assignedWarehouseId = defaultWh._id;
-  }
+  // 3. Resolve warehouse matching Order Type and delivery address via Bifurcation Engine
+  const { resolveFulfillmentWarehouse, normalizeOrderType } = require('./warehouse.bifurcation.service');
+  const detectedOrderType = normalizeOrderType(
+    processedItems.some(it => it.is_trial_kit) ? 'trial_order' : null,
+    processedItems
+  );
+
+  const bifurcation = await resolveFulfillmentWarehouse({
+    district_id: delivery_address?.district_id,
+    state_id: delivery_address?.state_id,
+    order_type: detectedOrderType,
+    items: processedItems
+  });
+
+  const assignedWarehouseId = bifurcation.assigned_warehouse_id;
 
   // 3.5 Resolve product payment milestone configuration
   const ProductPaymentMilestone = require('../models/india_solarshop_db/product_payment_milestones.schema');
@@ -557,9 +554,17 @@ async function createEpcOfflineOrder({
     order_number: orderNumber,
     order_request_id: isOnlineECollection ? null : `REQ-EPC-${orderNumber.replace(/^ORD-EPC-/, '')}`,
     is_official_order_generated: isOnlineECollection ? true : false,
-    is_trial_order: Boolean(processedItems.some(it => it.is_trial_kit)),
+    order_type: detectedOrderType,
+    is_trial_order: detectedOrderType === 'trial_order' || Boolean(processedItems.some(it => it.is_trial_kit)),
     epc_id,
     warehouse_id: assignedWarehouseId,
+    fulfillment_bifurcation: {
+      assigned_warehouse_id: bifurcation.assigned_warehouse_id,
+      assigned_warehouse_code: bifurcation.assigned_warehouse_code,
+      order_type_matched: bifurcation.order_type_matched,
+      matched_level: bifurcation.matched_level,
+      matched_reason: bifurcation.matched_reason
+    },
     reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
     fulfillment_source: fulfillmentSource,

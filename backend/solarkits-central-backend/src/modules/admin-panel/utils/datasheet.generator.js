@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 const PDFDocument = require('pdfkit');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const {
   Product,
   ProductSku,
@@ -11,6 +14,72 @@ const {
   DatasheetDesignSetting
 } = require('../models/core_db');
 const { get_or_create_settings } = require('../controller/datasheet_settings.handler');
+
+/**
+ * Normalizes an image path or URL into a valid accessible URL.
+ */
+const normalizeImageUrl = (img) => {
+  if (!img || typeof img !== 'string') return null;
+  const trimmed = img.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('localhost:3001')) {
+    return trimmed.replace('localhost:3001', 'localhost:5000');
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  const cleanPath = trimmed.replace(/^public[\\/]/, '').replace(/^[\\/]/, '');
+  const baseUrl = process.env.BASE_URL || process.env.BACKEND_URL || 'http://localhost:5000';
+  return `${baseUrl.replace(/\/$/, '')}/${cleanPath}`;
+};
+
+/**
+ * Preloads an image into a Buffer for PDFKit rendering.
+ * Supports both local files and remote HTTP/HTTPS (Cloudinary, etc.).
+ */
+async function fetchImageBuffer(urlOrPath) {
+  if (!urlOrPath || typeof urlOrPath !== 'string') return null;
+  const trimmed = urlOrPath.trim();
+  if (!trimmed) return null;
+
+  // 1. Check local file system
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    try {
+      const candidatePaths = [
+        trimmed,
+        path.resolve(trimmed),
+        path.join(process.cwd(), trimmed),
+        path.join(process.cwd(), 'public', trimmed.replace(/^public[\\/]/, '')),
+        path.join(__dirname, '../../../../', trimmed)
+      ];
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+          return fs.readFileSync(p);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 2. Fetch remote URL (e.g. Cloudinary) with timeout
+  try {
+    let fetchUrl = trimmed;
+    if (fetchUrl.includes('localhost:3001')) {
+      fetchUrl = fetchUrl.replace('localhost:3001', 'localhost:5000');
+    }
+    const res = await axios.get(fetchUrl, {
+      responseType: 'arraybuffer',
+      timeout: 4500
+    });
+    if (res.status === 200 && res.data) {
+      return Buffer.from(res.data);
+    }
+  } catch (err) {
+    console.warn(`[Datasheet PDF] Unable to download image from ${urlOrPath}:`, err.message);
+  }
+  return null;
+}
 
 /**
  * Aggregates all component products, specifications, and uploaded datasheets
@@ -170,6 +239,13 @@ async function getCombinedKitDatasheetData(kitId) {
 
     const specs = resolveSpecsForComponent(product, sku, category, product?.name);
 
+    const isPanel = category === "Solar Panel";
+    const isInverter = category === "Solar Inverter";
+
+    // Only Panel and Inverter get their configured photo, BOS/others get null
+    const rawImg = (isPanel || isInverter) ? (sku?.image || product?.image || null) : null;
+    const resolvedImage = rawImg ? normalizeImageUrl(rawImg) : null;
+
     components.push({
       id: bc.sku_id ? bc.sku_id.toString() : `comp-${components.length + 1}`,
       category,
@@ -178,7 +254,7 @@ async function getCombinedKitDatasheetData(kitId) {
       model: sku?.sku_code || product?.name || "",
       quantity: bc.quantity || 1,
       datasheetUrl: product?.datasheet || null,
-      image: product?.image || null,
+      image: resolvedImage,
       specifications: specs
     });
   });
@@ -424,7 +500,7 @@ async function getCombinedKitDatasheetData(kitId) {
         quantityWithUnit: formatted.quantityWithUnit,
         brand: formatted.brand,
         skuCode: sku?.sku_code || "",
-        image: bk.image || product?.image || null,
+        image: null,
         details: formatted.details,
         specSummary: formatted.specSummary
       });
@@ -442,7 +518,7 @@ async function getCombinedKitDatasheetData(kitId) {
       model: `${kit.capacity || 0} kW BOS Complete Package (${bosItems.length} Components)`,
       quantity: 1,
       datasheetUrl: bosDatasheetUrls[0] || null,
-      image: kit.kit_image || null,
+      image: null,
       subComponents: detailedSubComponents,
       specifications: bosSpecs
     });
@@ -475,6 +551,28 @@ async function getCombinedKitDatasheetData(kitId) {
     });
   });
 
+  const panelComp = sortedComponents.find(c => c.category === "Solar Panel");
+  const inverterComp = sortedComponents.find(c => c.category === "Solar Inverter");
+
+  const equipmentPhotos = {
+    panel: panelComp ? {
+      productName: panelComp.productName,
+      brand: panelComp.brand,
+      model: panelComp.model,
+      quantity: panelComp.quantity,
+      image: panelComp.image,
+      datasheetUrl: panelComp.datasheetUrl
+    } : null,
+    inverter: inverterComp ? {
+      productName: inverterComp.productName,
+      brand: inverterComp.brand,
+      model: inverterComp.model,
+      quantity: inverterComp.quantity,
+      image: inverterComp.image,
+      datasheetUrl: inverterComp.datasheetUrl
+    } : null
+  };
+
   return {
     kit: {
       id: kit._id.toString(),
@@ -483,6 +581,7 @@ async function getCombinedKitDatasheetData(kitId) {
       datasheet: kit.datasheet || null,
       image: kit.kit_image || null
     },
+    equipmentPhotos,
     components: sortedComponents,
     combinedTable,
     designSettings: designSettings.toObject ? designSettings.toObject() : designSettings
@@ -492,8 +591,18 @@ async function getCombinedKitDatasheetData(kitId) {
 /**
  * Generates an official, beautifully styled Combined Kit Datasheet PDF and streams it to Express response.
  */
-function generateCombinedDatasheetPdf(datasheetData, res) {
-  const { kit, components, combinedTable, designSettings } = datasheetData;
+async function generateCombinedDatasheetPdf(datasheetData, res) {
+  const { kit, components, combinedTable, designSettings, equipmentPhotos } = datasheetData;
+
+  // Resolve Panel & Inverter image data
+  const panelData = equipmentPhotos?.panel || components.find(c => c.category === "Solar Panel");
+  const inverterData = equipmentPhotos?.inverter || components.find(c => c.category === "Solar Inverter");
+
+  // Preload Panel & Inverter images in parallel (Never preload BOS)
+  const [panelBuffer, inverterBuffer] = await Promise.all([
+    fetchImageBuffer(panelData?.image),
+    fetchImageBuffer(inverterData?.image)
+  ]);
 
   const doc = new PDFDocument({
     margin: 40,
@@ -544,6 +653,110 @@ function generateCombinedDatasheetPdf(datasheetData, res) {
   doc.fillColor('#065F46').fontSize(7.5).font('Helvetica-Bold').text('✓ MNRE & BIS COMPLIANT', startX + pageWidth - 140, currentY + 16, { width: 125, align: 'center' });
 
   currentY += 52;
+
+  // ─── Major Equipment Visual Showcase (Panel & Inverter ONLY — NO BOS) ───
+  const hasEquipment = Boolean(panelData || inverterData);
+  if (hasEquipment) {
+    const cardGap = 15;
+    const cardWidth = (pageWidth - cardGap) / 2; // 250 pt each
+    const cardHeight = 78;
+
+    // --- Panel Card (Left) ---
+    const panelX = startX;
+    doc.roundedRect(panelX, currentY, cardWidth, cardHeight, 6).fill('#FFFFFF');
+    doc.roundedRect(panelX, currentY, cardWidth, cardHeight, 6).stroke(borderColor);
+    doc.roundedRect(panelX, currentY, cardWidth, 4, 2).fill(headerBg);
+
+    doc.fillColor(headerBg).fontSize(7).font('Helvetica-Bold')
+      .text('SOLAR PV MODULE (PANEL)', panelX + 10, currentY + 8);
+
+    const imgBoxX = panelX + 10;
+    const imgBoxY = currentY + 20;
+    const imgBoxW = 50;
+    const imgBoxH = 50;
+
+    let panelImgDrawn = false;
+    if (panelBuffer) {
+      try {
+        doc.image(panelBuffer, imgBoxX, imgBoxY, { fit: [imgBoxW, imgBoxH], align: 'center', valign: 'center' });
+        panelImgDrawn = true;
+      } catch (err) {
+        console.warn('[Datasheet PDF] Error rendering panel image buffer:', err.message);
+      }
+    }
+    if (!panelImgDrawn) {
+      doc.roundedRect(imgBoxX, imgBoxY, imgBoxW, imgBoxH, 4).fill('#F8FAFC');
+      doc.roundedRect(imgBoxX, imgBoxY, imgBoxW, imgBoxH, 4).stroke(borderColor);
+      doc.fillColor('#94A3B8').fontSize(6.5).font('Helvetica-Bold')
+        .text('PHOTO\nCONFIGURED', imgBoxX + 2, imgBoxY + 18, { width: imgBoxW - 4, align: 'center' });
+    }
+
+    const pTextX = imgBoxX + imgBoxW + 8;
+    const pTextW = cardWidth - (imgBoxW + 24);
+    const pName = panelData?.productName || 'High-Efficiency Solar PV Module';
+    const pBrand = panelData?.brand || 'SolarKits Tier-1';
+    const pModel = panelData?.model ? `SKU: ${panelData.model}` : '';
+    const pQty = panelData?.quantity ? `Qty: ${panelData.quantity} Units` : 'Qty: 1 Set';
+
+    doc.fillColor('#0F172A').fontSize(8).font('Helvetica-Bold')
+      .text(pName, pTextX, currentY + 20, { width: pTextW, height: 22, ellipsis: true });
+    doc.fillColor('#475569').fontSize(7).font('Helvetica')
+      .text(`Brand: ${pBrand}`, pTextX, currentY + 36, { width: pTextW, lineBreak: false });
+    if (pModel) {
+      doc.fillColor('#64748B').fontSize(6.5).font('Helvetica')
+        .text(pModel, pTextX, currentY + 47, { width: pTextW, lineBreak: false });
+    }
+    doc.fillColor('#059669').fontSize(7).font('Helvetica-Bold')
+      .text(pQty, pTextX, currentY + 58, { width: pTextW, lineBreak: false });
+
+    // --- Inverter Card (Right) ---
+    const invX = startX + cardWidth + cardGap;
+    doc.roundedRect(invX, currentY, cardWidth, cardHeight, 6).fill('#FFFFFF');
+    doc.roundedRect(invX, currentY, cardWidth, cardHeight, 6).stroke(borderColor);
+    doc.roundedRect(invX, currentY, cardWidth, 4, 2).fill('#D97706');
+
+    doc.fillColor('#D97706').fontSize(7).font('Helvetica-Bold')
+      .text('SOLAR GRID-TIED INVERTER', invX + 10, currentY + 8);
+
+    const invImgBoxX = invX + 10;
+    const invImgBoxY = currentY + 20;
+
+    let invImgDrawn = false;
+    if (inverterBuffer) {
+      try {
+        doc.image(inverterBuffer, invImgBoxX, invImgBoxY, { fit: [imgBoxW, imgBoxH], align: 'center', valign: 'center' });
+        invImgDrawn = true;
+      } catch (err) {
+        console.warn('[Datasheet PDF] Error rendering inverter image buffer:', err.message);
+      }
+    }
+    if (!invImgDrawn) {
+      doc.roundedRect(invImgBoxX, invImgBoxY, imgBoxW, imgBoxH, 4).fill('#F8FAFC');
+      doc.roundedRect(invImgBoxX, invImgBoxY, imgBoxW, imgBoxH, 4).stroke(borderColor);
+      doc.fillColor('#94A3B8').fontSize(6.5).font('Helvetica-Bold')
+        .text('PHOTO\nCONFIGURED', invImgBoxX + 2, invImgBoxY + 18, { width: imgBoxW - 4, align: 'center' });
+    }
+
+    const iTextX = invImgBoxX + imgBoxW + 8;
+    const iTextW = cardWidth - (imgBoxW + 24);
+    const iName = inverterData?.productName || 'Solar Power Conditioning Inverter';
+    const iBrand = inverterData?.brand || 'SolarKits Tier-1';
+    const iModel = inverterData?.model ? `SKU: ${inverterData.model}` : '';
+    const iQty = inverterData?.quantity ? `Qty: ${inverterData.quantity} Unit` : 'Qty: 1 Unit';
+
+    doc.fillColor('#0F172A').fontSize(8).font('Helvetica-Bold')
+      .text(iName, iTextX, currentY + 20, { width: iTextW, height: 22, ellipsis: true });
+    doc.fillColor('#475569').fontSize(7).font('Helvetica')
+      .text(`Brand: ${iBrand}`, iTextX, currentY + 36, { width: iTextW, lineBreak: false });
+    if (iModel) {
+      doc.fillColor('#64748B').fontSize(6.5).font('Helvetica')
+        .text(iModel, iTextX, currentY + 47, { width: iTextW, lineBreak: false });
+    }
+    doc.fillColor('#059669').fontSize(7).font('Helvetica-Bold')
+      .text(iQty, iTextX, currentY + 58, { width: iTextW, lineBreak: false });
+
+    currentY += cardHeight + 14;
+  }
 
   // ─── Table Header ───
   const colWidths = [110, 185, 220]; // Total = 515

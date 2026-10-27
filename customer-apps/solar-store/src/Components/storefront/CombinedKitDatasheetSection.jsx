@@ -18,6 +18,13 @@ import {
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, "");
 
+const resolveStoreImageUrl = (url) => {
+  if (!url || typeof url !== "string" || url.trim() === "") return "";
+  if (url.includes("localhost:3001")) return url.replace("localhost:3001", "localhost:5000");
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${BACKEND_BASE}/${url.startsWith("/") ? url.slice(1) : url}`;
+};
+
 const DEFAULT_DESIGN_SETTINGS = {
   table_header_bg: "#1E3A8A",
   table_header_text: "#FFFFFF",
@@ -115,6 +122,7 @@ export default function CombinedKitDatasheetSection({ kit }) {
         brand: k.panel.brandName || "",
         quantity: k.panel.quantity || k.panel.panelCount || 0,
         datasheetUrl: k.panel.datasheet || null,
+        image: k.panel.image || null,
         specifications: pSpecs
       });
       pSpecs.forEach((s) => combinedTable.push({ component: "Solar Panel", ...s }));
@@ -133,6 +141,7 @@ export default function CombinedKitDatasheetSection({ kit }) {
         brand: k.inverter.brandName || "",
         quantity: k.inverter.quantity || 1,
         datasheetUrl: k.inverter.datasheet || null,
+        image: k.inverter.image || null,
         specifications: iSpecs
       });
       iSpecs.forEach((s) => combinedTable.push({ component: "Solar Inverter", ...s }));
@@ -318,6 +327,100 @@ export default function CombinedKitDatasheetSection({ kit }) {
       {/* Structured Combined Table Section */}
       {isExpanded && (
         <div className="p-4 sm:p-6 space-y-6">
+          {/* Major Equipment Showcase: Solar Panel & Solar Inverter ONLY (Never BOS) */}
+          {(() => {
+            const panelComp = (currentData.components || []).find(
+              (c) => c.category?.toLowerCase().includes("panel") || c.category?.toLowerCase().includes("module")
+            );
+            const inverterComp = (currentData.components || []).find(
+              (c) => c.category?.toLowerCase().includes("inverter")
+            );
+            const panelImg = panelComp?.image;
+            const invImg = inverterComp?.image;
+
+            if (!panelComp && !inverterComp) return null;
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {panelComp && (
+                  <div className="p-4 rounded-xl border border-border bg-gradient-to-br from-surface to-surface-hover/40 flex items-center gap-4 shadow-2xs">
+                    {panelImg ? (
+                      <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border bg-white p-1 flex items-center justify-center">
+                        <img
+                          src={resolveStoreImageUrl(panelImg)}
+                          alt={panelComp.productName}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement?.classList.add('hidden');
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 shrink-0 rounded-lg border border-border bg-primary/5 flex items-center justify-center text-primary">
+                        <FaSolarPanel size={28} />
+                      </div>
+                    )}
+                    <div className="space-y-1 min-w-0">
+                      <span className="inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary">
+                        Solar PV Module (Panel)
+                      </span>
+                      <h4 className="text-sm font-black text-text-primary truncate">
+                        {panelComp.productName}
+                      </h4>
+                      <p className="text-xs text-text-secondary">
+                        Brand: <span className="font-bold text-text-primary">{panelComp.brand}</span>
+                      </p>
+                      {panelComp.quantity && (
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          Quantity: {panelComp.quantity} Units
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {inverterComp && (
+                  <div className="p-4 rounded-xl border border-border bg-gradient-to-br from-surface to-surface-hover/40 flex items-center gap-4 shadow-2xs">
+                    {invImg ? (
+                      <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border bg-white p-1 flex items-center justify-center">
+                        <img
+                          src={resolveStoreImageUrl(invImg)}
+                          alt={inverterComp.productName}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement?.classList.add('hidden');
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 shrink-0 rounded-lg border border-border bg-amber-500/10 flex items-center justify-center text-amber-600">
+                        <FaBolt size={28} />
+                      </div>
+                    )}
+                    <div className="space-y-1 min-w-0">
+                      <span className="inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                        Solar Grid-Tied Inverter
+                      </span>
+                      <h4 className="text-sm font-black text-text-primary truncate">
+                        {inverterComp.productName}
+                      </h4>
+                      <p className="text-xs text-text-secondary">
+                        Brand: <span className="font-bold text-text-primary">{inverterComp.brand}</span>
+                      </p>
+                      {inverterComp.quantity && (
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          Quantity: {inverterComp.quantity} Unit
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Detailed Component Breakdown Cards */}
           <div
             className="rounded-xl overflow-hidden border shadow-xs"
@@ -379,7 +482,15 @@ export default function CombinedKitDatasheetSection({ kit }) {
                           >
                             <div className="flex items-center justify-between">
                               <span className="flex items-center gap-2">
-                                <Icon size={14} className="text-primary" />
+                                {(comp.category?.toLowerCase().includes("panel") || comp.category?.toLowerCase().includes("module") || comp.category?.toLowerCase().includes("inverter")) && comp.image ? (
+                                  <img
+                                    src={resolveStoreImageUrl(comp.image)}
+                                    alt=""
+                                    className="w-5 h-5 rounded-xs object-contain bg-white border border-border shrink-0"
+                                  />
+                                ) : (
+                                  <Icon size={14} className="text-primary" />
+                                )}
                                 <span>
                                   {comp.category} — {comp.productName}
                                 </span>

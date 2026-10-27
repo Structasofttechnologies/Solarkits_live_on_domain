@@ -1431,7 +1431,7 @@ const download_combined_datasheet_pdf = async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
         }
         const data = await getCombinedKitDatasheetData(kitId);
-        generateCombinedDatasheetPdf(data, res);
+        await generateCombinedDatasheetPdf(data, res);
     } catch (error) {
         console.error("Error in download_combined_datasheet_pdf:", error);
         return res.status(500).json({ status: 'error', message: error.message || 'Failed to generate datasheet PDF' });

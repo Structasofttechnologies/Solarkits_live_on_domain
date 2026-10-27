@@ -16,6 +16,13 @@ import { authHeaderObj } from "@/app/authHeader";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+const resolvePreviewImageUrl = (url) => {
+  if (!url || typeof url !== "string" || url.trim() === "") return "";
+  if (url.includes("localhost:3001")) return url.replace("localhost:3001", "localhost:5000");
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_URL.replace(/\/admin-api|\/api/g, "")}/${url.startsWith("/") ? url.slice(1) : url}`;
+};
+
 const getCategoryIcon = (category = "") => {
   const lower = category.toLowerCase();
   if (lower.includes("panel") || lower.includes("module")) return FaSolarPanel;
@@ -162,13 +169,18 @@ export default function CombinedDatasheetPreviewModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {components.map((comp, idx) => {
                 const IconComponent = getCategoryIcon(comp.category);
+                const isPanel = comp.category?.toLowerCase().includes("panel") || comp.category?.toLowerCase().includes("module");
+                const isInverter = comp.category?.toLowerCase().includes("inverter");
+                const showPhoto = (isPanel || isInverter) && Boolean(comp.image);
+                const imageUrl = showPhoto ? resolvePreviewImageUrl(comp.image) : "";
+
                 return (
                   <div
                     key={idx}
-                    className="p-3.5 bg-surface rounded-xl border border-border flex flex-col justify-between space-y-2 shadow-2xs"
+                    className="p-3.5 bg-surface rounded-xl border border-border flex flex-col justify-between space-y-3 shadow-2xs hover:border-primary/40 transition-colors"
                   >
                     <div>
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
                           <IconComponent size={12} /> {comp.category}
                         </span>
@@ -176,8 +188,30 @@ export default function CombinedDatasheetPreviewModal({
                           Qty: {comp.quantity}
                         </span>
                       </div>
+
+                      {/* Configured Product Photo: ONLY Panel & Inverter (Never BOS) */}
+                      {showPhoto && imageUrl && (
+                        <div className="mb-2.5 h-32 w-full rounded-lg overflow-hidden border border-border/80 bg-slate-50 dark:bg-slate-900/40 p-2 flex items-center justify-center relative group">
+                          <img
+                            src={imageUrl}
+                            alt={comp.productName}
+                            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement?.classList.add('hidden');
+                            }}
+                          />
+                          <span className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-black/70 text-white text-[9px] font-black uppercase tracking-wider backdrop-blur-xs">
+                            {isPanel ? "Solar Panel" : "Inverter"}
+                          </span>
+                        </div>
+                      )}
+
                       <h4 className="text-xs font-bold text-text-primary line-clamp-1">{comp.productName}</h4>
                       <p className="text-[10px] text-text-secondary">Brand: {comp.brand}</p>
+                      {comp.model && (
+                        <p className="text-[9px] font-mono text-text-muted mt-0.5 line-clamp-1">SKU: {comp.model}</p>
+                      )}
                     </div>
 
                     <div className="pt-2 border-t border-border flex items-center justify-between text-[10px]">
@@ -273,6 +307,13 @@ export default function CombinedDatasheetPreviewModal({
                                 <div className="flex items-center gap-2">
                                   {designSettings.section_heading_style === "accent-bar" && (
                                     <span className="w-1.5 h-3.5 bg-primary rounded-full" />
+                                  )}
+                                  {(comp.category?.toLowerCase().includes("panel") || comp.category?.toLowerCase().includes("module") || comp.category?.toLowerCase().includes("inverter")) && comp.image && (
+                                    <img
+                                      src={resolvePreviewImageUrl(comp.image)}
+                                      alt=""
+                                      className="w-5 h-5 rounded-xs object-contain bg-white border border-border shrink-0"
+                                    />
                                   )}
                                   <span>{comp.category}</span>
                                   {designSettings.show_product_name !== false && (

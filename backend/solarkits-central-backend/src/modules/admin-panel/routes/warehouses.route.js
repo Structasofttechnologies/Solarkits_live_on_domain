@@ -13,6 +13,8 @@ router.post("/validation/validaion-status", check_auth, check_permissions([{ uni
 router.post("/validation/change-status", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['edit'] }]), warehouse_handler.change_warehouse_validation_status);
 router.get("/:id", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['view'] }]), warehouse_handler.get_warehouse);
 router.put("/:id", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['edit'] }]), warehouse_handler.update_warehouse);
+router.patch("/:id/order-fulfillment-types", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['edit'] }, { unique_code: 'ADM_WH_KIT_ACT', permissions: ['edit'] }]), warehouse_handler.update_warehouse_order_fulfillment_types);
+router.put("/:id/order-fulfillment-types", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['edit'] }, { unique_code: 'ADM_WH_KIT_ACT', permissions: ['edit'] }]), warehouse_handler.update_warehouse_order_fulfillment_types);
 router.post("/validation/sections/add", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['add'] }]), warehouse_handler.add_warehouse_validation_section);
 router.get("/validation/sections/:warehouse_id", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['view'] }]), warehouse_handler.get_warehouse_validation_sections);
 router.get("/validation/sections/:warehouse_id/:id", check_auth, check_permissions([{ unique_code: 'ADM_WAREHOUSES', permissions: ['view'] }]), warehouse_handler.get_warehouse_validation_section);

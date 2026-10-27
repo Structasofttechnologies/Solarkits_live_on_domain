@@ -272,10 +272,30 @@ async function processEpcCheckout({
 
   const orderNumber = generateEpcOrderNumber();
 
+  // Resolve warehouse via Bifurcation Engine
+  const { resolveFulfillmentWarehouse, normalizeOrderType } = require('./warehouse.bifurcation.service');
+  const detectedOrderType = normalizeOrderType(null, processedItems);
+  const bifurcation = await resolveFulfillmentWarehouse({
+    district_id: delivery_address?.district_id,
+    state_id: delivery_address?.state_id,
+    order_type: detectedOrderType,
+    items: processedItems
+  });
+
   // 6. Create EpcOrder
   const epcOrder = await EpcOrder.create({
     order_number: orderNumber,
+    order_type: detectedOrderType,
+    is_trial_order: detectedOrderType === 'trial_order' || Boolean(processedItems.some(it => it.is_trial_kit)),
     epc_id: epc_id,
+    warehouse_id: bifurcation.assigned_warehouse_id,
+    fulfillment_bifurcation: {
+      assigned_warehouse_id: bifurcation.assigned_warehouse_id,
+      assigned_warehouse_code: bifurcation.assigned_warehouse_code,
+      order_type_matched: bifurcation.order_type_matched,
+      matched_level: bifurcation.matched_level,
+      matched_reason: bifurcation.matched_reason
+    },
     reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
     fulfillment_source: fulfillmentSource,

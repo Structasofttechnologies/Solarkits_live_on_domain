@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   FiMapPin,
   FiShield,
@@ -38,6 +39,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function EpcProfile() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth_slice);
 
   const [loading, setLoading] = useState(true);
@@ -482,14 +484,14 @@ export default function EpcProfile() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 animate-in fade-in duration-300">
-      {/* ── TOP HERO BANNER: EPC Identity & Stats ───────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-primary-900 to-slate-950 border border-slate-800 text-white shadow-2xl p-6 sm:p-8">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-1/4 -mb-16 w-60 h-60 bg-accent/15 rounded-full blur-2xl pointer-events-none" />
+      {/* ── TOP HERO BANNER: EPC Identity & Stats (Solar Store Theme) ────── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary via-[#1e2f70] to-[#152250] text-white border border-primary-400/20 shadow-xl shadow-primary/15 p-6 sm:p-8">
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-accent/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 -mb-16 w-60 h-60 bg-sky-400/15 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-accent to-amber-500 text-white flex items-center justify-center font-black text-2xl shadow-xl ring-4 ring-white/10 shrink-0">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-accent to-amber-500 text-white flex items-center justify-center font-black text-2xl shadow-xl ring-4 ring-white/15 shrink-0">
               {account.name ? account.name.substring(0, 2).toUpperCase() : "EP"}
             </div>
             <div>
@@ -497,26 +499,26 @@ export default function EpcProfile() {
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                   {account.name || "Solar EPC Partner"}
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-success/20 text-emerald-300 border border-emerald-500/30">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
                   <FiCheckCircle size={13} /> Certified Solar EPC
                 </span>
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10">
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-white/15 text-white border border-white/20 backdrop-blur-sm">
                   Role: {account.role ? account.role.toUpperCase() : "OWNER"}
                 </span>
               </div>
-              <p className="text-slate-300 font-medium text-sm mt-1 flex items-center gap-3 flex-wrap">
+              <p className="text-white/80 font-medium text-xs sm:text-sm mt-1.5 flex items-center gap-3 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                  <FiBriefcase className="text-accent" />
+                  <FiBriefcase className="text-amber-300" />
                   {company.name || "Solar EPC Enterprise"}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5">
-                  <FiMail className="text-sky-400" />
+                  <FiMail className="text-sky-300" />
                   {account.email}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5">
-                  <FiPhone className="text-emerald-400" />
+                  <FiPhone className="text-emerald-300" />
                   +91 {account.whatsapp || "N/A"}
                 </span>
               </p>
@@ -524,20 +526,19 @@ export default function EpcProfile() {
           </div>
 
           <div className="flex items-center gap-3 w-full lg:w-auto">
-            <Button
-              variant="primary"
-              leftIcon={<FiPlus size={18} />}
+            <button
+              type="button"
               onClick={() => {
                 setStateOtpStep(1);
                 setShowAddStateModal(true);
               }}
-              className="bg-accent hover:bg-accent-600 text-slate-950 font-black px-5 py-3 rounded-xl shadow-lg shadow-accent/20 border-0 flex-1 lg:flex-none justify-center"
+              className="bg-gradient-to-r from-accent to-amber-500 hover:from-amber-500 hover:to-accent text-white font-extrabold px-6 py-3 rounded-xl shadow-lg shadow-accent/25 hover:shadow-accent/40 hover:-translate-y-0.5 transition-all duration-200 border-0 flex-1 lg:flex-none flex items-center justify-center gap-2 cursor-pointer text-sm"
             >
-              Onboard In New State
-            </Button>
-            <Button
-              variant="outline"
-              leftIcon={<FiHome size={18} />}
+              <FiPlus size={18} />
+              <span>Onboard In New State</span>
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 if (profileData?.onboarded_states?.length > 0) {
                   setNewOfficeForm((prev) => ({
@@ -548,127 +549,126 @@ export default function EpcProfile() {
                 }
                 setShowAddOfficeModal(true);
               }}
-              className="border-white/20 text-white hover:bg-white/10 font-bold px-5 py-3 rounded-xl flex-1 lg:flex-none justify-center"
+              className="border border-white/30 text-white hover:bg-white/15 backdrop-blur-sm font-bold px-5 py-3 rounded-xl hover:-translate-y-0.5 transition-all duration-200 flex-1 lg:flex-none flex items-center justify-center gap-2 cursor-pointer text-sm"
             >
-              Add District Office
-            </Button>
+              <FiHome size={18} />
+              <span>Add District Office</span>
+            </button>
           </div>
         </div>
 
-        {/* ── Metric Badges ─────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-800/80">
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
+        {/* ── Metric Badges (Frosted Glass Solar Store Style) ─────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/15">
+          <div className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">
                 Onboarded States
               </span>
-              <FiMapPin className="text-accent text-lg" />
+              <FiMapPin className="text-amber-300 text-lg" />
             </div>
             <div className="text-2xl font-black text-white mt-1">
               {stats.total_states}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-white/70 mt-0.5">
               GST verified jurisdictions
             </p>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
+          <div className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">
                 Total Offices
               </span>
-              <FiBriefcase className="text-sky-400 text-lg" />
+              <FiBriefcase className="text-sky-300 text-lg" />
             </div>
             <div className="text-2xl font-black text-white mt-1">
               {stats.total_offices}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-white/70 mt-0.5">
               Across active districts
             </p>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
+          <div className="bg-white/10 hover:bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">
                 Home Offices
               </span>
-              <FiStar className="text-amber-400 text-lg" />
+              <FiStar className="text-amber-300 text-lg" />
             </div>
             <div className="text-2xl font-black text-white mt-1">
               {stats.total_home_offices}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-white/70 mt-0.5">
               State HQ base locations
             </p>
           </div>
 
           <div
             onClick={() => navigate("/users/create")}
-            className="bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50 transition-all group"
+            className="bg-white/10 hover:bg-white/20 hover:border-white/30 cursor-pointer backdrop-blur-md rounded-2xl p-4 border border-white/15 transition-all duration-200 text-white group"
             title="Manage EPC Team & Sub-Users"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider group-hover:text-emerald-400 transition-colors">
+              <span className="text-xs font-semibold text-white/80 uppercase tracking-wider group-hover:text-emerald-300 transition-colors">
                 Sub-User Logins
               </span>
-              <FiUsers className="text-emerald-400 text-lg" />
+              <FiUsers className="text-emerald-300 text-lg" />
             </div>
             <div className="text-2xl font-black text-white mt-1">
               {stats.total_team_users}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5 flex items-center justify-between">
+            <p className="text-[11px] text-white/70 mt-0.5 flex items-center justify-between">
               <span>Assigned staff</span>
-              <span className="text-emerald-400 font-bold group-hover:underline">Manage Team →</span>
+              <span className="text-emerald-300 font-bold group-hover:underline">Manage Team →</span>
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── TAB SELECTOR ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border pb-2 gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("states")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+      {/* ── TAB SELECTOR (Solar Store Pill Container) ────────────────────── */}
+      <div className="flex items-center gap-2 p-1.5 bg-surface border border-border rounded-2xl shadow-xs w-fit flex-wrap">
+        <button
+          onClick={() => setActiveTab("states")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${
+            activeTab === "states"
+              ? "bg-gradient-to-r from-primary to-primary-end text-white shadow-md shadow-primary/25"
+              : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+          }`}
+        >
+          <FiShield size={16} />
+          <span>1. Multi-State GST Onboarding</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-bold ${
               activeTab === "states"
-                ? "bg-primary text-white shadow-md shadow-primary/25"
-                : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                ? "bg-white/20 text-white"
+                : "bg-surface-hover text-text-muted border border-border"
             }`}
           >
-            <FiShield size={16} />
-            <span>1. Multi-State GST Onboarding</span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full ${
-                activeTab === "states"
-                  ? "bg-white/20 text-white"
-                  : "bg-surface text-text-muted"
-              }`}
-            >
-              {profileData?.onboarded_states?.length || 0}
-            </span>
-          </button>
+            {profileData?.onboarded_states?.length || 0}
+          </span>
+        </button>
 
-          <button
-            onClick={() => setActiveTab("offices")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+        <button
+          onClick={() => setActiveTab("offices")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${
+            activeTab === "offices"
+              ? "bg-gradient-to-r from-primary to-primary-end text-white shadow-md shadow-primary/25"
+              : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+          }`}
+        >
+          <FiHome size={16} />
+          <span>2. Multi-District Offices & Home Office Tagging</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-bold ${
               activeTab === "offices"
-                ? "bg-primary text-white shadow-md shadow-primary/25"
-                : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                ? "bg-white/20 text-white"
+                : "bg-surface-hover text-text-muted border border-border"
             }`}
           >
-            <FiHome size={16} />
-            <span>2. Multi-District Offices & Home Office Tagging</span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full ${
-                activeTab === "offices"
-                  ? "bg-white/20 text-white"
-                  : "bg-surface text-text-muted"
-              }`}
-            >
-              {profileData?.offices?.length || 0}
-            </span>
-          </button>
-        </div>
+            {profileData?.offices?.length || 0}
+          </span>
+        </button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -676,28 +676,27 @@ export default function EpcProfile() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === "states" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 rounded-2xl border border-border shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 rounded-2xl border border-border shadow-xs">
             <div>
               <h2 className="text-lg font-black text-text-primary flex items-center gap-2">
-                <FiShield className="text-primary" /> Onboarded States & GST
-                Registrations
+                <FiShield className="text-primary" /> Onboarded States & GST Registrations
               </h2>
               <p className="text-text-secondary text-xs mt-0.5">
                 Every state requires verified GST credentials. As you expand,
                 onboard additional states with their respective GSTIN.
               </p>
             </div>
-            <Button
-              variant="primary"
-              leftIcon={<FiPlus />}
+            <button
+              type="button"
               onClick={() => {
                 setStateOtpStep(1);
                 setShowAddStateModal(true);
               }}
-              className="bg-primary hover:bg-primary-hover font-bold text-xs py-2.5 px-4 rounded-xl shrink-0"
+              className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-sm shadow-primary/20 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
             >
-              Onboard Another State
-            </Button>
+              <FiPlus size={15} />
+              <span>Onboard Another State</span>
+            </button>
           </div>
 
           {/* Onboarded States Grid */}
@@ -820,21 +819,19 @@ export default function EpcProfile() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {activeTab === "offices" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 rounded-2xl border border-border shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 rounded-2xl border border-border shadow-xs">
             <div>
               <h2 className="text-lg font-black text-text-primary flex items-center gap-2">
-                <FiHome className="text-primary" /> District Offices & Home
-                Office Tagging
+                <FiHome className="text-primary" /> District Offices & Home Office Tagging
               </h2>
               <p className="text-text-secondary text-xs mt-0.5">
                 Manage all your operational centers across districts. Tag
-                exactly one <strong>Home Office (HQ)</strong> per state, with
+                exactly one <strong className="text-text-primary">Home Office (HQ)</strong> per state, with
                 all other offices functioning as working branch offices.
               </p>
             </div>
-            <Button
-              variant="primary"
-              leftIcon={<FiPlus />}
+            <button
+              type="button"
               onClick={() => {
                 if (
                   selectedStateFilter !== "all" &&
@@ -854,20 +851,21 @@ export default function EpcProfile() {
                 }
                 setShowAddOfficeModal(true);
               }}
-              className="bg-primary hover:bg-primary-hover font-bold text-xs py-2.5 px-4 rounded-xl shrink-0"
+              className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-sm shadow-primary/20 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
             >
-              Add New District Office
-            </Button>
+              <FiPlus size={15} />
+              <span>Add New District Office</span>
+            </button>
           </div>
 
           {/* State Filter Buttons */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             <button
               onClick={() => setSelectedStateFilter("all")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 selectedStateFilter === "all"
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "bg-surface border border-border text-text-secondary hover:bg-surface-hover"
+                  ? "bg-gradient-to-r from-primary to-primary-end text-white shadow-sm shadow-primary/25"
+                  : "bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover"
               }`}
             >
               All States ({profileData?.offices?.length || 0})
@@ -880,10 +878,10 @@ export default function EpcProfile() {
                 <button
                   key={st.state_id}
                   onClick={() => setSelectedStateFilter(st.state_id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
                     selectedStateFilter === st.state_id
-                      ? "bg-primary text-white shadow-sm shadow-primary/30"
-                      : "bg-surface border border-border text-text-secondary hover:bg-surface-hover"
+                      ? "bg-gradient-to-r from-primary to-primary-end text-white shadow-sm shadow-primary/25"
+                      : "bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover"
                   }`}
                 >
                   <span>{st.state_name}</span>
@@ -891,7 +889,7 @@ export default function EpcProfile() {
                     className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                       selectedStateFilter === st.state_id
                         ? "bg-white/20 text-white"
-                        : "bg-surface-hover text-text-muted"
+                        : "bg-surface-hover text-text-muted border border-border/80"
                     }`}
                   >
                     {count}
@@ -903,8 +901,8 @@ export default function EpcProfile() {
 
           {/* Offices List / Grid */}
           {filteredOffices.length === 0 ? (
-            <div className="bg-surface rounded-2xl border border-dashed border-border p-12 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+            <div className="bg-surface rounded-2xl border border-dashed border-border p-12 text-center shadow-xs">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center mx-auto mb-3">
                 <FiHome size={28} />
               </div>
               <h3 className="text-base font-bold text-text-primary">
@@ -914,9 +912,8 @@ export default function EpcProfile() {
                 Add an office in any of your onboarded states to activate that
                 district for procurement, delivery, and team member assignment.
               </p>
-              <Button
-                variant="primary"
-                leftIcon={<FiPlus />}
+              <button
+                type="button"
                 onClick={() => {
                   if (profileData?.onboarded_states?.length > 0) {
                     setNewOfficeForm((prev) => ({
@@ -927,10 +924,11 @@ export default function EpcProfile() {
                   }
                   setShowAddOfficeModal(true);
                 }}
-                className="font-bold text-xs"
+                className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md shadow-primary/20 transition-all inline-flex items-center gap-2 cursor-pointer"
               >
-                Add Your First Office
-              </Button>
+                <FiPlus size={15} />
+                <span>Add Your First Office</span>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1282,25 +1280,24 @@ export default function EpcProfile() {
           </div>
 
           <div className="pt-2 flex justify-end gap-3">
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => {
                 setShowAddStateModal(false);
                 setGstFetchSuccess(null);
                 setGstFetchError(null);
               }}
+              className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
-              variant="primary"
               disabled={isAddingState || (gstStateValidation && !gstStateValidation.isValid)}
-              className="bg-primary hover:bg-primary-hover font-bold px-6 disabled:opacity-50"
+              className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md shadow-primary/20 transition-all disabled:opacity-50 cursor-pointer"
             >
               {isAddingState ? "Verifying & Onboarding..." : "Verify & Onboard State"}
-            </Button>
+            </button>
           </div>
         </form>
       </Dialog>
@@ -1563,21 +1560,20 @@ export default function EpcProfile() {
           </div>
 
           <div className="pt-2 flex justify-end gap-3">
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => setShowAddOfficeModal(false)}
+              className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
-              variant="primary"
               disabled={isAddingOffice}
-              className="bg-primary hover:bg-primary-hover font-bold px-6"
+              className="bg-gradient-to-r from-primary to-primary-end hover:from-primary-600 hover:to-primary text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md shadow-primary/20 transition-all disabled:opacity-50 cursor-pointer"
             >
               {isAddingOffice ? "Saving Office..." : "Add District Office"}
-            </Button>
+            </button>
           </div>
         </form>
       </Dialog>

@@ -129,9 +129,27 @@ export default function AdminOrderApprovalDashboard() {
   const [records, setRecords] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
+  // Filters
+  const [activeTab, setActiveTab] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [orderTypeFilter, setOrderTypeFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Priority Sort: Pending requests always at the top, newest request first
   const sortedRecords = useMemo(() => {
-    return [...records].sort((a, b) => {
+    let filtered = records;
+    if (orderTypeFilter && orderTypeFilter !== "all") {
+      filtered = filtered.filter((r) => {
+        const type =
+          r.order_type ||
+          r.details?.order_type ||
+          r.fulfillment_bifurcation?.order_type ||
+          (r.is_trial_order ? "trial_order" : "po_order");
+        return type === orderTypeFilter;
+      });
+    }
+
+    return [...filtered].sort((a, b) => {
       const isPendingA = a.approval_status === "pending";
       const isPendingB = b.approval_status === "pending";
 
@@ -150,12 +168,7 @@ export default function AdminOrderApprovalDashboard() {
       const timeB = new Date(b.requested_at || 0).getTime();
       return timeB - timeA;
     });
-  }, [records]);
-
-  // Filters
-  const [activeTab, setActiveTab] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  }, [records, orderTypeFilter]);
 
   // Modals
   const [inspectionItem, setInspectionItem] = useState(null);
@@ -700,6 +713,17 @@ export default function AdminOrderApprovalDashboard() {
               <option value="rejected">Rejected</option>
               <option value="returned">Returned</option>
             </select>
+
+            <select
+              value={orderTypeFilter}
+              onChange={(e) => setOrderTypeFilter(e.target.value)}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            >
+              <option value="all">Fulfillment: All Types</option>
+              <option value="po_order">PO Orders (Bulk Combo)</option>
+              <option value="loose_order">Loose Orders (Custom BOM)</option>
+              <option value="trial_order">Trial Orders (Sample)</option>
+            </select>
           </div>
         </div>
 
@@ -794,6 +818,37 @@ export default function AdminOrderApprovalDashboard() {
                               )}
                             </div>
                           )}
+
+                          {/* Order Type & Bifurcated Warehouse Badges */}
+                          {(() => {
+                            const orderType = item.order_type || item.details?.order_type || item.fulfillment_bifurcation?.order_type || (item.is_trial_order ? "trial_order" : "po_order");
+                            const whCode = item.warehouse_code || item.details?.warehouse_code || item.fulfillment_bifurcation?.bifurcated_warehouse_code;
+                            return (
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                {orderType === "po_order" && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[9px] font-black bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                                    PO Order
+                                  </span>
+                                )}
+                                {orderType === "loose_order" && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[9px] font-black bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                                    Loose Order
+                                  </span>
+                                )}
+                                {orderType === "trial_order" && (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                    Trial Order
+                                  </span>
+                                )}
+                                {whCode && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border/60">
+                                    <FaWarehouse className="text-primary/70" size={9} />
+                                    {whCode}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Entity / Stakeholder */}
