@@ -64,6 +64,7 @@ router.post('/delivery-orders/:id/inward', check_auth, delivery_order_handler.in
 router.post('/delivery-orders/:id/inward-discrepancy', check_auth, delivery_order_handler.record_inward_discrepancy);
 router.post('/delivery-orders/:id/supply-status', check_auth, delivery_order_handler.update_supply_status);
 router.post('/delivery-orders/:id/kit-assembly', check_auth, delivery_order_handler.update_kit_assembly);
+router.post('/delivery-orders/:id/allocate-preassembled-kit', check_auth, delivery_order_handler.allocate_preassembled_kit);
 router.post('/delivery-orders/:id/send-for-delivery', check_auth, delivery_order_handler.send_for_delivery);
 router.post('/delivery-orders/:id/toggle-ungroup', check_auth, delivery_order_handler.toggle_ungroup);
 router.post('/delivery-orders/:id/account-remove-epc', check_auth, delivery_order_handler.account_remove_epc);

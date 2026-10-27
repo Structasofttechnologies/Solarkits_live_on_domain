@@ -93,11 +93,18 @@ const schema = new mongoose.Schema({
       paid_at:       { type: Date, default: null },
       verified_by:   { type: String, default: '' }
     },
+    solarkit_model:  { type: String, default: '' },
+    system_capacity: { type: String, default: '' },
+    panels_qty:      { type: String, default: '' },
+    inverter_qty:    { type: String, default: '' },
+    boskit_qty:      { type: String, default: '' },
+    structure_qty:   { type: String, default: '' },
+    share_percentage:{ type: Number, default: 100 },
     items: [{
-      sku:           { type: String, required: true },
-      product_name:  { type: String, required: true },
-      category:      { type: String, default: 'BOS Kit' },
-      ordered_qty:   { type: Number, required: true },
+      sku:           { type: String, default: 'SKU-GEN' },
+      product_name:  { type: String, default: 'SolarKit Component' },
+      category:      { type: String, default: 'SolarKit' },
+      ordered_qty:   { type: Number, default: 1 },
       received_qty:  { type: Number, default: 0 },
       pending_qty:   { type: Number, default: 0 },
       rack_location: { type: String, default: '' }

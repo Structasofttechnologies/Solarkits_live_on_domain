@@ -9,7 +9,7 @@ import {
   HiOutlineHashtag, HiOutlineQrcode, HiOutlineDownload,
   HiOutlineSearch, HiOutlinePlus, HiOutlineTrash, HiDuplicate
 } from 'react-icons/hi';
-import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers, FaLock, FaCheckDouble, FaPhoneAlt, FaTools, FaCheck, FaTruck, FaWarehouse } from "react-icons/fa";
+import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers, FaLock, FaCheckDouble, FaPhoneAlt, FaTools, FaCheck, FaTruck, FaWarehouse, FaShieldAlt, FaExclamationTriangle } from "react-icons/fa";
 import { HiOutlineClock, HiOutlineEye, HiOutlineClipboardCheck, HiOutlineTruck, HiOutlineLocationMarker, HiOutlineExclamation } from "react-icons/hi";
 import { getInwardActiveSkus, saveInward, getInwardLogs, getInwardStockStatus, getWarehousePurchaseOrders, markPurchaseOrderDelivered, uploadTaxInvoice, createPoRequest, getPoRequests, getOrderInwardFulfillment } from "../../api/inward";
 import { getDeliveryOrders, inwardDeliveryOrder, recordInwardDiscrepancy } from "../../api/deliveryOrders";
@@ -27,8 +27,8 @@ import CustomFilePicker from "../../components/CustomFilePicker";
 import Dialog from "../../components/Dialog";
 import PageHeader from "../../components/PageHeader";
 import NewOrdersDeliveryManager from "./NewOrdersDeliveryManager";
+import { warehouseConfirmInward, getPurchaseIndents } from "../../../accounts/api/accounts";
 import InwardVerificationModal from "../../../accounts/components/procurement/InwardVerificationModal";
-import { warehouseConfirmInward } from "../../../accounts/api/accounts";
 
 // ─── Inline Proforma Invoice Modal ────────────────────────────────────────────
 // ─── Inline Proforma Invoice Modal ────────────────────────────────────────────
@@ -372,6 +372,602 @@ const initialPendingTransfers = [
   }
 ];
 
+// ─── Procurement Inward Verification Modal (Online & Offline Modes) ─────────────
+function ProcurementInwardModal({
+  isOpen,
+  onClose,
+  purchaseIndent,
+  destinationWarehouse,
+  initialMode = "offline",
+  onConfirmInward,
+  loading
+}) {
+  const dispatch = useDispatch();
+  const [inwardMode, setInwardMode] = useState(initialMode); // "offline" | "online"
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [qcPassed, setQcPassed] = useState(true);
+  const [damageNotes, setDamageNotes] = useState("");
+  const [defaultRack, setDefaultRack] = useState("BAY-A1-01");
+  const [remarks, setRemarks] = useState("");
+
+  // Items verification state: { [sku_code]: { accepted_qty, damaged_qty, missing_qty, rack_location } }
+  const [itemsState, setItemsState] = useState({});
+  // Online Scanner state
+  const [scannerInput, setScannerInput] = useState("");
+  const [scannedSerials, setScannedSerials] = useState([]);
+
+  useEffect(() => {
+    if (isOpen && purchaseIndent) {
+      setInwardMode(initialMode || "offline");
+      setInvoiceNo(
+        purchaseIndent.fulfilment?.dispatch_reference ||
+        purchaseIndent.fulfilment?.tracking_reference ||
+        `INV-${purchaseIndent.pi_number}`
+      );
+      setInvoiceDate(new Date().toISOString().split("T")[0]);
+      setQcPassed(true);
+      setDamageNotes("");
+      setDefaultRack("BAY-A1-01");
+      setRemarks("");
+      setScannerInput("");
+      setScannedSerials([]);
+
+      const initial = {};
+      (purchaseIndent.items || []).forEach(it => {
+        initial[it.sku_code || it.sku_id] = {
+          accepted_qty: it.quantity || 1,
+          damaged_qty: 0,
+          missing_qty: 0,
+          rack_location: "BAY-A1-01"
+        };
+      });
+      setItemsState(initial);
+    }
+  }, [isOpen, purchaseIndent, initialMode]);
+
+  if (!isOpen || !purchaseIndent) return null;
+
+  const items = purchaseIndent.items || [];
+  const totalExpectedQty = items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+  // Compute scanned counts per SKU
+  const scannedCountPerSku = {};
+  items.forEach(it => { scannedCountPerSku[it.sku_code] = 0; });
+  scannedSerials.forEach(s => {
+    if (scannedCountPerSku[s.sku_code] !== undefined) {
+      scannedCountPerSku[s.sku_code]++;
+    }
+  });
+  const totalScannedCount = scannedSerials.length;
+
+  const handleScanSerial = (e) => {
+    if (e) e.preventDefault();
+    const barcode = scannerInput.trim();
+    if (!barcode) return;
+
+    if (scannedSerials.some(s => s.serial_code === barcode)) {
+      dispatch(setAlert({ message: `Serial / Barcode "${barcode}" is already scanned!`, type: "warning" }));
+      setScannerInput("");
+      return;
+    }
+
+    let matchedItem = items.find(it =>
+      (it.sku_code || "").toLowerCase() === barcode.toLowerCase() ||
+      barcode.toLowerCase().includes((it.sku_code || "").toLowerCase())
+    );
+    if (!matchedItem) {
+      matchedItem = items.find(it => (scannedCountPerSku[it.sku_code] || 0) < it.quantity);
+    }
+    if (!matchedItem) {
+      matchedItem = items[0];
+    }
+
+    if (!matchedItem) {
+      dispatch(setAlert({ message: `Could not match code "${barcode}" to any item in this indent.`, type: "warning" }));
+      return;
+    }
+
+    const currentCount = scannedCountPerSku[matchedItem.sku_code] || 0;
+    if (currentCount >= matchedItem.quantity) {
+      dispatch(setAlert({ message: `All ${matchedItem.quantity} units of ${matchedItem.product_name} are already scanned!`, type: "warning" }));
+      setScannerInput("");
+      return;
+    }
+
+    const newEntry = {
+      sku_code: matchedItem.sku_code,
+      product_name: matchedItem.product_name,
+      serial_code: barcode,
+      scanned_at: new Date().toLocaleTimeString()
+    };
+    setScannedSerials(prev => [newEntry, ...prev]);
+    setScannerInput("");
+    dispatch(setAlert({ message: `✓ Scanned: ${matchedItem.product_name} (${barcode})`, type: "success" }));
+  };
+
+  const handleAutoFillRemaining = () => {
+    const newSerials = [...scannedSerials];
+    items.forEach(it => {
+      const already = newSerials.filter(s => s.sku_code === it.sku_code).length;
+      const remaining = it.quantity - already;
+      for (let i = 1; i <= remaining; i++) {
+        newSerials.push({
+          sku_code: it.sku_code,
+          product_name: it.product_name,
+          serial_code: `${it.sku_code}-${purchaseIndent.pi_number.slice(-5)}-${String(already + i).padStart(4, '0')}`,
+          scanned_at: new Date().toLocaleTimeString()
+        });
+      }
+    });
+    setScannedSerials(newSerials);
+    dispatch(setAlert({ message: `Auto-generated barcode serials for all ${totalExpectedQty} units.`, type: "success" }));
+  };
+
+  const handleRemoveSerial = (serialCode) => {
+    setScannedSerials(prev => prev.filter(s => s.serial_code !== serialCode));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!invoiceNo.trim()) {
+      dispatch(setAlert({ message: "Supplier Tax Invoice / Gate Challan number is required.", type: "warning" }));
+      return;
+    }
+
+    const receivedItems = items.map(it => {
+      const st = itemsState[it.sku_code || it.sku_id] || {};
+      const accepted = inwardMode === "online"
+        ? (scannedCountPerSku[it.sku_code] || it.quantity)
+        : (parseInt(st.accepted_qty) ?? it.quantity);
+      return {
+        sku_id: it.sku_id,
+        sku_code: it.sku_code,
+        quantity: Math.max(0, accepted),
+        unit_rate: it.unit_rate,
+        damaged_qty: parseInt(st.damaged_qty) || 0,
+        missing_qty: parseInt(st.missing_qty) || 0,
+        rack_location: st.rack_location || defaultRack
+      };
+    });
+
+    const totalInwardQty = receivedItems.reduce((acc, it) => acc + it.quantity, 0);
+    if (totalInwardQty <= 0) {
+      dispatch(setAlert({ message: "Total accepted inward quantity must be greater than zero.", type: "warning" }));
+      return;
+    }
+
+    onConfirmInward({
+      pi_id: purchaseIndent._id,
+      customer_order_number: purchaseIndent.customer_order_number || "WH-STOCK-PROCUREMENT",
+      warehouse_id: destinationWarehouse?.id || purchaseIndent.destination_warehouse_id,
+      invoice_no: invoiceNo.trim(),
+      invoice_date: invoiceDate,
+      received_items: receivedItems,
+      damage_notes: !qcPassed ? damageNotes : "",
+      qc_passed: qcPassed,
+      inward_mode: inwardMode,
+      remarks,
+      scanned_serials: inwardMode === "online" ? scannedSerials : []
+    });
+  };
+
+  return (
+    <Dialog isOpen={isOpen} onClose={onClose} title="Inward Shipment into Warehouse Inventory" size="xl">
+      <form onSubmit={handleSubmit} className="space-y-4 p-1 text-text-primary">
+        
+        {/* Mode Selector Tabs */}
+        <div className="flex bg-surface-hover border border-border p-1.5 rounded-2xl gap-2">
+          <button
+            type="button"
+            onClick={() => setInwardMode("online")}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              inwardMode === "online"
+                ? "gradient-primary text-white shadow-sm"
+                : "text-text-secondary hover:bg-surface hover:text-text-primary"
+            }`}
+          >
+            <HiOutlineQrcode className="text-base" />
+            <span>Online Inward (Scanner Gun & QR Code Feed)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setInwardMode("offline")}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              inwardMode === "offline"
+                ? "gradient-primary text-white shadow-sm"
+                : "text-text-secondary hover:bg-surface hover:text-text-primary"
+            }`}
+          >
+            <HiOutlineClipboardCheck className="text-base" />
+            <span>Offline Inward (Physical Gate Challan & Invoice)</span>
+          </button>
+        </div>
+
+        {/* PI & Logistics Summary Card */}
+        <div className="bg-surface border border-border rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div>
+            <span className="text-[10px] font-bold text-text-muted uppercase block">PI / Indent No</span>
+            <span className="font-mono font-black text-primary text-sm">{purchaseIndent.pi_number}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-text-muted uppercase block">Supplier</span>
+            <span className="font-bold text-text-primary block truncate">{purchaseIndent.supplier_name}</span>
+            <span className="text-[10px] text-text-secondary">Brand: {purchaseIndent.supplier_brand || "N/A"}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-text-muted uppercase block">Delivery Method & Vehicle</span>
+            <span className="font-bold text-text-primary block">{purchaseIndent.fulfilment?.method || "Supplier Delivery"}</span>
+            <span className="text-[10px] font-mono text-primary font-bold">{purchaseIndent.fulfilment?.vehicle_details?.vehicle_number || "No Vehicle"}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-text-muted uppercase block">Destination Hub</span>
+            <span className="font-bold text-text-primary block">{purchaseIndent.destination_warehouse_name || "Central Hub"}</span>
+            <span className="text-[10px] text-text-secondary">Total: {totalExpectedQty} units</span>
+          </div>
+        </div>
+
+        {/* Top Invoice and Rack Fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface border border-border rounded-xl p-3.5">
+          <CustomInput
+            label="Supplier Tax Invoice / Gate Pass No *"
+            required
+            value={invoiceNo}
+            onChange={(e) => setInvoiceNo(e.target.value)}
+            placeholder="e.g. GST-2026-9902 or GP-881"
+          />
+          <CustomInput
+            label="Invoice Date *"
+            type="date"
+            required
+            value={invoiceDate}
+            onChange={(e) => setInvoiceDate(e.target.value)}
+          />
+          <CustomInput
+            label="Default Storage Rack / Bay"
+            value={defaultRack}
+            onChange={(e) => setDefaultRack(e.target.value)}
+            placeholder="e.g. BAY-A1-01"
+          />
+        </div>
+
+        {/* MODE A: ONLINE SCANNER GUN VIEW */}
+        {inwardMode === "online" && (
+          <div className="space-y-4 bg-surface border border-primary/20 rounded-2xl p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-2">
+                  <FaBarcode className="text-primary text-base" />
+                  <span>Handheld Barcode / QR Scanner Feed</span>
+                </h4>
+                <p className="text-[11px] text-text-secondary mt-0.5">
+                  Point laser scanner gun at product cartons or scan QR serial tags. Scans match live with indent items.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-black px-3 py-1 rounded-xl bg-primary/10 text-primary border border-primary/20">
+                  {totalScannedCount} / {totalExpectedQty} Scanned
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAutoFillRemaining}
+                  className="px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20 transition-all cursor-pointer"
+                >
+                  ⚡ Auto-Fill Remaining ({totalExpectedQty - totalScannedCount})
+                </button>
+              </div>
+            </div>
+
+            {/* Scan Gun Input Field */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <HiOutlineQrcode className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary text-lg pointer-events-none" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Scan item barcode with gun or type serial & press Enter..."
+                  value={scannerInput}
+                  onChange={(e) => setScannerInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleScanSerial();
+                    }
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-surface-hover border-2 border-primary/30 rounded-xl text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleScanSerial}
+                className="whitespace-nowrap px-4 py-2 text-xs"
+              >
+                Scan / Match
+              </Button>
+            </div>
+
+            {/* SKU Progress Bars */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {items.map((it, idx) => {
+                const count = scannedCountPerSku[it.sku_code] || 0;
+                const pct = Math.min(100, Math.round((count / (it.quantity || 1)) * 100));
+                const isComplete = count >= it.quantity;
+                return (
+                  <div key={idx} className="bg-surface-hover/80 border border-border/80 rounded-xl p-3 text-xs space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono font-extrabold text-primary">{it.sku_code}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        isComplete ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'
+                      }`}>
+                        {count} / {it.quantity} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-semibold text-text-primary truncate">{it.product_name}</div>
+                    <div className="w-full h-2 rounded-full bg-surface border border-border/60 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${isComplete ? 'bg-success' : 'gradient-primary'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Scanned Serials Chip List */}
+            {scannedSerials.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-[10px] font-black uppercase text-text-muted">
+                  <span>Scanned Serials Log ({scannedSerials.length})</span>
+                  <button
+                    type="button"
+                    onClick={() => setScannedSerials([])}
+                    className="text-danger hover:underline font-bold"
+                  >
+                    Clear All Scans
+                  </button>
+                </div>
+                <div className="max-h-36 overflow-y-auto p-2 bg-surface-hover/50 border border-border rounded-xl flex flex-wrap gap-1.5">
+                  {scannedSerials.map((s, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface border border-border text-[10px] font-mono text-text-primary"
+                    >
+                      <span className="text-primary font-bold">{s.sku_code}:</span>
+                      <span>{s.serial_code}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSerial(s.serial_code)}
+                        className="text-text-muted hover:text-danger ml-0.5"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODE B: OFFLINE GATE CHALLAN & ITEMS VERIFICATION VIEW */}
+        {inwardMode === "offline" && (
+          <div className="space-y-4 bg-surface border border-border rounded-2xl p-4">
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-2">
+                  <FaBoxes className="text-primary text-base" />
+                  <span>Physical Gate Challan Verification & Quantity Counting</span>
+                </h4>
+                <p className="text-[11px] text-text-secondary mt-0.5">
+                  Verify unloaded cartons against supplier physical gate pass and assign warehouse rack locations.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const filled = {};
+                  items.forEach(it => {
+                    filled[it.sku_code || it.sku_id] = {
+                      accepted_qty: it.quantity,
+                      damaged_qty: 0,
+                      missing_qty: 0,
+                      rack_location: defaultRack
+                    };
+                  });
+                  setItemsState(filled);
+                  dispatch(setAlert({ message: "Accepted all expected quantities.", type: "info" }));
+                }}
+                className="px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer"
+              >
+                ⚡ Accept Full Quantities
+              </button>
+            </div>
+
+            {/* Items verification table */}
+            <div className="border border-border/80 rounded-xl overflow-hidden">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-surface-hover border-b border-border text-[10px] font-black uppercase text-text-muted">
+                  <tr>
+                    <th className="px-3.5 py-2.5">#</th>
+                    <th className="px-3.5 py-2.5">SKU & Item Details</th>
+                    <th className="px-3.5 py-2.5 text-center">Expected</th>
+                    <th className="px-3.5 py-2.5 text-center">Accepted (Pcs)</th>
+                    <th className="px-3.5 py-2.5 text-center">Damaged</th>
+                    <th className="px-3.5 py-2.5 text-center">Missing</th>
+                    <th className="px-3.5 py-2.5">Rack Location</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {items.map((it, idx) => {
+                    const stKey = it.sku_code || it.sku_id;
+                    const st = itemsState[stKey] || {};
+                    return (
+                      <tr key={idx} className="hover:bg-surface-hover/30 transition-colors">
+                        <td className="px-3.5 py-3 text-text-muted">{idx + 1}</td>
+                        <td className="px-3.5 py-3">
+                          <span className="font-mono font-extrabold text-primary block">{it.sku_code}</span>
+                          <span className="font-semibold text-text-primary text-xs">{it.product_name}</span>
+                          <span className="text-[10px] text-text-secondary block">{it.component_type}</span>
+                        </td>
+                        <td className="px-3.5 py-3 text-center font-bold text-text-secondary">
+                          {it.quantity} pcs
+                        </td>
+                        <td className="px-3.5 py-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max={it.quantity * 2}
+                            value={st.accepted_qty ?? it.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setItemsState(prev => ({
+                                ...prev,
+                                [stKey]: { ...prev[stKey], accepted_qty: val }
+                              }));
+                            }}
+                            className="w-20 p-1.5 text-center text-xs font-mono font-black bg-surface-hover border border-border rounded-lg text-primary focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-3.5 py-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={st.damaged_qty || ""}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setItemsState(prev => ({
+                                ...prev,
+                                [stKey]: { ...prev[stKey], damaged_qty: val }
+                              }));
+                              if (val > 0) setQcPassed(false);
+                            }}
+                            className="w-16 p-1.5 text-center text-xs font-mono bg-danger/10 border border-danger/30 rounded-lg text-danger placeholder:text-danger/40"
+                          />
+                        </td>
+                        <td className="px-3.5 py-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={st.missing_qty || ""}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setItemsState(prev => ({
+                                ...prev,
+                                [stKey]: { ...prev[stKey], missing_qty: val }
+                              }));
+                              if (val > 0) setQcPassed(false);
+                            }}
+                            className="w-16 p-1.5 text-center text-xs font-mono bg-warning/10 border border-warning/30 rounded-lg text-warning placeholder:text-warning/40"
+                          />
+                        </td>
+                        <td className="px-3.5 py-3">
+                          <input
+                            type="text"
+                            placeholder={defaultRack}
+                            value={st.rack_location || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setItemsState(prev => ({
+                                ...prev,
+                                [stKey]: { ...prev[stKey], rack_location: val }
+                              }));
+                            }}
+                            className="w-28 p-1.5 text-xs font-mono bg-surface-hover border border-border rounded-lg text-text-primary focus:border-primary"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Quality Control (QC) Inspection Block */}
+        <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+          <label className="text-[11px] font-bold text-text-muted uppercase block">
+            Quality Control (QC) & Physical Condition Inspection *
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setQcPassed(true)}
+              className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                qcPassed
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                  : "bg-surface text-text-muted border-border hover:border-emerald-500/50"
+              }`}
+            >
+              <FaCheckCircle /> QC Passed (Zero Damage / Packaging Intact)
+            </button>
+            <button
+              type="button"
+              onClick={() => setQcPassed(false)}
+              className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                !qcPassed
+                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                  : "bg-surface text-text-muted border-border hover:border-red-500/50"
+              }`}
+            >
+              <FaExclamationTriangle /> Discrepancy / Damaged Goods Found
+            </button>
+          </div>
+
+          {!qcPassed && (
+            <CustomInput
+              label="Damage / Shortage Notes *"
+              required={!qcPassed}
+              value={damageNotes}
+              onChange={(e) => setDamageNotes(e.target.value)}
+              placeholder="e.g. 2 solar panels broken in transit; packaging crushed on pallet 3."
+            />
+          )}
+
+          <div>
+            <label className="text-[10px] font-black text-text-muted uppercase block mb-1">
+              Inward Staff Notes / Remarks
+            </label>
+            <textarea
+              rows="2"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="Add any additional inward observations (e.g. unloaded at Bay 4, driver signed gate pass)..."
+              className="w-full p-2 text-xs bg-surface-hover border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Modal Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border">
+          <div className="text-xs text-text-secondary">
+            <span>GRN will immediately update warehouse stock for </span>
+            <strong className="text-primary">{purchaseIndent.destination_warehouse_name || "Central Warehouse"}</strong>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading}
+              loading={loading}
+              leftIcon={<HiOutlineClipboardCheck className="text-base" />}
+            >
+              {loading ? "Generating GRN..." : "Confirm Inward & Generate GRN"}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 export default function MaterialInward() {
   const dispatch = useDispatch();
   const [warehouseMode, setWarehouseMode] = useState(localStorage.getItem('warehouseMode') || 'master');
@@ -415,8 +1011,11 @@ export default function MaterialInward() {
 
   const [activeTab, setActiveTab] = useState(() => {
     const saved = sessionStorage.getItem("inwardActiveTab");
-    return saved === "inventory" ? "inventory" : "local";
+    return (saved === "inventory" || saved === "stock_pos" || saved === "procurement") ? saved : "procurement";
   });
+
+  const [indentsPage, setIndentsPage] = useState(1);
+  const indentsPageSize = 5;
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
@@ -425,12 +1024,100 @@ export default function MaterialInward() {
     setPosPage(1);
     setStockPage(1);
     setFulfillmentPage(1);
+    setIndentsPage(1);
   };
 
   const tabs = useMemo(() => [
-    { id: "local", label: "Inventory Inward" },
-    { id: "inventory", label: "Stock Updates" }
+    { id: "procurement", label: "🏭 Accounts Procurement Inward" },
+    { id: "stock_pos", label: "📦 Warehouse Stock POs" },
+    { id: "inventory", label: "📊 Live Stock & Inward Logs" }
   ], []);
+
+  // ─── Accounts Procurement Inward State (Warehouse Inventory Stocking) ───
+  const [purchaseIndents, setPurchaseIndents] = useState([]);
+  const [loadingIndents, setLoadingIndents] = useState(false);
+  const [indentsFilter, setIndentsFilter] = useState("all"); // "all" | "in_transit" | "completed"
+  const [indentsTransportFilter, setIndentsTransportFilter] = useState("all"); // "all" | "Supplier Delivery" | "Company Pickup"
+  const [indentsSearch, setIndentsSearch] = useState("");
+
+  // Procurement Inward Modal State
+  const [procurementInwardModalOpen, setProcurementInwardModalOpen] = useState(false);
+  const [selectedPiForModal, setSelectedPiForModal] = useState(null);
+  const [modalInwardMode, setModalInwardMode] = useState("offline");
+
+  const handleOpenPiInwardModal = (pi, mode = "offline") => {
+    setSelectedPiForModal(pi);
+    setModalInwardMode(mode);
+    setProcurementInwardModalOpen(true);
+  };
+
+  const fetchPurchaseIndents = async () => {
+    try {
+      setLoadingIndents(true);
+      const res = await getPurchaseIndents({ limit: 100 });
+      if (res?.status === "success") {
+        setPurchaseIndents(res.data?.indents || res.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch purchase indents for inward:", err);
+    } finally {
+      setLoadingIndents(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPurchaseIndents();
+  }, []);
+
+  const filteredPurchaseIndents = useMemo(() => {
+    return purchaseIndents.filter(pi => {
+      const supplyStatus = pi.fulfilment?.supply_status || 'Pending';
+      const isCompleted = supplyStatus === 'Inward Completed' || pi.pi_status === 'Completed';
+
+      if (indentsFilter === 'in_transit' && isCompleted) return false;
+      if (indentsFilter === 'completed' && !isCompleted) return false;
+
+      const method = pi.fulfilment?.method || '';
+      if (indentsTransportFilter !== 'all') {
+        if (indentsTransportFilter === 'Supplier Delivery' && !method.toLowerCase().includes('supplier')) return false;
+        if (indentsTransportFilter === 'Company Pickup' && !(method.toLowerCase().includes('company') || method.toLowerCase().includes('pickup'))) return false;
+      }
+
+      if (indentsSearch.trim()) {
+        const q = indentsSearch.toLowerCase().trim();
+        const piNum = (pi.pi_number || '').toLowerCase();
+        const ordNum = (pi.customer_order_number || '').toLowerCase();
+        const supp = (pi.supplier_name || '').toLowerCase();
+        const brand = (pi.supplier_brand || '').toLowerCase();
+        const carrier = (pi.fulfilment?.carrier_name || '').toLowerCase();
+        const veh = (pi.fulfilment?.vehicle_details?.vehicle_number || '').toLowerCase();
+        const driver = (pi.fulfilment?.vehicle_details?.driver_name || '').toLowerCase();
+        const lr = (pi.fulfilment?.tracking_reference || pi.fulfilment?.dispatch_reference || '').toLowerCase();
+        const hasItem = (pi.items || []).some(it => 
+          (it.sku_code || '').toLowerCase().includes(q) || (it.product_name || '').toLowerCase().includes(q)
+        );
+        return piNum.includes(q) || ordNum.includes(q) || supp.includes(q) || brand.includes(q) || carrier.includes(q) || veh.includes(q) || driver.includes(q) || lr.includes(q) || hasItem;
+      }
+
+      return true;
+    });
+  }, [purchaseIndents, indentsFilter, indentsTransportFilter, indentsSearch]);
+
+  const paginatedPurchaseIndents = useMemo(() => {
+    const start = (indentsPage - 1) * indentsPageSize;
+    return filteredPurchaseIndents.slice(start, start + indentsPageSize);
+  }, [filteredPurchaseIndents, indentsPage]);
+
+  const indentCounts = useMemo(() => {
+    let inTransit = 0;
+    let completed = 0;
+    purchaseIndents.forEach(pi => {
+      const isCompleted = pi.fulfilment?.supply_status === 'Inward Completed' || pi.pi_status === 'Completed';
+      if (isCompleted) completed++;
+      else inTransit++;
+    });
+    return { total: purchaseIndents.length, inTransit, completed };
+  }, [purchaseIndents]);
 
   // ── Delivery Orders Inward State (Client Orders Inward Fulfillment) ──
   const [deliveryOrders, setDeliveryOrders] = useState([]);
@@ -742,9 +1429,18 @@ export default function MaterialInward() {
       setIsDelivering(true);
       const res = await warehouseConfirmInward(payload);
       if (res?.status === "success") {
-        showAlert(res.message || `Inward verified and GRN generated: ${res.data?.grn_number || 'Success'}`, "Success", "success");
+        showAlert(
+          res.message || `Inward verified and GRN generated: ${res.data?.grn_number || 'Success'}. Warehouse stock updated.`,
+          "GRN Generated & Stock Inwarded",
+          "success"
+        );
         setIsPiInwardModalOpen(false);
+        setProcurementInwardModalOpen(false);
         setSelectedPiForInward(null);
+        setSelectedPiForModal(null);
+        fetchPurchaseIndents();
+        fetchStock();
+        fetchLogs();
         fetchFulfillment();
       } else {
         showAlert(res?.message || "Failed to confirm inward", "Error", "danger");
@@ -1104,8 +1800,13 @@ export default function MaterialInward() {
   };
 
   useEffect(() => {
-    if (activeTab === "local") {
+    if (activeTab === "procurement") {
+      fetchPurchaseIndents();
+    } else if (activeTab === "stock_pos") {
       fetchPOs();
+    } else if (activeTab === "inventory") {
+      fetchStock();
+      fetchLogs();
     } else if (activeTab === "supplier") {
       fetchFulfillment();
     }
@@ -1780,8 +2481,43 @@ export default function MaterialInward() {
         icon={HiCube}
       />
 
-      {/* Premium Tab Navigation: 2 tabs (Inventory Inward & Stock Updates) */}
-      <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-xl shadow-inner relative overflow-hidden backdrop-blur-md overflow-x-auto">
+      {/* Informational Banner: Separation of Warehouse Stock vs Customer Orders */}
+      <div className="bg-gradient-to-r from-blue-500/10 via-primary/5 to-purple-500/10 border border-primary/20 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center text-lg flex-shrink-0">
+            <HiOutlineClipboardCheck />
+          </div>
+          <div>
+            <div className="font-extrabold text-sm text-text-primary flex items-center gap-2">
+              <span>Warehouse Inventory Stocking & GRN Station</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-primary/20 text-primary uppercase">
+                Bulk Inward
+              </span>
+            </div>
+            <p className="text-xs text-text-secondary mt-0.5">
+              This station solely handles incoming bulk procurement shipments from Accounts to replenish warehouse stock. For customer sales order kit assembly and dispatch, use the New Orders Queue.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const prefix = location.pathname.startsWith("/warehouse-management-panel")
+              ? "/warehouse-management-panel"
+              : location.pathname.startsWith("/warehouse")
+              ? "/warehouse"
+              : "/warehouse-management-panel";
+            navigate(`${prefix}/new-orders`);
+          }}
+          className="px-3.5 py-2 rounded-xl bg-surface hover:bg-surface-hover text-text-primary border border-border text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-xs cursor-pointer hover:border-primary"
+        >
+          <span>Go to Customer Orders Queue</span>
+          <span className="text-primary font-black">→</span>
+        </button>
+      </div>
+
+      {/* Premium Tab Navigation: 3 tabs */}
+      <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-2xl shadow-inner relative overflow-hidden backdrop-blur-md overflow-x-auto">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab.id;
           return (
@@ -1794,8 +2530,9 @@ export default function MaterialInward() {
                   : "text-text-secondary hover:bg-surface-hover hover:text-primary"
                 }`}
             >
-              {tab.id === 'local' && <HiOutlineClipboardList className="text-base" />}
-              {tab.id === 'inventory' && <HiCube className="text-base" />}
+              {tab.id === 'procurement' && <FaBuilding className="text-base" />}
+              {tab.id === 'stock_pos' && <HiCube className="text-base" />}
+              {tab.id === 'inventory' && <FaWarehouse className="text-base" />}
               {tab.label}
               {isSelected && (
                 <motion.div
@@ -1818,256 +2555,361 @@ export default function MaterialInward() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="w-full"
         >
-          {activeTab === "local" && (
+          {activeTab === "procurement" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
-              {/* Sub-Switch: Order-Specific Inward vs Warehouse Stock Replenishment */}
-              <div className="flex bg-surface border border-border p-1.5 rounded-2xl max-w-xl gap-1 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => setInwardSubTab("orders")}
-                  className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    inwardSubTab === "orders"
-                      ? "gradient-primary text-white shadow-sm"
-                      : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                  }`}
-                >
-                  <FaBoxes className="text-sm" />
-                  <span>Order-Specific Inward ({deliveryOrders.length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInwardSubTab("stock")}
-                  className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    inwardSubTab === "stock"
-                      ? "gradient-primary text-white shadow-sm"
-                      : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                  }`}
-                >
-                  <HiCube className="text-sm" />
-                  <span>Warehouse Stock POs ({purchaseOrders.length})</span>
-                </button>
+              {/* Header Stats & Filter Controls */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface p-4 rounded-2xl border border-border shadow-xs">
+                {/* Status KPI Chips */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { id: 'all', label: 'All Indents', count: indentCounts.total },
+                    { id: 'in_transit', label: 'In Transit / Sourced', count: indentCounts.inTransit },
+                    { id: 'completed', label: 'Inward Completed', count: indentCounts.completed },
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => { setIndentsFilter(f.id); setIndentsPage(1); }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                        indentsFilter === f.id
+                          ? 'bg-primary text-white border-primary shadow-xs'
+                          : 'bg-surface-hover hover:bg-surface border-border text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      <span>{f.label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${indentsFilter === f.id ? 'bg-white/20 text-white' : 'bg-surface text-text-primary'}`}>
+                        {f.count}
+                      </span>
+                    </button>
+                  ))}
+
+                  <div className="h-5 w-px bg-border mx-1 hidden sm:block" />
+
+                  {/* Transport Filter */}
+                  {[
+                    { id: 'all', label: 'All Transport' },
+                    { id: 'Supplier Delivery', label: '🚚 Supplier Delivery' },
+                    { id: 'Company Pickup', label: '🏢 Company Pickup' },
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => { setIndentsTransportFilter(t.id); setIndentsPage(1); }}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border cursor-pointer ${
+                        indentsTransportFilter === t.id
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-surface-hover hover:bg-surface border-border text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Box */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 sm:w-72">
+                    <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm" />
+                    <input
+                      type="text"
+                      placeholder="Search PI#, Order#, Transporter, Vehicle, SKU..."
+                      value={indentsSearch}
+                      onChange={(e) => { setIndentsSearch(e.target.value); setIndentsPage(1); }}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-surface-hover border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
+                    />
+                    {indentsSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setIndentsSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary text-xs"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    onClick={fetchPurchaseIndents}
+                    variant="secondary"
+                    size="sm"
+                    loading={loadingIndents}
+                    leftIcon={<HiOutlineClock className="text-xs" />}
+                  >
+                    Refresh
+                  </Button>
+                </div>
               </div>
 
-              {inwardSubTab === "orders" ? (
-                /* ── SUB-VIEW A: Customer Orders Inward (Account Manager Inward Lists) ── */
-                <div className="space-y-4">
-                  {/* Filter & Search Bar */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-4 rounded-2xl border border-border shadow-xs">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {[
-                        { id: 'all', label: 'All Orders', count: deliveryOrderCounts.total },
-                        { id: 'pending', label: 'Pending Inward', count: deliveryOrderCounts.pending },
-                        { id: 'partial', label: 'Partially Inwarded', count: deliveryOrderCounts.partial },
-                        { id: 'completed', label: 'Inward Completed', count: deliveryOrderCounts.completed },
-                      ].map(f => (
-                        <button
-                          key={f.id}
-                          onClick={() => setDeliveryOrdersFilter(f.id)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                            deliveryOrdersFilter === f.id
-                              ? 'bg-primary text-white border-primary shadow-xs'
-                              : 'bg-surface-hover hover:bg-surface border-border text-text-secondary hover:text-text-primary'
-                          }`}
-                        >
-                          <span>{f.label}</span>
-                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${deliveryOrdersFilter === f.id ? 'bg-white/20 text-white' : 'bg-surface text-text-primary'}`}>
-                            {f.count}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1 sm:w-64">
-                        <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm" />
-                        <input
-                          type="text"
-                          placeholder="Search order #, client, DO..."
-                          value={deliveryOrdersSearch}
-                          onChange={(e) => setDeliveryOrdersSearch(e.target.value)}
-                          className="w-full pl-9 pr-3 py-1.5 text-xs bg-surface-hover border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                      <button
-                        onClick={fetchDeliveryOrders}
-                        disabled={loadingDeliveryOrders}
-                        className="p-2 rounded-xl bg-surface-hover border border-border text-text-secondary hover:text-text-primary transition-all text-xs cursor-pointer"
-                        title="Refresh delivery orders"
-                      >
-                        <FaSpinner className={loadingDeliveryOrders ? "animate-spin" : ""} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Orders Cards List */}
-                  {loadingDeliveryOrders ? (
-                    <div className="p-12 text-center text-text-muted flex items-center justify-center gap-2">
-                      <FaSpinner className="animate-spin text-xl text-primary" />
-                      <span className="text-xs">Loading customer orders for inward...</span>
-                    </div>
-                  ) : filteredDeliveryOrders.length === 0 ? (
-                    <div className="card p-12 text-center text-text-muted space-y-2 bg-surface border border-border rounded-2xl">
-                      <FaBoxes className="mx-auto text-3xl opacity-30" />
-                      <div className="text-sm font-bold text-text-primary">No orders found</div>
-                      <div className="text-xs">No customer delivery orders match the current inward filter.</div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {filteredDeliveryOrders.map((ord) => {
-                        const items = ord.items || [];
-                        const totalOrdered = items.reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
-                        const totalReceived = items.reduce((acc, it) => acc + (it.received_qty || 0), 0);
-                        const totalPending = items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
-                        const inwardPercent = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
-                        const isComplete = totalPending === 0 || ord.delivery_status === 'ready_for_dispatch';
-                        const isPartial = totalReceived > 0 && totalPending > 0;
-
-                        return (
-                          <div key={ord._id} className="card p-5 space-y-3.5 bg-surface border border-border hover:border-primary/40 rounded-2xl shadow-xs transition-all">
-                            {/* Card Header */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
-                              <div className="flex items-center gap-2.5 flex-wrap">
-                                <span className="text-base font-black text-text-primary font-mono">
-                                  Order #{ord.order_number}
-                                </span>
-                                <span className="px-2 py-0.5 rounded-lg font-mono text-xs font-bold bg-primary/15 text-primary border border-primary/30">
-                                  {ord.delivery_order_id}
-                                </span>
-                                {ord.incoming_truck_group?.vehicle_number && (
-                                  <span className="px-2 py-0.5 rounded-lg font-mono text-xs font-bold bg-surface-hover text-text-secondary border border-border flex items-center gap-1">
-                                    <FaTruck className="text-[10px] text-primary" /> {ord.incoming_truck_group.vehicle_number}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1">
-                                  <FaCheckCircle className="text-[10px]" /> Payment Verified
-                                </span>
-
-                                {isComplete ? (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
-                                    <FaCheckCircle className="text-[10px]" /> Inward Complete (100%)
-                                  </span>
-                                ) : isPartial ? (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
-                                    <HiOutlineExclamation className="text-xs" /> Partially Inwarded ({inwardPercent}%)
-                                  </span>
-                                ) : (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/30 flex items-center gap-1">
-                                    <HiOutlineClock className="text-xs" /> Inward Pending
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Client & Destination strip */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary bg-surface-hover/40 px-3.5 py-2 rounded-xl border border-border/40">
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                                <span className="font-bold text-text-primary flex items-center gap-1.5">
-                                  <FaBuilding className="text-primary text-xs" />
-                                  {ord.customer_name}
-                                </span>
-                                {ord.customer_phone && (
-                                  <span className="text-text-muted flex items-center gap-1 font-medium">
-                                    <FaPhoneAlt className="text-[10px] text-primary" /> {ord.customer_phone}
-                                  </span>
-                                )}
-                                {(ord.destination?.city || ord.destination?.district || ord.destination?.state) && (
-                                  <span className="text-text-muted flex items-center gap-1 font-medium">
-                                    <HiOutlineLocationMarker className="text-xs text-primary" />
-                                    {ord.destination?.city || ord.destination?.district || ''}{ord.destination?.state ? `, ${ord.destination.state}` : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-text-muted">
-                                Ordered: {new Date(ord.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                              </span>
-                            </div>
-
-                            {/* Items Inward Fulfillment Table */}
-                            <div className="border border-border rounded-xl overflow-hidden bg-surface">
-                              <table className="w-full text-left text-xs">
-                                <thead className="bg-surface-hover/70 border-b border-border text-[10px] font-black uppercase text-text-muted">
-                                  <tr>
-                                    <th className="p-2.5">Item / SKU</th>
-                                    <th className="p-2.5">Sourcing / Supplier</th>
-                                    <th className="p-2.5 text-center">Ordered</th>
-                                    <th className="p-2.5 text-center">Inwarded</th>
-                                    <th className="p-2.5 text-center">Pending</th>
-                                    <th className="p-2.5 text-right">Rack Location</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                  {items.map((it) => (
-                                    <tr key={it.sku} className="hover:bg-surface-hover/30">
-                                      <td className="p-2.5">
-                                        <div className="font-bold text-text-primary">{it.product_name}</div>
-                                        <div className="text-[10px] font-mono text-primary">{it.sku}</div>
-                                      </td>
-                                      <td className="p-2.5 text-text-secondary text-[11px]">
-                                        <div>{it.supplier_name || 'Warehouse Stock'}</div>
-                                        {it.supply_status && (
-                                          <span className="text-[9px] uppercase font-bold text-text-muted">{it.supply_status.replace(/_/g, ' ')}</span>
-                                        )}
-                                      </td>
-                                      <td className="p-2.5 text-center font-bold text-text-primary">{it.ordered_qty}</td>
-                                      <td className="p-2.5 text-center font-bold text-success">{it.received_qty}</td>
-                                      <td className="p-2.5 text-center">
-                                        {(it.pending_qty || 0) === 0 ? (
-                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success">0 Pcs</span>
-                                        ) : (
-                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-warning/15 text-warning">{it.pending_qty} Pcs</span>
-                                        )}
-                                      </td>
-                                      <td className="p-2.5 text-right font-mono text-[11px] text-text-secondary">
-                                        {it.rack_location || '—'}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            {/* Card Footer: Progress & Inward Button */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                              <div className="flex items-center gap-3">
-                                <span className="text-[11px] font-black text-text-muted uppercase tracking-wider">
-                                  Inward Progress:
-                                </span>
-                                <div className="w-32 sm:w-44 h-2 rounded-full bg-border overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${inwardPercent === 100 ? 'bg-success' : 'bg-primary'}`}
-                                    style={{ width: `${inwardPercent}%` }}
-                                  />
-                                </div>
-                                <span className={`text-xs font-mono font-bold ${inwardPercent === 100 ? 'text-success' : 'text-primary'}`}>
-                                  {totalReceived} / {totalOrdered} Pcs ({inwardPercent}%)
-                                </span>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleOpenOrderInwardModal(ord)}
-                                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 shadow-sm cursor-pointer ${
-                                  isComplete
-                                    ? 'bg-surface-hover text-text-secondary border border-border hover:text-text-primary'
-                                    : 'gradient-primary text-white hover:opacity-95 active:scale-95'
-                                }`}
-                              >
-                                <HiOutlineClipboardCheck className="text-base" />
-                                <span>{isComplete ? 'Inward Completed (Edit)' : 'Inward Material'}</span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+              {/* Purchase Indents Cards List */}
+              {loadingIndents ? (
+                <div className="p-12 text-center text-xs text-text-muted bg-surface rounded-2xl border border-dashed border-border flex items-center justify-center gap-2">
+                  <FaSpinner className="animate-spin text-primary" /> Loading procurement indents...
+                </div>
+              ) : filteredPurchaseIndents.length === 0 ? (
+                <div className="p-12 text-center text-xs text-text-muted bg-surface rounded-2xl border border-dashed border-border space-y-2">
+                  <FaWarehouse className="text-3xl text-text-muted mx-auto opacity-40 mb-2" />
+                  <div className="font-bold text-text-primary text-sm">No Procurement Shipments Found</div>
+                  <p className="max-w-md mx-auto text-text-secondary">
+                    No supplier shipments match the current filters. Procurement indents approved by Accounts for warehouse inventory restocking will appear here.
+                  </p>
                 </div>
               ) : (
-                /* ── SUB-VIEW B: Warehouse Stock Purchase Orders ── */
-                <div className="card p-6 space-y-4 w-full max-w-full overflow-hidden">
+                <div className="space-y-4">
+                  {paginatedPurchaseIndents.map((pi) => {
+                    const supplyStatus = pi.fulfilment?.supply_status || 'Pending';
+                    const isCompleted = supplyStatus === 'Inward Completed' || pi.pi_status === 'Completed';
+                    const totalQty = (pi.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
+                    const isSupplierDelivery = (pi.fulfilment?.method || '').toLowerCase().includes('supplier');
+
+                    return (
+                      <div
+                        key={pi._id}
+                        className={`bg-surface border rounded-2xl p-4 sm:p-5 transition-all duration-200 shadow-xs space-y-4 ${
+                          isCompleted
+                            ? 'border-emerald-500/30 bg-emerald-500/[0.02]'
+                            : 'border-border hover:border-primary/40'
+                        }`}
+                      >
+                        {/* Top Card Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-black text-sm px-2.5 py-1 rounded-xl bg-primary/10 text-primary border border-primary/20">
+                              {pi.pi_number}
+                            </span>
+                            <span className="font-bold text-xs text-text-secondary bg-surface-hover px-2 py-1 rounded-lg border border-border">
+                              Ref: {pi.customer_order_number || 'WH-STOCK-PROCUREMENT'}
+                            </span>
+                            {pi.order_group_id && (
+                              <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                                {pi.order_group_id}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                              isCompleted
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                : supplyStatus === 'In Transit'
+                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 animate-pulse'
+                                : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'
+                            }`}>
+                              {isCompleted ? <FaCheckCircle /> : <FaShippingFast />}
+                              <span>{isCompleted ? 'Inward Completed' : supplyStatus}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Supplier & Destination Strip */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-surface-hover/50 p-3 rounded-xl border border-border/50">
+                          <div>
+                            <span className="text-[10px] font-bold text-text-muted uppercase block">Supplier Name</span>
+                            <span className="font-extrabold text-text-primary block truncate">{pi.supplier_name}</span>
+                            {pi.supplier_brand && (
+                              <span className="text-[10px] text-text-secondary font-medium">Brand: {pi.supplier_brand}</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-text-muted uppercase block">Supplier GST</span>
+                            <span className="font-mono text-text-secondary font-bold text-[11px] block">
+                              {pi.supplier_gst || 'N/A'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-text-muted uppercase block">Destination Hub</span>
+                            <span className="font-bold text-text-primary block truncate">
+                              {pi.destination_warehouse_name || 'Central Master Warehouse'}
+                            </span>
+                            {pi.destination_warehouse_code && (
+                              <span className="text-[10px] font-mono text-primary font-bold">{pi.destination_warehouse_code}</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-text-muted uppercase block">Shipment Quantity</span>
+                            <span className="font-black text-text-primary text-sm block">
+                              {totalQty.toLocaleString()} units
+                            </span>
+                            <span className="text-[10px] text-text-muted">{(pi.items || []).length} SKU types</span>
+                          </div>
+                        </div>
+
+                        {/* Transport Logistics Ribbon */}
+                        <div className="bg-surface-hover/70 border border-border/80 rounded-xl p-3.5 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                                isSupplierDelivery
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                              }`}>
+                                <FaTruck className="text-xs" />
+                                <span>{pi.fulfilment?.method || 'Supplier Delivery'}</span>
+                              </span>
+                              <span className="text-[10px] text-text-muted font-bold">
+                                Responsibility: {pi.fulfilment?.transport_responsibility || 'Supplier'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] font-mono font-bold text-text-secondary flex items-center gap-1.5">
+                              <span className="text-text-muted font-normal text-[10px] uppercase">LR / Gate Ref:</span>
+                              <span className="text-primary font-black bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                                {pi.fulfilment?.tracking_reference || pi.fulfilment?.dispatch_reference || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <span className="text-[10px] font-bold text-text-muted uppercase block">Transporter / Carrier</span>
+                              <span className="font-extrabold text-text-primary truncate block" title={pi.fulfilment?.carrier_name}>
+                                {pi.fulfilment?.carrier_name || 'Direct Transport'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-text-muted uppercase block">Vehicle Number</span>
+                              <span className="font-mono font-black text-text-primary bg-surface border border-border/80 px-1.5 py-0.5 rounded inline-block">
+                                {pi.fulfilment?.vehicle_details?.vehicle_number || 'Pending'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-text-muted uppercase block">Driver Details</span>
+                              {pi.fulfilment?.vehicle_details?.driver_name ? (
+                                <div className="text-text-primary">
+                                  <span className="font-bold">{pi.fulfilment.vehicle_details.driver_name}</span>
+                                  {pi.fulfilment.vehicle_details.driver_phone && (
+                                    <a
+                                      href={`tel:${pi.fulfilment.vehicle_details.driver_phone}`}
+                                      className="text-[10px] text-primary font-bold hover:underline block flex items-center gap-1"
+                                    >
+                                      <FaPhoneAlt size={8} /> {pi.fulfilment.vehicle_details.driver_phone}
+                                    </a>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-text-muted italic text-[11px]">Not provided</span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-text-muted uppercase block">Dispatch / Expected</span>
+                              <span className="font-semibold text-text-primary block text-[11px]">
+                                {pi.fulfilment?.actual_dispatch_date ? new Date(pi.fulfilment.actual_dispatch_date).toLocaleDateString('en-IN') : 'Dispatched'}
+                                <span className="text-text-muted"> → </span>
+                                <span className="text-primary font-bold">
+                                  {pi.fulfilment?.expected_inward_date ? new Date(pi.fulfilment.expected_inward_date).toLocaleDateString('en-IN') : 'Today'}
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Materials Sent by Account Manager Table */}
+                        <div className="border border-border/70 rounded-xl overflow-hidden bg-surface">
+                          <div className="bg-surface-hover/80 px-3.5 py-2 border-b border-border/60 flex justify-between items-center">
+                            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                              <FaBoxes className="text-primary" />
+                              <span>Materials Sent by Account Manager to Inward ({pi.items?.length || 0} Components)</span>
+                            </div>
+                            <div className="text-[10px] text-text-secondary font-bold">
+                              Total Inward Quantity: <span className="text-primary font-black">{totalQty.toLocaleString()} pcs</span>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left">
+                              <thead className="bg-surface border-b border-border/50 text-[10px] font-black uppercase text-text-muted">
+                                <tr>
+                                  <th className="px-3.5 py-2">#</th>
+                                  <th className="px-3.5 py-2">SKU Code</th>
+                                  <th className="px-3.5 py-2">Component / Product Name</th>
+                                  <th className="px-3.5 py-2">Category</th>
+                                  <th className="px-3.5 py-2 text-right">Qty to Inward</th>
+                                  <th className="px-3.5 py-2 text-right">Unit Rate</th>
+                                  <th className="px-3.5 py-2 text-right">Total (excl tax)</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/40">
+                                {(pi.items || []).map((it, idx) => (
+                                  <tr key={idx} className="hover:bg-surface-hover/30 transition-colors">
+                                    <td className="px-3.5 py-2 text-text-muted">{idx + 1}</td>
+                                    <td className="px-3.5 py-2 font-mono font-extrabold text-primary">{it.sku_code}</td>
+                                    <td className="px-3.5 py-2 font-semibold text-text-primary">{it.product_name || it.sku_code}</td>
+                                    <td className="px-3.5 py-2 text-text-secondary text-[11px]">{it.component_type || '-'}</td>
+                                    <td className="px-3.5 py-2 text-right font-black text-text-primary">
+                                      <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+                                        {it.quantity?.toLocaleString()} pcs
+                                      </span>
+                                    </td>
+                                    <td className="px-3.5 py-2 text-right font-mono text-text-secondary">₹{Number(it.unit_rate || 0).toLocaleString()}</td>
+                                    <td className="px-3.5 py-2 text-right font-black text-text-primary">₹{(Number(it.quantity || 0) * Number(it.unit_rate || 0)).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Card Footer: Totals and Inward Actions */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/60">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <span className="text-[10px] font-bold text-text-muted uppercase block">Total Shipment Value</span>
+                              <span className="text-base font-black text-primary">₹{Number(pi.total_pi_value || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="h-6 w-px bg-border/80 hidden sm:block" />
+                            <div className="text-[11px] text-text-secondary">
+                              <span>Payment Status: </span>
+                              <span className={`font-bold ${pi.payment?.payment_status === 'Paid' ? 'text-success' : 'text-warning'}`}>
+                                {pi.payment?.payment_status || 'Pending'}
+                              </span>
+                              {pi.payment?.advance_percentage > 0 && ` (${pi.payment.advance_percentage}% Adv)`}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {isCompleted ? (
+                              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-black uppercase tracking-wider">
+                                <FaCheckCircle className="text-sm" />
+                                <span>Inward Completed & GRN Generated</span>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPiInwardModal(pi, 'online')}
+                                  className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-surface-hover hover:bg-surface text-primary border border-primary/30 hover:border-primary shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <HiOutlineQrcode className="text-base text-primary" />
+                                  <span>⚡ Online Inward (QR/Scanner)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPiInwardModal(pi, 'offline')}
+                                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider gradient-primary text-white shadow-sm hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <HiOutlineClipboardCheck className="text-base" />
+                                  <span>📋 Offline Inward (Gate Challan)</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <Pagination
+                    currentPage={indentsPage}
+                    totalPages={Math.ceil(filteredPurchaseIndents.length / indentsPageSize)}
+                    onPageChange={setIndentsPage}
+                    totalItems={filteredPurchaseIndents.length}
+                    pageSize={indentsPageSize}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "stock_pos" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
+              {/* Warehouse Stock Purchase Orders */}
+              <div className="card p-6 space-y-4 w-full max-w-full overflow-hidden">
                   <div className="border-b border-border pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
                       <FaBoxes className="text-primary" />
@@ -2253,9 +3095,8 @@ export default function MaterialInward() {
                   pageSize={posPageSize}
                 />
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
           {activeTab === "supplier" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -3513,7 +4354,21 @@ export default function MaterialInward() {
         )}
       </Dialog>
 
-      {/* Procurement Inward Verification Modal */}
+      {/* Procurement Inward Modal (Online Scanner & Offline Gate Challan) */}
+      <ProcurementInwardModal
+        isOpen={procurementInwardModalOpen}
+        onClose={() => {
+          setProcurementInwardModalOpen(false);
+          setSelectedPiForModal(null);
+        }}
+        purchaseIndent={selectedPiForModal}
+        destinationWarehouse={{ id: selectedPiForModal?.destination_warehouse_id }}
+        initialMode={modalInwardMode}
+        onConfirmInward={handleConfirmPiInward}
+        loading={isDelivering}
+      />
+
+      {/* Legacy PI Modal Fallback */}
       <InwardVerificationModal
         isOpen={isPiInwardModalOpen}
         onClose={() => {

@@ -225,5 +225,16 @@ export const updateKitAssembly = async (id, { stage, kit_serial_barcode, notes }
   return res.data;
 };
 
+export const allocatePreassembledKit = async (id, { kit_model_name, batch_code, notes } = {}) => {
+  const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/allocate-preassembled-kit`, {
+    kit_model_name,
+    batch_code,
+    notes
+  }, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
 
 

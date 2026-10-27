@@ -54,7 +54,7 @@ const UnifiedCustomerOutward = lazy(() => import("../pages/warehouse-management/
 
 /* ===================== MENU CONFIG ===================== */
 
-const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
+const getMenusForMode = (mode, prefix = "/warehouse-management-panel", badgeCounts = {}) => {
   const isInwardSub = mode === "sub";
 
   return [
@@ -64,31 +64,36 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
         name: "New Orders",
         icon: <FaClipboardList />,
         path: `${prefix}/new-orders`,
-        unique_id: "WH_DELIVERY_MGMT"
+        unique_id: "WH_DELIVERY_MGMT",
+        badge: badgeCounts.new_orders ?? 3
       },
       {
         name: "BOS Kit Assembly",
         icon: <FaTools />,
         path: `${prefix}/bos-kit-assembly`,
-        unique_id: "WH_DELIVERY_MGMT"
+        unique_id: "WH_DELIVERY_MGMT",
+        badge: badgeCounts.bos_kit_assembly ?? 2
       },
       {
         name: "Material Inward",
         icon: <HiCube />,
         path: `${prefix}/material-inward`,
-        unique_id: "WH_MAT_INWARD"
+        unique_id: "WH_MAT_INWARD",
+        badge: badgeCounts.material_inward ?? 1
       },
       {
         name: "Out for Delivery",
         icon: <FaTruckLoading />,
         path: `${prefix}/out-for-delivery`,
-        unique_id: "WH_DELIVERY_MGMT"
+        unique_id: "WH_DELIVERY_MGMT",
+        badge: badgeCounts.out_for_delivery ?? 3
       },
       {
         name: "Track Delivery & POD",
         icon: <FaShippingFast />,
         path: `${prefix}/track-delivery`,
-        unique_id: "WH_DELIVERY_MGMT"
+        unique_id: "WH_DELIVERY_MGMT",
+        badge: badgeCounts.track_delivery ?? 1
       },
       {
         name: isInwardSub ? "Sub-Warehouse Outward" : "Master-Warehouse Outward",
@@ -298,10 +303,18 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  const [sidebarBadges, setSidebarBadges] = useState({
+    new_orders: 3,
+    bos_kit_assembly: 2,
+    material_inward: 1,
+    out_for_delivery: 3,
+    track_delivery: 1
+  });
+
   const currentPrefix = location.pathname.startsWith("/warehouse-management-panel")
     ? "/warehouse-management-panel"
     : "/warehouse";
-  const filteredMenus = filterMenusByPermission(getMenusForMode(warehouseMode, currentPrefix), allowedUniqueIds);
+  const filteredMenus = filterMenusByPermission(getMenusForMode(warehouseMode, currentPrefix, sidebarBadges), allowedUniqueIds);
 
   // Dynamic Title detection
   const getPageTitle = () => {

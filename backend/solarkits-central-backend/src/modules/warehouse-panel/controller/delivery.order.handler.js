@@ -363,9 +363,26 @@ exports.inward_material = async (req, res) => {
 
     // Validation pass: Ensure no item exceeds pending quantity
     for (const inItem of items) {
-      const orderItem = orderItems.find(it => it.sku === inItem.sku);
+      let orderItem = orderItems.find(it => it.sku === inItem.sku);
       if (!orderItem) {
-        return res.status(400).json({ status: 'error', message: `Item SKU ${inItem.sku} is not part of this order.` });
+        // If it's a BOS Kit item for this order, dynamically initialize it in order.items
+        const isBos = inItem.sku?.startsWith('BOS-KIT-') || inItem.product_name?.toLowerCase().includes('bos kit') || inItem.is_bos_kit;
+        if (isBos) {
+          const qty = parseInt(inItem.qty) || 1;
+          orderItem = {
+            sku: inItem.sku,
+            product_name: inItem.product_name || 'BOS Kit (Pre-assembled Enclosure Package)',
+            category: 'BOS Kit',
+            ordered_qty: qty,
+            received_qty: 0,
+            pending_qty: qty,
+            rack_location: inItem.rack_location || 'BAY-BOS-STOCK',
+            qc_status: 'Pending'
+          };
+          order.items.push(orderItem);
+        } else {
+          return res.status(400).json({ status: 'error', message: `Item SKU ${inItem.sku} is not part of this order.` });
+        }
       }
 
       const inwardQty = parseInt(inItem.qty) || 0;
@@ -392,6 +409,18 @@ exports.inward_material = async (req, res) => {
 
       if (inItem.rack_location) {
         orderItem.rack_location = inItem.rack_location;
+      }
+
+      // If inwarding a BOS Kit, mark kit_preparation_status as kit_ready
+      const isBos = inItem.sku?.startsWith('BOS-KIT-') || orderItem.category === 'BOS Kit' || (orderItem.product_name && orderItem.product_name.toLowerCase().includes('bos kit'));
+      if (isBos && inwardQty > 0) {
+        order.kit_preparation_status = 'kit_ready';
+        if (!order.kit_assembly_details) order.kit_assembly_details = {};
+        order.kit_assembly_details.assembly_status = 'completed';
+        order.kit_assembly_details.qc_status = 'passed';
+        order.kit_assembly_details.qc_verified = true;
+        order.kit_assembly_details.storage_location = inItem.rack_location || 'BAY-BOS-STOCK';
+        order.kit_assembly_details.kit_serial_barcode = order.kit_assembly_details.kit_serial_barcode || `SK-WH-STOCK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
       }
 
       inwardedItemsLog.push({
@@ -1145,9 +1174,23 @@ exports.record_inward_discrepancy = async (req, res) => {
     }
 
     const { sku, received_qty, damaged_qty, missing_qty, remarks } = req.body || {};
-    const item = order.items.find(it => it.sku === sku);
+    let item = order.items.find(it => it.sku === sku);
     if (!item) {
-      return res.status(404).json({ status: 'error', message: `SKU ${sku} not found in this order.` });
+      if (sku && (sku.startsWith('BOS-KIT-') || sku.toLowerCase().includes('bos-kit'))) {
+        item = {
+          sku,
+          product_name: 'BOS Kit (Pre-assembled Enclosure Package)',
+          category: 'BOS Kit',
+          ordered_qty: Math.max(1, (Number(received_qty) || 0) + (Number(missing_qty) || 0)),
+          received_qty: 0,
+          pending_qty: Math.max(1, (Number(received_qty) || 0) + (Number(missing_qty) || 0)),
+          rack_location: 'BAY-BOS-STOCK',
+          qc_status: 'Pending'
+        };
+        order.items.push(item);
+      } else {
+        return res.status(404).json({ status: 'error', message: `SKU ${sku} not found in this order.` });
+      }
     }
 
     const recQty = Number(received_qty) || 0;
@@ -1344,6 +1387,61 @@ exports.update_kit_assembly = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * POST /warehouse-api/delivery-orders/:id/allocate-preassembled-kit
+ * Directly allocates an already pre-assembled BOS Kit from warehouse ready stock to the order.
+ * Marks the order as kit_ready immediately without requiring on-demand workstation assembly.
+ */
+exports.allocate_preassembled_kit = async (req, res) => {
+  try {
+    const order = await DeliveryOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Delivery order not found.' });
+    }
+
+    const { kit_model_name, batch_code, notes } = req.body || {};
+
+    // Auto-allocate all components as fulfilled from pre-assembled stock
+    (order.items || []).forEach(it => {
+      it.allocated_stock = it.ordered_qty || it.pending_qty || 0;
+    });
+
+    const kitBarcode = batch_code || `SK-WH-STOCK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
+
+    order.kit_preparation_status = 'kit_ready';
+    order.kit_assembly_details = {
+      picked_at: new Date(),
+      picked_by: req.user?.name || 'Warehouse Stock Manager',
+      assembly_status: 'completed',
+      assembled_at: new Date(),
+      assembled_by: 'Warehouse Pre-Assembled Stock',
+      qc_status: 'passed',
+      qc_verified: true,
+      qc_verified_by: req.user?.name || 'Pre-QC Verified (Stock)',
+      packed_and_labeled: true,
+      packed_at: new Date(),
+      kit_serial_barcode: kitBarcode
+    };
+
+    order.audit_trail.push({
+      action: 'Pre-Assembled BOS Kit Allocated from Warehouse Stock',
+      performed_by_name: req.user?.name || 'Delivery Manager',
+      timestamp: new Date(),
+      notes: `Allocated ready kit (${kit_model_name || 'Standard Solar BOS Kit'}) from warehouse stock. Barcode: ${kitBarcode}. ${notes || ''}`
+    });
+
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Successfully allocated pre-assembled BOS Kit (${kit_model_name || 'Standard Kit'}) from warehouse stock! Order is ready for dispatch.`,
+      data: order
+    });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
   }
 };
 
