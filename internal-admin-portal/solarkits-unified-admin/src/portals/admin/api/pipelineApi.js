@@ -17,3 +17,19 @@ export const fetchPipelineStatus = async (country = 'india') => {
     return null;
   }
 };
+
+/**
+ * Fetch real-time movement and pending counts for all connected Solar Shop sidebar modules
+ */
+export const fetchSidebarCounts = async (country = 'india') => {
+  try {
+    const res = await axios.get(`${API_BASE}/solarshop/sidebar-counts?country=${encodeURIComponent(country)}`, {
+      headers: authHeaderObj(),
+    });
+    return res.data?.data || null;
+  } catch (error) {
+    console.warn('Error fetching sidebar counts:', error.message);
+    return null;
+  }
+};
+

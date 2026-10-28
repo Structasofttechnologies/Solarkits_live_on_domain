@@ -81,10 +81,12 @@ const AdminOrderApprovalDashboard = lazy(() => import("../pages/solar-shop/order
 
 
 const menus = [
-    [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/solar-shop/home", unique_id: "00000000" }],
+    [{ step: "01", badgeKey: "01", name: "Dashboard", icon: <FaHome />, path: "/admin-panel/solar-shop/home", unique_id: "00000000" }],
     [
-        { name: "Approve New EPC", icon: <FaUserCheck />, path: "/admin-panel/solar-shop/approve-new-epc", unique_id: "ADM_APPROVE_EPC" },
+        { step: "02", badgeKey: "02", name: "Approve New EPC", icon: <FaUserCheck />, path: "/admin-panel/solar-shop/approve-new-epc", unique_id: "ADM_APPROVE_EPC" },
         {
+            step: "03",
+            badgeKey: "03",
             name: "Solar Kit Configurations",
             icon: <FaLayerGroup />,
             path: "/admin-panel/solar-shop/combokit-configurations",
@@ -94,51 +96,60 @@ const menus = [
                     name: "Combo Kits",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/combokit-configurations/combo-kits",
-                    unique_id: "ADM_COMBO_KITS"
+                    unique_id: "ADM_COMBO_KITS",
+                    badgeKey: "combo-kits"
                 },
                 {
                     name: "Customize Kits",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/combokit-configurations/customize-kits",
-                    unique_id: "ADM_CUSTOMIZE_KITS"
+                    unique_id: "ADM_CUSTOMIZE_KITS",
+                    badgeKey: "customize-kits"
                 },
                 {
                     name: "Bulk Combo Kits",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/combokit-configurations/bulk-combo-kits",
-                    unique_id: "ADM_BULK_COMBO"
+                    unique_id: "ADM_BULK_COMBO",
+                    badgeKey: "bulk-combo-kits"
                 },
                 {
                     name: "Combo Kit Variants",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/combokit-configurations/combo-kit-variants",
-                    unique_id: "ADM_COMBO_KIT_VARIANTS"
+                    unique_id: "ADM_COMBO_KIT_VARIANTS",
+                    badgeKey: "combo-kit-variants"
                 },
                 {
                     name: "Pincode Delivery Costs",
                     icon: <FaTruck />,
                     path: "/admin-panel/solar-shop/combokit-configurations/pincode-delivery-costs",
-                    unique_id: "ADM_COMBO_KITS"
+                    unique_id: "ADM_PINCODE_COSTS",
+                    badgeKey: "pincode-delivery-costs"
                 },
                 {
                     name: "Best Seller Configuration",
                     icon: <FaAward />,
                     path: "/admin-panel/solar-shop/combokit-configurations/best-seller",
-                    unique_id: "ADM_COMBO_KITS"
+                    unique_id: "ADM_BEST_SELLER",
+                    badgeKey: "best-seller"
                 },
                 {
                     name: "Product Datasheets",
                     icon: <FaFilePdf />,
                     path: "/admin-panel/solar-shop/combokit-configurations/product-datasheets",
-                    unique_id: "ADM_COMBO_KITS"
+                    unique_id: "ADM_PRODUCT_DATASHEETS",
+                    badgeKey: "product-datasheets"
                 }
             ]
         },
-        { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
-        { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
-        { name: "EPC Orders & Approvals", icon: <FaUserShield />, path: "/admin-panel/solar-shop/epc-orders", unique_id: "00000000" },
-        { name: "Order & Stage Approvals", icon: <FiCheckSquare />, path: "/admin-panel/solar-shop/order-approvals", unique_id: "ADM_ORDER_APPROVALS" },
+        { step: "04", badgeKey: "04", name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
+        { step: "05", badgeKey: "05", name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
+        { step: "06", badgeKey: "06", name: "EPC Orders & Approvals", icon: <FaUserShield />, path: "/admin-panel/solar-shop/epc-orders", unique_id: "00000000" },
+        { step: "07", badgeKey: "07", name: "Order & Stage Approvals", icon: <FiCheckSquare />, path: "/admin-panel/solar-shop/order-approvals", unique_id: "ADM_ORDER_APPROVALS" },
         {
+            step: "08",
+            badgeKey: "08",
             name: "Delivery Management",
             icon: <FaTruck />,
             path: "/admin-panel/solar-shop/delivery-management/vehicle-master",
@@ -148,54 +159,64 @@ const menus = [
                     name: "1. Vehicle Master (Catalog)",
                     icon: <FaTruck />,
                     path: "/admin-panel/solar-shop/delivery-management/vehicle-master",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "vehicle-master"
                 },
                 {
                     name: "2. Transport Vendors",
                     icon: <FiUsers />,
                     path: "/admin-panel/solar-shop/delivery-management/providers",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "providers"
                 },
                 {
                     name: "3. Live Fleet & Vehicles",
                     icon: <FaTruck />,
                     path: "/admin-panel/solar-shop/delivery-management/fleet",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "fleet"
                 },
                 {
                     name: "4. ComboKit Weight Master",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/delivery-management/kit-weights",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "kit-weights"
                 },
                 {
                     name: "5. Delivery Cost Settings",
                     icon: <FiDollarSign />,
                     path: "/admin-panel/solar-shop/delivery-management/cost-settings",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "cost-settings"
                 },
                 {
                     name: "6. Route & Consolidation",
                     icon: <FiSliders />,
                     path: "/admin-panel/solar-shop/delivery-management/routes",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "routes"
                 },
                 {
                     name: "7. Dashboard & Analytics",
                     icon: <FiBarChart2 />,
                     path: "/admin-panel/solar-shop/delivery-management/dashboard",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "delivery-dashboard"
                 },
                 {
                     name: "8. Approval Queue",
                     icon: <FiShield />,
                     path: "/admin-panel/solar-shop/delivery-management/approval-queue",
-                    unique_id: "ADM_DELIVERY_MGMT"
+                    unique_id: "ADM_DELIVERY_MGMT",
+                    badgeKey: "approval-queue"
                 }
             ]
         },
 
         {
+            step: "09",
+            badgeKey: "09",
             name: "Margin & Commission",
             icon: <FaCoins />,
             path: "/admin-panel/solar-shop/company-margin",
@@ -205,13 +226,15 @@ const menus = [
                     name: "Warehouse Margins",
                     icon: <FaPercent />,
                     path: "/admin-panel/solar-shop/company-margin",
-                    unique_id: "ADM_CO_MARGIN"
+                    unique_id: "ADM_CO_MARGIN",
+                    badgeKey: "company-margin"
                 },
                 {
                     name: "Offers & Discounts",
                     icon: <FiTag />,
                     path: "/admin-panel/solar-shop/company-margin/offers",
-                    unique_id: "ADM_CO_MARGIN"
+                    unique_id: "ADM_CO_MARGIN",
+                    badgeKey: "offers"
                 },
                 {
                     name: "Company Goals",
@@ -227,8 +250,10 @@ const menus = [
                 },
             ]
         },
-        { name: "Warehouse Kit Activations", icon: <FaToggleOn />, path: "/admin-panel/solar-shop/warehouse-kit-activations", unique_id: "ADM_WH_KIT_ACT" },
+        { step: "10", badgeKey: "10", name: "Warehouse Kit Activations", icon: <FaToggleOn />, path: "/admin-panel/solar-shop/warehouse-kit-activations", unique_id: "ADM_WH_KIT_ACT" },
         {
+            step: "11",
+            badgeKey: "11",
             name: "Order Management Settings",
             icon: <FiSliders />,
             path: "/admin-panel/solar-shop/order-management-settings",
@@ -280,7 +305,8 @@ const menus = [
                     name: "Overdue Settings",
                     icon: <FiClock />,
                     path: "/admin-panel/solar-shop/order-management-settings/overdue-settings",
-                    unique_id: "ADM_ORDER_SETTINGS"
+                    unique_id: "ADM_ORDER_SETTINGS",
+                    badgeKey: "overdue-settings"
                 },
                 {
                     name: "Order Journey Dashboard",
@@ -293,10 +319,12 @@ const menus = [
     ],
     [
         // ── Service Tickets Module ───────────────────────────────────────────
-        { name: "Service Tickets", icon: <FiTool />, path: "/admin-panel/solar-shop/service-tickets", unique_id: "ADM_SKT_MGMT" },
+        { step: "12", badgeKey: "12", name: "Service Tickets", icon: <FiTool />, path: "/admin-panel/solar-shop/service-tickets", unique_id: "ADM_SKT_MGMT" },
 
         // ── Store Management Module (Converted from Franchisee Management) ────────
         {
+            step: "13",
+            badgeKey: "13",
             name: "Franchisee Management",
             icon: <FiUsers />,
             path: "/admin-panel/solar-shop/reseller-management",
@@ -351,7 +379,8 @@ const menus = [
                     name: "Franchisee Leads",
                     icon: <FiFileText />,
                     path: "/admin-panel/solar-shop/reseller-management/leads",
-                    unique_id: "RSL_MGMT"
+                    unique_id: "RSL_MGMT",
+                    badgeKey: "leads"
                 },
                 {
                     name: "Onboard New Store",
@@ -363,7 +392,8 @@ const menus = [
                     name: "Store Onboarding Queue",
                     icon: <FaStore />,
                     path: "/admin-panel/solar-shop/reseller-management/onboarding",
-                    unique_id: "RSL_MGMT"
+                    unique_id: "RSL_MGMT",
+                    badgeKey: "onboarding"
                 },
                 {
                     name: "Store Setup & Operations",
@@ -375,7 +405,8 @@ const menus = [
                     name: "Franchisee Accounts",
                     icon: <FiUsers />,
                     path: "/admin-panel/solar-shop/reseller-management/resellers",
-                    unique_id: "RSL_MGMT"
+                    unique_id: "RSL_MGMT",
+                    badgeKey: "resellers"
                 },
 
                 // ── Section 3: Live Operations, Sales & Financials ────────
@@ -389,7 +420,8 @@ const menus = [
                     name: "Franchisee Orders",
                     icon: <FaFileInvoiceDollar />,
                     path: "/admin-panel/solar-shop/reseller-management/orders",
-                    unique_id: "RSL_MGMT"
+                    unique_id: "RSL_MGMT",
+                    badgeKey: "orders"
                 },
                 {
                     name: "Performance Tracker",
@@ -407,12 +439,15 @@ const menus = [
                     name: "Earnings & Settlement",
                     icon: <FaWallet />,
                     path: "/admin-panel/solar-shop/reseller-management/wallet",
-                    unique_id: "RSL_WALLET"
+                    unique_id: "RSL_WALLET",
+                    badgeKey: "wallet"
                 },
             ]
         },
         // ── EPC Quotation Management Module ─────────────────────────────────
         {
+            step: "14",
+            badgeKey: "14",
             name: "EPC Quote Management",
             icon: <FiFileText />,
             path: "/admin-panel/solar-shop/quote-settings",
@@ -422,7 +457,8 @@ const menus = [
                     name: "Quote Settings",
                     icon: <FiSettings />,
                     path: "/admin-panel/solar-shop/quote-settings",
-                    unique_id: "00000000"
+                    unique_id: "00000000",
+                    badgeKey: "quote-settings"
                 },
                 {
                     name: "Warranty Options",
@@ -440,6 +476,8 @@ const menus = [
         },
         // ── Know My Margin (KMM) Module ─────────────────────────────────────
         {
+            step: "15",
+            badgeKey: "15",
             name: "Know My Margin",
             icon: <FiDollarSign />,
             path: "/admin-panel/solar-shop/project-bom-settings",
@@ -449,7 +487,8 @@ const menus = [
                     name: "Project BOM Settings",
                     icon: <FiSliders />,
                     path: "/admin-panel/solar-shop/project-bom-settings",
-                    unique_id: "00000000"
+                    unique_id: "00000000",
+                    badgeKey: "project-bom-settings"
                 },
                 {
                     name: "Estimator Settings",
@@ -461,6 +500,8 @@ const menus = [
         },
         // ── Region Payment Configuration & Offline Approval Queue ───────────
         {
+            step: "16",
+            badgeKey: "16",
             name: "Payment Configuration",
             icon: <FiCreditCard />,
             path: "/admin-panel/solar-shop/payment-configuration",
@@ -482,7 +523,8 @@ const menus = [
                     name: "Offline Approval Queue",
                     icon: <FiCheckSquare />,
                     path: "/admin-panel/solar-shop/payment-configuration/offline-approvals",
-                    unique_id: "00000000"
+                    unique_id: "00000000",
+                    badgeKey: "offline-approvals"
                 },
             ]
         },

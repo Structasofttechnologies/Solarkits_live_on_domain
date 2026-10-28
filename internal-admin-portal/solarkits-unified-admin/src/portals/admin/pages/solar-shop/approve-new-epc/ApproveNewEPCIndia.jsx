@@ -317,6 +317,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
         }));
 
         fetchRequests();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
         setProcessingId(null);
         setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null });
         setSelectedFile(null);
@@ -382,6 +384,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
           setSelectedFile(null);
           setFileError("");
           fetchRequests();
+          window.dispatchEvent(new Event('sidebar-counts-refresh'));
+          window.dispatchEvent(new Event('pipeline-status-refresh'));
         } else {
           throw new Error(response.data.message || "Failed to approve request");
         }
@@ -403,6 +407,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
           }));
 
           fetchRequests();
+          window.dispatchEvent(new Event('sidebar-counts-refresh'));
+          window.dispatchEvent(new Event('pipeline-status-refresh'));
         } else {
           throw new Error(response.data.message || "Failed to reject request");
         }

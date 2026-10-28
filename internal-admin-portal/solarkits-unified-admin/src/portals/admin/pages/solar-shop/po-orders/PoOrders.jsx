@@ -237,6 +237,8 @@ export default function PoOrders({ moduleUniqueId }) {
         setApproveForm({ payment_method: "RTGS", payment_reference: "", approval_notes: "" });
         fetchRefundRequests();
         fetchFpoOrders();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to approve refund." }));
@@ -265,6 +267,8 @@ export default function PoOrders({ moduleUniqueId }) {
         setRejectReasonInput("");
         fetchRefundRequests();
         fetchFpoOrders();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to reject refund." }));

@@ -288,6 +288,8 @@ export default function AdminOrderApprovalDashboard() {
         }
         fetchSummary();
         fetchQueue(pagination.page);
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       console.error("Error submitting approval action:", err);

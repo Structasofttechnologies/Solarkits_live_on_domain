@@ -411,6 +411,8 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
         setPaymentRefInput("");
         setSelectedOrder(null);
         fetchLooseOrders();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Payment confirmation failed." }));
@@ -433,6 +435,8 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
         dispatch(setAlert({ type: "success", message: "Loose Order marked as Dispatched!" }));
         setSelectedOrder(null);
         fetchLooseOrders();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to dispatch loose order." }));
@@ -454,6 +458,8 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
         dispatch(setAlert({ type: "success", message: "Loose Order marked as Delivered!" }));
         setSelectedOrder(null);
         fetchLooseOrders();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to mark delivered." }));
