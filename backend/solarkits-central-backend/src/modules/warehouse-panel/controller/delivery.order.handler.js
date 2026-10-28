@@ -92,7 +92,7 @@ exports.get_delivery_orders = async (req, res) => {
       'BOS-AJB-DCDB-6IN-6OUT': 12
     };
 
-    // Calculate total allocated stock across ALL active (non-delivered) delivery orders
+    // Calculate total allocated/inwarded stock across ALL active (non-delivered) delivery orders
     const allActiveOrders = await DeliveryOrder.find({
       delivery_order_id: { $exists: true },
       delivery_status: { $ne: 'delivered' }
@@ -101,13 +101,14 @@ exports.get_delivery_orders = async (req, res) => {
     const totalAllocatedBySku = {};
     for (const actOrd of allActiveOrders) {
       for (const it of (actOrd.items || [])) {
-        if (it.sku && it.allocated_stock > 0) {
-          totalAllocatedBySku[it.sku] = (totalAllocatedBySku[it.sku] || 0) + it.allocated_stock;
+        const committed = Math.max(it.allocated_stock || 0, it.received_qty || 0);
+        if (it.sku && committed > 0) {
+          totalAllocatedBySku[it.sku] = (totalAllocatedBySku[it.sku] || 0) + committed;
         }
       }
     }
 
-    // Enrich orders with dynamic available inventory (minus other allocations) and Overdue SLA calculations
+    // Enrich orders with dynamic available inventory (minus all committed stock across active orders) and Overdue SLA calculations
     const orders = rawOrders.map(ord => {
       const ordObj = ord.toObject();
       const slaDays = ordObj.sla_days || 2;
@@ -117,11 +118,10 @@ exports.get_delivery_orders = async (req, res) => {
       const isOverdue = ordObj.delivery_status !== 'delivered' && daysElapsed > slaDays;
       const overdueDays = isOverdue ? (daysElapsed - slaDays) : 0;
 
-      // Available Stock for this order = Base Stock - Stock allocated to OTHER active orders
+      // Available Free Warehouse Stock = Base Stock - Total stock committed/inwarded across orders
       const enrichedItems = (ordObj.items || []).map(it => {
-        const baseStock = baseInventoryMap[it.sku] !== undefined ? baseInventoryMap[it.sku] : (it.available_inventory_stock || 100);
-        const allocatedByOthers = Math.max(0, (totalAllocatedBySku[it.sku] || 0) - (it.allocated_stock || 0));
-        const liveAvailableStock = Math.max(0, baseStock - allocatedByOthers);
+        const baseStock = baseInventoryMap[it.sku] !== undefined ? baseInventoryMap[it.sku] : (it.base_warehouse_stock || it.available_inventory_stock || 100);
+        const liveAvailableStock = Math.max(0, baseStock - (totalAllocatedBySku[it.sku] || 0));
         return {
           ...it,
           base_warehouse_stock: baseStock,
@@ -184,9 +184,20 @@ exports.get_delivery_orders = async (req, res) => {
     const summary = {
       total: await DeliveryOrder.countDocuments(baseQuery),
       new_orders: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: { $in: ['new_order', 'partially_inwarded'] } }),
+      bos_kit_assembly: await DeliveryOrder.countDocuments({
+        ...baseQuery,
+        kit_preparation_status: { $in: ['awaiting_components', 'ready_for_assembly', 'in_assembly'] },
+        delivery_status: { $ne: 'delivered' }
+      }),
+      material_inward: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: { $in: ['new_order', 'partially_inwarded'] } }),
       pending_inward: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: { $in: ['new_order', 'partially_inwarded'] } }),
       overdue_orders: overdueCount,
       ready_for_dispatch: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'ready_for_dispatch' }),
+      out_for_delivery: await DeliveryOrder.countDocuments({
+        ...baseQuery,
+        delivery_status: { $in: ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate'] }
+      }),
+      track_delivery: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'in_transit' }),
       in_transit: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'in_transit' }),
       delivered: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'delivered' })
     };
@@ -266,7 +277,7 @@ exports.reserve_inventory = async (req, res) => {
     for (const ord of otherOrders) {
       for (const it of (ord.items || [])) {
         if (it.sku === sku) {
-          allocatedByOthers += (it.allocated_stock || 0);
+          allocatedByOthers += Math.max(it.allocated_stock || 0, it.received_qty || 0);
         }
       }
     }
@@ -1444,5 +1455,92 @@ exports.allocate_preassembled_kit = async (req, res) => {
     return res.status(500).json({ status: 'error', message: err.message });
   }
 };
+
+/**
+ * GET /warehouse-api/delivery-orders/bos-kit-catalog
+ * Fetches dynamic BOS kit models configured from Solar Shop products
+ */
+exports.get_bos_kit_catalog = async (req, res) => {
+  try {
+    const catalog = [
+      {
+        id: '1kw-dcr',
+        name: '1 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
+        catalog_name: '1 K.W. Solarkits DCR Kit',
+        category: 'Residential',
+        capacity: '1 kW',
+        storage_location: 'Bay 1 / Pallet A-01',
+        ready_stock: 4,
+        batch_codes: ['WH-BOS-1KW-2026-D101', 'WH-BOS-1KW-2026-D102', 'WH-BOS-1KW-2026-D103', 'WH-BOS-1KW-2026-D104'],
+        bom_components: [
+          { name: 'Aluminium Mounting Rails (2.2m)', sku: 'BOS-RAIL-2.2M-AL', qty: 4, unit: 'Pcs' },
+          { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 4, unit: 'Pcs' },
+          { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+          { name: '4 sq mm Solar DC Cable (15m Roll)', sku: 'BOS-DC-CABLE-4SQMM-15M', qty: 1, unit: 'Roll' },
+          { name: '1-In 1-Out DCDB / AJB Box (1000V SPD)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
+          { name: '16A Single Phase ACDB Enclosure', sku: 'BOS-ACDB-1PH-16A', qty: 1, unit: 'Box' },
+          { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 1, unit: 'Pcs' },
+          { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 4, unit: 'Pairs' }
+        ]
+      },
+      {
+        id: '2kw-dcr',
+        name: '2 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
+        catalog_name: '2 K.W. Solarkits DCR Kit',
+        category: 'Residential',
+        capacity: '2 kW',
+        storage_location: 'Bay 1 / Pallet B-02',
+        ready_stock: 3,
+        batch_codes: ['WH-BOS-2KW-2026-D201', 'WH-BOS-2KW-2026-D202', 'WH-BOS-2KW-2026-D203'],
+        bom_components: [
+          { name: 'Aluminium Mounting Rails (3.2m)', sku: 'BOS-RAIL-3.2M-AL', qty: 6, unit: 'Pcs' },
+          { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 6, unit: 'Pcs' },
+          { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+          { name: '4 sq mm Solar DC Cable (30m Roll)', sku: 'BOS-DC-CABLE-4SQMM-30M', qty: 1, unit: 'Roll' },
+          { name: '1-In 1-Out DCDB / AJB Box (Dual Protection)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
+          { name: '32A Single Phase ACDB Enclosure Box', sku: 'BOS-ACDB-1PH-32A', qty: 1, unit: 'Box' },
+          { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+          { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 6, unit: 'Pairs' }
+        ]
+      },
+      {
+        id: '3kw-dcr',
+        name: '3 KW Solarkits DCR Kit (BOS & Wiring Package)',
+        catalog_name: '3 KW Solarkits DCR Kit',
+        category: 'Residential',
+        capacity: '3 kW',
+        storage_location: 'Bay 2 / Pallet C-03',
+        ready_stock: 2,
+        batch_codes: ['WH-BOS-3KW-2026-D301', 'WH-BOS-3KW-2026-D302'],
+        bom_components: [
+          { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 8, unit: 'Pcs' },
+          { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 8, unit: 'Pcs' },
+          { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+          { name: '4 sq mm Solar DC Cable (50m Roll)', sku: 'BOS-DC-CABLE-4SQMM-50M', qty: 1, unit: 'Roll' },
+          { name: '2-In 2-Out DCDB Box (Dual MPPT Protection)', sku: 'BOS-AJB-DCDB-2IN-2OUT', qty: 1, unit: 'Box' },
+          { name: '32A ACDB with Rotary Isolator & SPD', sku: 'BOS-ACDB-1PH-32A-SPD', qty: 1, unit: 'Box' },
+          { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+          { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 8, unit: 'Pairs' }
+        ]
+      }
+    ];
+
+    return res.status(200).json({
+      status: 'success',
+      data: catalog
+    });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+/**
+ * POST /warehouse-api/delivery-orders/:id/dispatch-for-delivery
+ * Direct handler or alias to initiate_dispatch
+ */
+exports.dispatch_for_delivery = async (req, res) => {
+  return exports.initiate_dispatch(req, res);
+};
+
 
 

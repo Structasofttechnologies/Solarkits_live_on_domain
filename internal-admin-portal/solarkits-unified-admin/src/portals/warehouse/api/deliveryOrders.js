@@ -236,5 +236,13 @@ export const allocatePreassembledKit = async (id, { kit_model_name, batch_code, 
   return res.data;
 };
 
+export const getBosKitCatalog = async () => {
+  const res = await axios.get(`${API_URL}/warehouse/delivery-orders/bos-kit-catalog`, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+
 
 

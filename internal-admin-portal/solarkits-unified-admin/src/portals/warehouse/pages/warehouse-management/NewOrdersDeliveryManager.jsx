@@ -28,7 +28,8 @@ import {
   recordInwardDiscrepancy,
   updateSupplyStatus,
   updateKitAssembly,
-  allocatePreassembledKit
+  allocatePreassembledKit,
+  getBosKitCatalog
 } from '../../api/deliveryOrders';
 
 import Button from '../../components/Button';
@@ -111,56 +112,66 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   // Mode: 'order_specific' (Order Fulfillment) vs 'stock_inventory' (Pre-Assembly for Warehouse Stock)
   const [boskitWorkstationMode, setBoskitWorkstationMode] = useState('order_specific');
 
-  // Pre-Assembled Warehouse Stock Models (Initial Standard Templates)
+  // Pre-Assembled Warehouse Stock Models (Connected to Solar Shop DCR Combo Kits)
   const DEFAULT_STOCK_MODELS = [
     {
-      id: '5kw-std',
-      name: '5kW Standard Residential Solar BOS Kit',
+      id: '1kw-dcr',
+      name: '1 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
+      catalog_name: '1 K.W. Solarkits DCR Kit',
       category: 'Residential',
-      storage_location: 'Bay 2 / Pallet B-04',
+      capacity: '1 kW',
+      storage_location: 'Bay 1 / Pallet A-01',
       ready_stock: 4,
-      batch_codes: ['WH-BOS-5KW-2026-B101', 'WH-BOS-5KW-2026-B102', 'WH-BOS-5KW-2026-B103', 'WH-BOS-5KW-2026-B104'],
+      batch_codes: ['WH-BOS-1KW-2026-D101', 'WH-BOS-1KW-2026-D102', 'WH-BOS-1KW-2026-D103', 'WH-BOS-1KW-2026-D104'],
       bom_components: [
-        { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 8, unit: 'Pcs' },
-        { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 14, unit: 'Pcs' },
+        { name: 'Aluminium Mounting Rails (2.2m)', sku: 'BOS-RAIL-2.2M-AL', qty: 4, unit: 'Pcs' },
+        { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 4, unit: 'Pcs' },
         { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
-        { name: '4 sq mm Solar DC Cable (100m Roll)', sku: 'BOS-DC-CABLE-4SQMM-100M', qty: 1, unit: 'Roll' },
-        { name: '2-In 2-Out DCDB / AJB Box', sku: 'BOS-AJB-DCDB-4IN-4OUT', qty: 1, unit: 'Box' },
-        { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
-        { name: 'MC4 Connectors 1000V', sku: 'BOS-MC4-CONN-1000V', qty: 8, unit: 'Pairs' }
+        { name: '4 sq mm Solar DC Cable (15m Roll)', sku: 'BOS-DC-CABLE-4SQMM-15M', qty: 1, unit: 'Roll' },
+        { name: '1-In 1-Out DCDB / AJB Box (1000V SPD)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
+        { name: '16A Single Phase ACDB Enclosure', sku: 'BOS-ACDB-1PH-16A', qty: 1, unit: 'Box' },
+        { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 1, unit: 'Pcs' },
+        { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 4, unit: 'Pairs' }
       ]
     },
     {
-      id: '3kw-std',
-      name: '3kW Residential Compact Solar BOS Kit',
+      id: '2kw-dcr',
+      name: '2 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
+      catalog_name: '2 K.W. Solarkits DCR Kit',
       category: 'Residential',
-      storage_location: 'Bay 1 / Rack A-02',
-      ready_stock: 2,
-      batch_codes: ['WH-BOS-3KW-2026-A201', 'WH-BOS-3KW-2026-A202'],
+      capacity: '2 kW',
+      storage_location: 'Bay 1 / Pallet B-02',
+      ready_stock: 3,
+      batch_codes: ['WH-BOS-2KW-2026-D201', 'WH-BOS-2KW-2026-D202', 'WH-BOS-2KW-2026-D203'],
       bom_components: [
         { name: 'Aluminium Mounting Rails (3.2m)', sku: 'BOS-RAIL-3.2M-AL', qty: 6, unit: 'Pcs' },
-        { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 8, unit: 'Pcs' },
+        { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 6, unit: 'Pcs' },
         { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
-        { name: '4 sq mm Solar DC Cable (100m Roll)', sku: 'BOS-DC-CABLE-4SQMM-100M', qty: 1, unit: 'Roll' },
-        { name: '1-In 1-Out DCDB / AJB Box', sku: 'BOS-AJB-DCDB-4IN-4OUT', qty: 1, unit: 'Box' },
-        { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' }
+        { name: '4 sq mm Solar DC Cable (30m Roll)', sku: 'BOS-DC-CABLE-4SQMM-30M', qty: 1, unit: 'Roll' },
+        { name: '1-In 1-Out DCDB / AJB Box (Dual Protection)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
+        { name: '32A Single Phase ACDB Enclosure Box', sku: 'BOS-ACDB-1PH-32A', qty: 1, unit: 'Box' },
+        { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+        { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 6, unit: 'Pairs' }
       ]
     },
     {
-      id: '10kw-comm',
-      name: '10kW Commercial Solar BOS Kit',
-      category: 'Commercial',
-      storage_location: 'Bay 3 / Rack C-01',
-      ready_stock: 1,
-      batch_codes: ['WH-BOS-10KW-2026-C301'],
+      id: '3kw-dcr',
+      name: '3 KW Solarkits DCR Kit (BOS & Wiring Package)',
+      catalog_name: '3 KW Solarkits DCR Kit',
+      category: 'Residential',
+      capacity: '3 kW',
+      storage_location: 'Bay 2 / Pallet C-03',
+      ready_stock: 2,
+      batch_codes: ['WH-BOS-3KW-2026-D301', 'WH-BOS-3KW-2026-D302'],
       bom_components: [
-        { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 16, unit: 'Pcs' },
-        { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 28, unit: 'Pcs' },
-        { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 8, unit: 'Pcs' },
-        { name: '4 sq mm Solar DC Cable (100m Roll)', sku: 'BOS-DC-CABLE-4SQMM-100M', qty: 2, unit: 'Rolls' },
-        { name: '4-In 4-Out DCDB / AJB Box', sku: 'BOS-AJB-DCDB-6IN-6OUT', qty: 1, unit: 'Box' },
-        { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 4, unit: 'Pcs' },
-        { name: 'MC4 Connectors 1000V', sku: 'BOS-MC4-CONN-1000V', qty: 16, unit: 'Pairs' }
+        { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 8, unit: 'Pcs' },
+        { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 8, unit: 'Pcs' },
+        { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+        { name: '4 sq mm Solar DC Cable (50m Roll)', sku: 'BOS-DC-CABLE-4SQMM-50M', qty: 1, unit: 'Roll' },
+        { name: '2-In 2-Out DCDB Box (Dual MPPT Protection)', sku: 'BOS-AJB-DCDB-2IN-2OUT', qty: 1, unit: 'Box' },
+        { name: '32A ACDB with Rotary Isolator & SPD', sku: 'BOS-ACDB-1PH-32A-SPD', qty: 1, unit: 'Box' },
+        { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+        { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 8, unit: 'Pairs' }
       ]
     }
   ];
@@ -168,7 +179,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   const [preassembledStock, setPreassembledStock] = useState(() => {
     try {
       const saved = localStorage.getItem('solarkits_preassembled_stock');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure at least 1kw-dcr format
+        if (parsed.some(p => p.id === '1kw-dcr')) return parsed;
+      }
     } catch {
       // ignore localStorage parse error
     }
@@ -178,27 +193,30 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   const [stockAssemblyHistory, setStockAssemblyHistory] = useState(() => {
     try {
       const saved = localStorage.getItem('solarkits_stock_assembly_history');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.some(h => (h.model_name || '').includes('DCR'))) return parsed;
+      }
     } catch {
       // ignore localStorage parse error
     }
     return [
       {
         id: 'hist-1',
-        model_name: '5kW Standard Residential Solar BOS Kit',
-        batch_code: 'WH-BOS-5KW-2026-B101, WH-BOS-5KW-2026-B102',
+        model_name: '1 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
+        batch_code: 'WH-BOS-1KW-2026-D101, WH-BOS-1KW-2026-D102',
         qty: 2,
         assembled_by: 'Warehouse Technician (Ramesh)',
-        storage_location: 'Bay 2 / Pallet B-04',
+        storage_location: 'Bay 1 / Pallet A-01',
         timestamp: new Date(Date.now() - 86400000).toISOString()
       },
       {
         id: 'hist-2',
-        model_name: '3kW Residential Compact Solar BOS Kit',
-        batch_code: 'WH-BOS-3KW-2026-A201',
+        model_name: '2 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
+        batch_code: 'WH-BOS-2KW-2026-D201',
         qty: 1,
         assembled_by: 'QC Specialist (Mukesh)',
-        storage_location: 'Bay 1 / Rack A-02',
+        storage_location: 'Bay 1 / Pallet B-02',
         timestamp: new Date(Date.now() - 172800000).toISOString()
       }
     ];
@@ -210,16 +228,16 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
 
   // Modal State for Pre-Assembling into Stock (Part 2)
   const [stockAssemblyModalOpen, setStockAssemblyModalOpen] = useState(false);
-  const [selectedStockModelId, setSelectedStockModelId] = useState('5kw-std');
+  const [selectedStockModelId, setSelectedStockModelId] = useState('1kw-dcr');
   const [stockAssembleQty, setStockAssembleQty] = useState(1);
-  const [stockAssemblyRack, setStockAssemblyRack] = useState('Bay 2 / Pallet B-04');
+  const [stockAssemblyRack, setStockAssemblyRack] = useState('Bay 1 / Pallet A-01');
   const [stockAssemblyOperator, setStockAssemblyOperator] = useState('Warehouse Assembly Lead');
   const [submittingStockAssembly, setSubmittingStockAssembly] = useState(false);
 
   // Modal State for 1-Click Allocating from Ready Stock to Customer Order (Part 1)
   const [stockAllocateModalOpen, setStockAllocateModalOpen] = useState(false);
   const [orderForStockAllocation, setOrderForStockAllocation] = useState(null);
-  const [selectedAllocateModelId, setSelectedAllocateModelId] = useState('5kw-std');
+  const [selectedAllocateModelId, setSelectedAllocateModelId] = useState('1kw-dcr');
   const [submittingStockAllocation, setSubmittingStockAllocation] = useState(false);
 
   // Inward Modal State
@@ -457,6 +475,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
         await fetchOrders();
         if (onNavigateToOutward) {
           onNavigateToOutward(order);
+        } else {
+          navigate(`${prefix}/out-for-delivery`);
         }
       }
     } catch (err) {
@@ -552,7 +572,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       const res = await getDeliveryOrders(params);
       if (res.status === 'success') {
         setOrders(res.data || []);
-        if (res.summary) setSummary(res.summary);
+        if (res.summary) {
+          setSummary(res.summary);
+          window.dispatchEvent(new CustomEvent('deliveryOrdersUpdated', { detail: res.summary }));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch delivery orders:', err);
@@ -565,6 +588,30 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   useEffect(() => {
     fetchOrders();
   }, [selectedStatus, selectedState, selectedDistrict, pincodeFilter, dateFilter]);
+
+  // Load dynamic BOS Kit catalog from backend (connected to Solar Shop products)
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        const res = await getBosKitCatalog();
+        if (res.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
+          setPreassembledStock(prev => {
+            return res.data.map(catItem => {
+              const match = prev.find(p => p.id === catItem.id || p.catalog_name === catItem.catalog_name);
+              return {
+                ...catItem,
+                ready_stock: match ? match.ready_stock : catItem.ready_stock,
+                batch_codes: match ? match.batch_codes : catItem.batch_codes
+              };
+            });
+          });
+        }
+      } catch (e) {
+        console.warn('Could not load dynamic BOS kit catalog, using defaults:', e);
+      }
+    };
+    fetchCatalog();
+  }, []);
 
   // Handle Search on Enter or debounce
   const handleSearchSubmit = (e) => {
@@ -593,16 +640,25 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     }));
   };
 
+  // Helper to determine if an order has been forwarded to Out for Delivery or beyond
+  const isOrderSentForDelivery = (ord) => {
+    if (!ord) return false;
+    const sentStatuses = ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate', 'dispatched_pending', 'in_transit', 'delivered', 'delivery_exception'];
+    return sentStatuses.includes(ord.delivery_status) || !!ord.sent_for_delivery_at;
+  };
+
   // Relevant Filter Counts for New Orders: All Orders, Payment Done, Inward Pending, Inward Done
   const queueCounts = useMemo(() => {
     let paymentDone = 0;
     let pendingInward = 0;
     let inwardDone = 0;
 
-    orders.forEach(ord => {
+    const activeOrders = orders.filter(ord => !isOrderSentForDelivery(ord));
+
+    activeOrders.forEach(ord => {
       const items = ord.items || [];
       const totalPending = items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
-      const isComplete = totalPending === 0 || ord.delivery_status === 'ready_for_dispatch';
+      const isComplete = totalPending === 0;
 
       // Payment Done: checks first-half payment is completed / verified
       const isPaymentDone = (ord.epcs || []).length === 0 || (ord.epcs || []).every(epc => epc.payment_first_half?.status === 'done');
@@ -616,20 +672,21 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     });
 
     return {
-      total: orders.length,
+      total: activeOrders.length,
       paymentDone,
       pendingInward,
       inwardDone
     };
   }, [orders]);
 
-  // Displayed Orders filtered by the 4 boss-defined tabs
+  // Displayed Orders filtered by the 4 boss-defined tabs (Sent orders disappear and move to Out for Delivery)
   const displayedOrders = useMemo(() => {
-    if (selectedQueueTab === 'all') return orders;
-    return orders.filter(ord => {
+    const activeOrders = orders.filter(ord => !isOrderSentForDelivery(ord));
+    if (selectedQueueTab === 'all') return activeOrders;
+    return activeOrders.filter(ord => {
       const items = ord.items || [];
       const totalPending = items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
-      const isComplete = totalPending === 0 || ord.delivery_status === 'ready_for_dispatch';
+      const isComplete = totalPending === 0;
       const isPaymentDone = (ord.epcs || []).length === 0 || (ord.epcs || []).every(epc => epc.payment_first_half?.status === 'done');
 
       if (selectedQueueTab === 'payment_done') return isPaymentDone;
@@ -883,6 +940,30 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           message: res.message || 'Material inward verified & updated!',
           type: 'success'
         }));
+      }
+
+      // Deduct from preassembled stock if any BOS kit was inwarded from buffer
+      const bosInwarded = itemsToInward.find(it => isBosKitItem(it) || it.sku?.startsWith('BOS-KIT-'));
+      if (bosInwarded && bosInwarded.qty > 0) {
+        setPreassembledStock(prev => {
+          let remainingToDeduct = bosInwarded.qty;
+          const updated = prev.map(m => {
+            if (remainingToDeduct > 0 && m.ready_stock > 0) {
+              const deduct = Math.min(remainingToDeduct, m.ready_stock);
+              remainingToDeduct -= deduct;
+              return {
+                ...m,
+                ready_stock: m.ready_stock - deduct,
+                batch_codes: (m.batch_codes || []).slice(deduct)
+              };
+            }
+            return m;
+          });
+          try {
+            localStorage.setItem('solarkits_preassembled_stock', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
       }
 
       setInwardModalOpen(false);
@@ -1472,17 +1553,17 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       return (
                         <button
                           type="button"
-                          onClick={() => {
-                            const prefix = location.pathname.startsWith('/warehouse-management-panel')
-                              ? '/warehouse-management-panel'
-                              : '/warehouse';
-                            navigate(`${prefix}/out-for-delivery`);
-                          }}
-                          className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 shadow-sm bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer active:scale-95 shadow-emerald-500/25"
+                          onClick={() => handleSendForDelivery(ord)}
+                          disabled={sendingOrderId === ord._id}
+                          className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 shadow-sm bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer active:scale-95 shadow-emerald-500/25 disabled:opacity-50"
                           title="All materials inwarded! Click to forward order to Out for Delivery Station"
                         >
-                          <FaTruck className="text-xs" />
-                          <span>Send for Delivery</span>
+                          {sendingOrderId === ord._id ? (
+                            <FaSpinner className="animate-spin text-xs" />
+                          ) : (
+                            <FaTruck className="text-xs" />
+                          )}
+                          <span>{sendingOrderId === ord._id ? 'Sending...' : 'Send for Delivery'}</span>
                           <FaArrowRight className="text-[10px]" />
                         </button>
                       );
@@ -1891,10 +1972,29 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           {/* BOS Kit Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
             {[
-              { id: 'all', label: 'All BOS Kits', count: orders.filter(o => o.kit_preparation_status && o.kit_preparation_status !== 'not_required').length },
-              { id: 'awaiting_components', label: 'Awaiting Components', count: orders.filter(o => o.kit_preparation_status === 'awaiting_components').length, color: 'text-amber-400' },
-              { id: 'in_assembly', label: 'In Assembly Station', count: orders.filter(o => o.kit_preparation_status === 'in_assembly').length, color: 'text-purple-400' },
-              { id: 'kit_ready', label: 'Kit Ready for Dispatch', count: orders.filter(o => o.kit_preparation_status === 'kit_ready').length, color: 'text-emerald-400' },
+              {
+                id: 'all',
+                label: 'Pending Assembly Queue',
+                count: orders.filter(o => o.kit_preparation_status && o.kit_preparation_status !== 'not_required' && o.kit_preparation_status !== 'kit_ready' && o.kit_assembly_details?.assembly_status !== 'completed').length
+              },
+              {
+                id: 'awaiting_components',
+                label: 'Awaiting Components',
+                count: orders.filter(o => o.kit_preparation_status === 'awaiting_components').length,
+                color: 'text-amber-400'
+              },
+              {
+                id: 'in_assembly',
+                label: 'In Assembly Station',
+                count: orders.filter(o => o.kit_preparation_status === 'in_assembly').length,
+                color: 'text-purple-400'
+              },
+              {
+                id: 'kit_ready',
+                label: 'Kit Ready / Allocated',
+                count: orders.filter(o => o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed').length,
+                color: 'text-emerald-400'
+              },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1917,7 +2017,17 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           {(() => {
             const kitOrders = orders
               .filter(o => o.kit_preparation_status && o.kit_preparation_status !== 'not_required')
-              .filter(o => boskitStageFilter === 'all' || o.kit_preparation_status === boskitStageFilter);
+              .filter(o => {
+                const isReady = o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed';
+                if (boskitStageFilter === 'all') {
+                  // User specification: If BOS Kit is allocated or ready, hide card from active pending assembly queue
+                  return !isReady;
+                }
+                if (boskitStageFilter === 'kit_ready') {
+                  return isReady;
+                }
+                return o.kit_preparation_status === boskitStageFilter;
+              });
 
             if (kitOrders.length === 0) {
               return (
@@ -1933,12 +2043,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
               <div className="space-y-4">
                 {kitOrders.map(ord => {
                   const kitStatus = ord.kit_preparation_status || 'not_required';
-                  const unallocatedShortage = (ord.items || []).reduce((acc, it) => {
-                    const pending = it.pending_qty || 0;
-                    const allocated = it.allocated_stock || 0;
-                    return acc + Math.max(0, pending - allocated);
-                  }, 0);
-                  const hasShortage = unallocatedShortage > 0;
+                  const isKitReady = kitStatus === 'kit_ready' || ord.kit_assembly_details?.assembly_status === 'completed';
+                  // BOS Kit shortage: only short if kit is not ready AND warehouse buffer has 0 ready kits
+                  const hasShortage = !isKitReady && totalPreassembledKitsInStock === 0;
+                  const unallocatedShortage = hasShortage ? 1 : 0;
                   const assemblyDetails = ord.kit_assembly_details || {};
 
                   return (
@@ -1983,81 +2091,148 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                         </div>
                       </div>
 
-                      {/* ── Ready Warehouse Stock Allocation Banner (Boss Requirement) ── */}
-                      {kitStatus === 'kit_ready' && assemblyDetails.fulfilled_from_stock ? (
-                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <FaCheck className="text-sm shrink-0 text-emerald-400" />
-                            <span>
-                              <strong>Fulfilled from Warehouse Ready Stock:</strong> Model <strong>{assemblyDetails.preassembled_model_name || 'Standard BOS Kit'}</strong> (Batch: <code className="font-mono bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">{assemblyDetails.allocated_from_batch_code || 'WH-BOS-STOCK'}</code>). Manual assembly bypassed — Ready for dispatch!
-                            </span>
-                          </div>
-                          <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
-                            ⚡ Instant Buffer Match
-                          </span>
-                        </div>
-                      ) : kitStatus !== 'kit_ready' ? (
-                        <div className="p-3.5 rounded-xl bg-gradient-to-r from-purple-900/30 via-surface to-indigo-900/25 border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-                                <FaCube className="text-purple-400" />
-                                Warehouse Buffer Stock:
-                              </span>
-                              {totalPreassembledKitsInStock > 0 ? (
-                                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                  {totalPreassembledKitsInStock} Kits Ready in WH
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                  0 Kits in WH Stock (Shortage)
-                                </span>
-                              )}
+                      {/* ── Status-Specific Top Card (Ready vs Buffer Available vs Shortage) ── */}
+                      {isKitReady ? (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-surface border-2 border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg shrink-0">
+                              <FaCheckCircle />
                             </div>
-                            <p className="text-[11px] text-text-secondary">
-                              {totalPreassembledKitsInStock > 0
-                                ? 'Is order ko fast-track karne ke liye warehouse ready stock se 1-click me BOS Kit bind karein.'
-                                : 'Warehouse buffer me pre-assembled kit nahi hai. Niche 5-step assembly line se inwarded material assemble karein.'}
+                            <div>
+                              <div className="font-black text-emerald-400 text-sm flex items-center gap-2">
+                                <span>BOS Kit Ready & Staged</span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                                  {assemblyDetails.allocated_from_batch_code || assemblyDetails.kit_serial_barcode || 'WH-BOS-STOCK'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-text-secondary mt-0.5">
+                                Complete BOS kit package tayyar hai aur rack <strong className="text-text-primary font-mono">{assemblyDetails.storage_location || 'BAY-BOS-STOCK'}</strong> par staged hai. Ready for dispatch!
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleSendForDelivery(ord)}
+                              disabled={sendingOrderId === ord._id}
+                              className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-md flex items-center gap-2 transition-all active:scale-95"
+                              title="Click to send order directly to Out for Delivery Station"
+                            >
+                              {sendingOrderId === ord._id ? (
+                                <>
+                                  <FaSpinner className="animate-spin text-xs" />
+                                  <span>Sending to Delivery...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FaTruck className="text-xs" />
+                                  <span>Send for Delivery</span>
+                                  <FaArrowRight className="text-[10px]" />
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssemblyModal(ord)}
+                              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-surface-hover hover:bg-surface border border-border text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1.5"
+                            >
+                              <FaTools className="text-xs text-text-muted" />
+                              <span>Workstation Dossier</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (standaloneBoskit || location.pathname.includes('bos-kit-assembly')) {
+                                  navigate(`${prefix}/new-orders`);
+                                } else {
+                                  setMainSectionTab('orders');
+                                }
+                              }}
+                              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-surface-hover hover:bg-surface border border-border text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1.5"
+                            >
+                              <FaArrowLeft className="text-[10px]" />
+                              <span>Back to Orders</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : totalPreassembledKitsInStock > 0 ? (
+                        /* User Rule 3: Agar stock me hai to sirf itna show ho: "Allocate from Ready Stock" */
+                        <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-surface to-teal-950/30 border-2 border-emerald-500/40 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5">
+                                <FaCube className="text-emerald-400" />
+                                Warehouse Buffer Stock: {totalPreassembledKitsInStock} Kits Ready in WH
+                              </span>
+                              <span className="text-[11px] text-text-muted font-bold font-mono">
+                                (1kW / 2kW / 3kW Solarkits DCR Packages)
+                              </span>
+                            </div>
+                            <p className="text-xs text-text-secondary">
+                              Warehouse buffer me <strong>{totalPreassembledKitsInStock} ready BOS Kits</strong> available hain. Is order ke liye manual assembly line bypass karke direct ready stock se 1-click me allocate karein.
                             </p>
                           </div>
 
-                          {totalPreassembledKitsInStock > 0 ? (
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
                             <button
                               type="button"
                               onClick={() => handleOpenStockAllocationModal(ord)}
-                              className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/25 flex items-center gap-2 cursor-pointer transition-all active:scale-95 shrink-0"
+                              className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/25 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
                               title="1-Click allocate pre-assembled BOS kit from warehouse stock"
                             >
                               <FaCheck className="text-xs" />
                               <span>⚡ Allocate from Ready Stock</span>
                             </button>
-                          ) : (
                             <button
                               type="button"
-                              onClick={() => setBoskitWorkstationMode('stock_inventory')}
-                              className="px-3.5 py-1.5 rounded-xl text-[11px] font-bold bg-surface-hover hover:bg-surface border border-purple-500/40 text-purple-300 flex items-center gap-1.5 cursor-pointer shrink-0"
-                              title="Go to Warehouse Buffer Assembly to build stock"
+                              onClick={() => handleOpenAssemblyModal(ord)}
+                              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-surface-hover hover:bg-surface border border-border text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1.5"
                             >
-                              <FaPlus className="text-[10px]" />
-                              <span>Pre-Assemble Kits for WH</span>
+                              <FaTools className="text-xs text-text-muted" />
+                              <span>Workstation Dossier</span>
                             </button>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (standaloneBoskit || location.pathname.includes('bos-kit-assembly')) {
+                                  navigate(`${prefix}/new-orders`);
+                                } else {
+                                  setMainSectionTab('orders');
+                                }
+                              }}
+                              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-surface-hover hover:bg-surface border border-border text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1.5"
+                            >
+                              <FaArrowLeft className="text-[10px]" />
+                              <span>Back to Orders</span>
+                            </button>
+                          </div>
                         </div>
-                      ) : null}
-
-                      {/* Component Shortage Warning if items pending */}
-                      {hasShortage && (
-                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-center gap-2">
-                          <FaExclamationTriangle className="text-sm shrink-0" />
-                          <span>
-                            <strong>Component Shortage Alert:</strong> {unallocatedShortage} units have unallocated shortage. Please inward or allocate stock before final dispatch staging.
-                          </span>
+                      ) : (
+                        /* User Rule 3: Shortage Alert shown only when 0 stock in buffer */
+                        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <FaExclamationTriangle className="text-sm shrink-0" />
+                            <span>
+                              <strong>BOS Kit Stock Shortage (0 Ready Kits in WH):</strong> Warehouse buffer me 0 ready kits hain. Workstation par niche 5-stage assembly line se raw materials assemble karein ya Account Manager se raw materials procure karwayein.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenProcureModal(ord, { product_name: 'BOS Kit Electrical & Structure Raw Materials Package', sku: 'BOS-RAW-MAT-PKG' })}
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all cursor-pointer shrink-0"
+                          >
+                            Request Account Manager
+                          </button>
                         </div>
                       )}
 
-                      {/* 5-Stage Stepper Workflow */}
+                      {/* 5-Stage Stepper Workflow & BOM Assembly Station (User Rule 3: Shown ONLY when Kit is not ready AND buffer stock is 0) */}
+                      {!isKitReady && totalPreassembledKitsInStock === 0 && (
+                        <>
+                          {/* 5-Stage Stepper Workflow */}
                       {(() => {
-                        const isPickedDone = ['ready_for_assembly', 'in_assembly', 'kit_ready'].includes(kitStatus) || !hasShortage;
+                        const isPickedDone = ['ready_for_assembly', 'in_assembly', 'kit_ready'].includes(kitStatus) || isKitReady;
                         const isAssembledDone = ['in_assembly', 'kit_ready'].includes(kitStatus) && (assemblyDetails.assembly_status === 'completed' || !!assemblyDetails.assembled_at || assemblyDetails.qc_verified || kitStatus === 'kit_ready');
                         const isQcDone = assemblyDetails.qc_verified === true || assemblyDetails.qc_status === 'passed' || kitStatus === 'kit_ready';
                         const isPackedDone = assemblyDetails.packed_and_labeled === true || !!assemblyDetails.kit_serial_barcode || kitStatus === 'kit_ready';
@@ -2101,143 +2276,78 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                         );
                       })()}
 
-                      {/* Kit Components Table */}
+                      {/* True BOS Kit BOM Components Table (Mounting Rails, Mid/End Clamps, DC Cables, DCDB, Earth Rods, MC4) */}
                       <div className="border border-border rounded-xl overflow-hidden bg-surface">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-surface-hover/80 border-b border-border text-[10px] font-black uppercase text-text-muted">
                             <tr>
-                              <th className="p-3">Component / SKU</th>
+                              <th className="p-3">BOS Raw Material / BOM SKU</th>
                               <th className="p-3">Fulfilment Method</th>
-                              <th className="p-3 text-center">WH Available</th>
-                              <th className="p-3 text-center">Required</th>
-                              <th className="p-3 text-center">Inwarded</th>
-                              <th className="p-3 text-center">Pending</th>
-                              <th className="p-3 text-right">Allocation Status</th>
+                              <th className="p-3 text-center">WH Available Stock</th>
+                              <th className="p-3 text-center">Required (BOM)</th>
+                              <th className="p-3 text-center">Picking / Build Status</th>
+                              <th className="p-3 text-right">Workstation Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
-                            {(ord.items || []).map(it => {
-                              const isItemDone = (it.pending_qty || 0) === 0;
-                              const isFullyAllocated = (it.allocated_stock || 0) >= (it.pending_qty || 0) && (it.allocated_stock || 0) > 0;
-                              const isPartiallyAllocated = (it.allocated_stock || 0) > 0 && (it.allocated_stock || 0) < (it.pending_qty || 0);
+                            {(() => {
+                              const matchedModel = preassembledStock.find(m =>
+                                (ord.system_capacity && m.name.toLowerCase().includes(ord.system_capacity.toLowerCase())) ||
+                                m.id === '5kw-std'
+                              ) || preassembledStock[0];
 
-                              return (
-                                <tr key={it.sku} className="hover:bg-surface-hover/30">
-                                  <td className="p-3">
-                                    <div className="font-bold text-text-primary">{it.product_name}</div>
-                                    <div className="text-[10px] font-mono text-primary">{it.sku}</div>
-                                  </td>
-                                  <td className="p-3 text-[11px]">
-                                    <span className="capitalize text-text-secondary">{it.supply_fulfilment_method ? it.supply_fulfilment_method.replace(/_/g, ' ') : 'Warehouse Stock'}</span>
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    <div className="inline-flex flex-col items-center">
-                                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold ${
-                                        (it.available_inventory_stock ?? 0) >= (it.pending_qty || 0)
-                                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                                          : (it.available_inventory_stock ?? 0) > 0
-                                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                                          : 'bg-danger/10 text-danger border border-danger/30'
-                                      }`}>
-                                        {it.available_inventory_stock ?? 0} Pcs
+                              const bomList = (matchedModel?.bom_components || [
+                                { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 8, unit: 'Pcs' },
+                                { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 14, unit: 'Pcs' },
+                                { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+                                { name: '4 sq mm Solar DC Cable (100m Roll)', sku: 'BOS-DC-CABLE-4SQMM-100M', qty: 1, unit: 'Roll' },
+                                { name: '2-In 2-Out DCDB / AJB Box', sku: 'BOS-AJB-DCDB-4IN-4OUT', qty: 1, unit: 'Box' },
+                                { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+                                { name: 'MC4 Connectors 1000V', sku: 'BOS-MC4-CONN-1000V', qty: 8, unit: 'Pairs' }
+                              ]);
+
+                              return bomList.map(it => {
+                                return (
+                                  <tr key={it.sku} className="hover:bg-surface-hover/30">
+                                    <td className="p-3">
+                                      <div className="font-bold text-text-primary">{it.name}</div>
+                                      <div className="text-[10px] font-mono text-purple-400 font-bold">{it.sku}</div>
+                                    </td>
+                                    <td className="p-3 text-[11px]">
+                                      <span className="capitalize text-text-secondary">Warehouse Raw Bin</span>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                        In Stock
                                       </span>
-                                      {it.base_warehouse_stock !== undefined && (
-                                        <span className="text-[9px] text-text-muted mt-0.5" title="Physical Total Warehouse Stock">
-                                          Total: {it.base_warehouse_stock}
+                                    </td>
+                                    <td className="p-3 text-center font-bold">{it.qty} {it.unit || 'Pcs'}</td>
+                                    <td className="p-3 text-center">
+                                      {isKitReady ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success">
+                                          ✓ Assembled & Verified
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-400">
+                                          Ready for Picking
                                         </span>
                                       )}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 text-center font-bold">{it.ordered_qty}</td>
-                                  <td className="p-3 text-center font-bold text-success">{it.received_qty}</td>
-                                  <td className="p-3 text-center">
-                                    {isItemDone ? (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success">
-                                        0 Pcs
-                                      </span>
-                                    ) : isFullyAllocated ? (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" title="Shortage 100% covered by warehouse allocated stock">
-                                        ✓ Covered (WH)
-                                      </span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-warning/15 text-warning">
-                                        {Math.max(0, (it.pending_qty || 0) - (it.allocated_stock || 0))} Pcs
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="p-3 text-right">
-                                    {isItemDone ? (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs">
-                                        <FaCheckCircle className="text-[10px]" /> Fulfilled
-                                      </span>
-                                    ) : isFullyAllocated ? (
-                                      <div className="inline-flex items-center justify-end gap-1.5">
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                          <FaCheckCircle className="text-[10px]" /> {it.allocated_stock} Allocated
+                                    </td>
+                                    <td className="p-3 text-right">
+                                      {isKitReady ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs">
+                                          <FaCheckCircle className="text-[10px]" /> Kit Built
                                         </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenReserveModal(ord, it)}
-                                          className="px-2 py-0.5 rounded text-[10px] font-bold text-text-muted hover:text-primary hover:bg-surface-hover border border-border transition-all cursor-pointer"
-                                          title="Edit allocated quantity"
-                                        >
-                                          Edit
-                                        </button>
-                                      </div>
-                                    ) : isPartiallyAllocated ? (
-                                      <div className="inline-flex items-center justify-end gap-1.5">
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                                          ✓ {it.allocated_stock} Allocated
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-surface-hover text-text-secondary border border-border">
+                                          Bin Pick Ready
                                         </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenReserveModal(ord, it)}
-                                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-surface-hover hover:bg-primary hover:text-white border border-border transition-all cursor-pointer"
-                                        >
-                                          Allocate Rest
-                                        </button>
-                                        {(it.available_inventory_stock || 0) < ((it.pending_qty || 0) - (it.allocated_stock || 0)) && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleOpenProcureModal(ord, it)}
-                                            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white border border-amber-500/30 transition-all cursor-pointer"
-                                            title="Procure shortage"
-                                          >
-                                            Procure
-                                          </button>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <div className="inline-flex items-center justify-end gap-1.5">
-                                        {(it.available_inventory_stock || 0) > 0 ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleOpenReserveModal(ord, it)}
-                                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-primary text-white hover:bg-primary-hover border border-primary/30 transition-all cursor-pointer shadow-xs"
-                                          >
-                                            Allocate Stock
-                                          </button>
-                                        ) : (
-                                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-danger/10 text-danger border border-danger/20">
-                                            0 In Stock
-                                          </span>
-                                        )}
-                                        {((it.available_inventory_stock || 0) < (it.pending_qty || 0)) && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleOpenProcureModal(ord, it)}
-                                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white border border-amber-500/30 transition-all cursor-pointer"
-                                            title="Send procurement requisition"
-                                          >
-                                            Procure
-                                          </button>
-                                        )}
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              });
+                            })()}
                           </tbody>
                         </table>
                       </div>
@@ -2380,7 +2490,9 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </>
+                  )}
+                </div>
                   );
                 })}
               </div>
@@ -2665,18 +2777,18 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                 </div>
 
                 {/* Items Input Table */}
-                <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[380px] overflow-y-auto shadow-xs">
+                <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[460px] overflow-y-auto shadow-xs">
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-slate-200 border-b-2 border-slate-300 z-10 shadow-2xs">
                       <tr className="text-[12px] font-black uppercase tracking-wider text-slate-950">
                         <th className="p-3 text-slate-950 font-black">Product / SKU</th>
-                        <th className="p-3 text-center text-slate-950 font-black">Ordered</th>
-                        <th className="p-3 text-center text-slate-950 font-black">Inwarded</th>
-                        <th className="p-3 text-center text-slate-950 font-black">Pending</th>
+                        <th className="p-3 text-center w-20 text-slate-950 font-black">Ordered</th>
+                        <th className="p-3 text-center w-24 text-slate-950 font-black">Inwarded</th>
+                        <th className="p-3 text-center min-w-[110px] text-slate-950 font-black">Pending</th>
                         <th className="p-3 text-center w-28 text-slate-950 font-black">Inward (OK)</th>
                         <th className="p-3 text-center w-24 text-slate-950 font-black">Damaged</th>
                         <th className="p-3 text-center w-24 text-slate-950 font-black">Missing</th>
-                        <th className="p-3 text-center w-36 text-slate-950 font-black">Rack / Location</th>
+                        <th className="p-3 text-center w-40 text-slate-950 font-black">Rack / Location</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y-2 divide-slate-200">
@@ -2698,16 +2810,16 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               }`}
                             >
                               <td className="p-3">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <div className="font-black text-slate-950 text-sm flex items-center gap-1.5">
                                     <FaTools className="text-purple-700 text-sm shrink-0" />
                                     <span>{it.product_name}</span>
                                   </div>
-                                  <span className="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-xs shrink-0">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-xs shrink-0">
                                     ⚡ SolarKit BOS Package
                                   </span>
                                 </div>
-                                <div className="text-[11px] font-mono text-purple-950 font-black mt-1 flex flex-wrap items-center gap-2">
+                                <div className="text-[11px] font-mono text-purple-950 font-black mt-0.5 flex flex-wrap items-center gap-2">
                                   <span>{it.sku}</span>
                                   <span className="text-slate-800 font-bold">• In-house Pre-assembled Enclosure (ACDB / DCDB / Cables)</span>
                                 </div>
@@ -2735,58 +2847,65 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                 )}
 
                                 {/* Action controls directly on the BOS Kit row */}
-                                <div className="mt-3 pt-2.5 border-t-2 border-purple-200 flex flex-wrap items-center gap-2.5">
-                                  {/* Button 1: Inward from Ready Buffer Stock if available */}
-                                  {totalPreassembledKitsInStock > 0 && !isDone && (
+                                <div className="mt-2.5 pt-2 border-t-2 border-purple-200 flex flex-wrap items-center gap-2">
+                                  {totalPreassembledKitsInStock > 0 && !isDone ? (
+                                    /* Button 1: Inward from Ready Buffer Stock (Shown ONLY when stock > 0) */
+                                    input.qty === it.pending_qty && input.qty > 0 ? (
+                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center gap-1.5 shadow-xs">
+                                        <FaCheck className="text-xs text-emerald-700" />
+                                        <span>✓ Stock Allocated ({it.pending_qty} Pcs Ready to Confirm)</span>
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setInwardInputs(prev => ({
+                                            ...prev,
+                                            [it.sku]: {
+                                              ...(prev[it.sku] || {}),
+                                              qty: it.pending_qty,
+                                              damaged_qty: 0,
+                                              missing_qty: 0,
+                                              rack_location: prev[it.sku]?.rack_location || 'BAY-BOS-STOCK'
+                                            }
+                                          }));
+                                          dispatch(setAlert({
+                                            message: `⚡ Allocated ${it.pending_qty} ready BOS Kit(s) from warehouse buffer stock! Inward quantity set.`,
+                                            type: 'success'
+                                          }));
+                                        }}
+                                        className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+                                        title="Directly inward from warehouse buffer stock"
+                                      >
+                                        <FaCheck className="text-xs" />
+                                        <span>⚡ Inward from Buffer Stock ({totalPreassembledKitsInStock} Ready in WH)</span>
+                                      </button>
+                                    )
+                                  ) : !isDone ? (
+                                    /* Button 2: Request / Build for this Order in BOS Kit Assembly Tab (Shown ONLY when stock === 0) */
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setInwardInputs(prev => ({
-                                          ...prev,
-                                          [it.sku]: {
-                                            ...(prev[it.sku] || {}),
-                                            qty: it.pending_qty,
-                                            damaged_qty: 0,
-                                            missing_qty: 0,
-                                            rack_location: prev[it.sku]?.rack_location || 'BAY-BOS-STOCK'
-                                          }
-                                        }));
+                                        setInwardModalOpen(false);
+                                        if (onNavigateToBosKit) {
+                                          onNavigateToBosKit(selectedOrderForInward);
+                                        } else {
+                                          navigate(`${prefix}/bos-kit-assembly?orderId=${selectedOrderForInward._id || selectedOrderForInward.order_number}`);
+                                          setMainSectionTab('boskit_station');
+                                          setSelectedOrderForAssembly(selectedOrderForInward);
+                                        }
                                         dispatch(setAlert({
-                                          message: `⚡ Allocated ${it.pending_qty} ready BOS Kit(s) from warehouse buffer stock! Inward quantity set.`,
-                                          type: 'success'
+                                          message: `Opening BOS Kit Assembly Workstation for ${selectedOrderForInward.delivery_order_id}. You can begin kit assembly or request missing components from Account Manager.`,
+                                          type: 'info'
                                         }));
                                       }}
-                                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-sm cursor-pointer transition-all active:scale-95"
-                                      title="Directly inward from warehouse buffer stock"
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-700 hover:bg-purple-800 text-white border border-purple-800 flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+                                      title="Open BOS Kit Assembly tab to build this kit or send procurement request to Account Manager"
                                     >
-                                      <FaCheck className="text-xs" />
-                                      <span>⚡ Inward from Buffer Stock ({totalPreassembledKitsInStock} Ready in WH)</span>
+                                      <FaTools className="text-xs" />
+                                      <span>🔨 Request / Build in BOS Kit Assembly Tab →</span>
                                     </button>
-                                  )}
-
-                                  {/* Button 2: Request / Build for this Order in BOS Kit Assembly Tab */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setInwardModalOpen(false);
-                                      if (onNavigateToBosKit) {
-                                        onNavigateToBosKit(selectedOrderForInward);
-                                      } else {
-                                        navigate(`${prefix}/bos-kit-assembly?orderId=${selectedOrderForInward._id || selectedOrderForInward.order_number}`);
-                                        setMainSectionTab('boskit_station');
-                                        setSelectedOrderForAssembly(selectedOrderForInward);
-                                      }
-                                      dispatch(setAlert({
-                                        message: `Opening BOS Kit Assembly Workstation for ${selectedOrderForInward.delivery_order_id}. You can begin kit assembly or request missing components from Account Manager.`,
-                                        type: 'info'
-                                      }));
-                                    }}
-                                    className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-700 hover:bg-purple-800 text-white border border-purple-800 flex items-center gap-2 shadow-sm cursor-pointer transition-all active:scale-95"
-                                    title="Open BOS Kit Assembly tab to build this kit or send procurement request to Account Manager"
-                                  >
-                                    <FaTools className="text-xs" />
-                                    <span>🔨 Request / Build in BOS Kit Assembly Tab →</span>
-                                  </button>
+                                  ) : null}
                                 </div>
                               </td>
                               <td className="p-3 text-center font-black text-slate-950 text-base">
@@ -2795,8 +2914,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               <td className="p-3 text-center font-black text-emerald-800 text-base">
                                 {it.received_qty}
                               </td>
-                              <td className="p-3 text-center">
-                                <span className={`px-3 py-1 rounded-full text-xs font-black shadow-2xs ${
+                              <td className="p-3 text-center whitespace-nowrap">
+                                <span className={`inline-flex items-center justify-center min-w-[75px] px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs ${
                                   isDone
                                     ? 'bg-emerald-100 text-emerald-950 border-2 border-emerald-500'
                                     : 'bg-amber-100 text-amber-950 border-2 border-amber-500'
@@ -2929,8 +3048,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                             <td className="p-3 text-center font-black text-emerald-800 text-base">
                               {it.received_qty}
                             </td>
-                            <td className="p-3 text-center">
-                              <span className={`px-3 py-1 rounded-full text-xs font-black shadow-2xs ${
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <span className={`inline-flex items-center justify-center min-w-[75px] px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs ${
                                 isDone
                                   ? 'bg-emerald-100 text-emerald-950 border-2 border-emerald-500'
                                   : 'bg-amber-100 text-amber-950 border-2 border-amber-500'
@@ -3548,9 +3667,38 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       >
         {selectedOrderForDetails && (() => {
           const ord = selectedOrderForDetails;
-          const totalOrderedItems = (ord.items || []).reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
-          const totalReceivedItems = (ord.items || []).reduce((acc, it) => acc + (it.received_qty || 0), 0);
-          const totalPendingItems = (ord.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+          
+          // Synthesize BOS kit item if required so all components appear together
+          const itemsWithBosKit = (() => {
+            const list = [...(ord.items || [])];
+            const hasBos = list.some(it => isBosKitItem(it));
+            if (!hasBos && ord.kit_preparation_status !== 'not_required') {
+              const totalKits = (ord.epcs || []).reduce((acc, epc) => {
+                const match = (epc.boskit_qty || '').match(/(\d+)/);
+                return acc + (match ? parseInt(match[1]) : 1);
+              }, 0) || 1;
+              const isKitReady = ord.kit_preparation_status === 'kit_ready' || ord.kit_assembly_details?.assembly_status === 'completed';
+              const receivedKits = isKitReady ? totalKits : 0;
+              const pendingKits = Math.max(0, totalKits - receivedKits);
+              list.push({
+                sku: `BOS-KIT-${(ord.system_capacity || '5KW').replace(/\s+/g, '')}-STD`,
+                product_name: `BOS Kit (${ord.system_capacity || '5kW'} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`,
+                category: 'BOS Kit',
+                ordered_qty: totalKits,
+                received_qty: receivedKits,
+                pending_qty: pendingKits,
+                available_inventory_stock: totalPreassembledKitsInStock,
+                supply_fulfilment_method: 'Warehouse Stock / Assembly',
+                rack_location: ord.kit_assembly_details?.storage_location || 'BAY-BOS-STOCK',
+                is_synthesized_bos_kit: true
+              });
+            }
+            return list;
+          })();
+
+          const totalOrderedItems = itemsWithBosKit.reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
+          const totalReceivedItems = itemsWithBosKit.reduce((acc, it) => acc + (it.received_qty || 0), 0);
+          const totalPendingItems = itemsWithBosKit.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
           const inwardPercent = totalOrderedItems > 0 ? Math.round((totalReceivedItems / totalOrderedItems) * 100) : 0;
 
           return (
@@ -3879,7 +4027,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {(ord.items || []).map(it => (
+                      {itemsWithBosKit.map(it => (
                         <tr key={it.sku} className="hover:bg-surface-hover/30">
                           <td className="p-2.5">
                             <div className="font-bold text-text-primary">{it.product_name}</div>
@@ -3954,16 +4102,39 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                     Inward Material
                   </button>
                   {ord.kit_preparation_status && ord.kit_preparation_status !== 'not_required' && (
-                    <button
-                      onClick={() => {
-                        setOrderDetailsModalOpen(false);
-                        setSelectedOrderForAssembly(ord);
-                        setMainSectionTab('boskit_station');
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-sm"
-                    >
-                      Open BOSKit Station
-                    </button>
+                    (ord.kit_preparation_status === 'kit_ready' || ord.kit_assembly_details?.assembly_status === 'completed') ? (
+                      <span className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5 shadow-sm">
+                        <FaCheck className="text-xs" />
+                        <span>✓ BOS Kit Allocated ({ord.kit_assembly_details?.allocated_from_batch_code || ord.kit_assembly_details?.kit_serial_barcode || 'In Stock'})</span>
+                      </span>
+                    ) : totalPreassembledKitsInStock > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderDetailsModalOpen(false);
+                          handleOpenStockAllocationModal(ord);
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-sm flex items-center gap-1.5"
+                        title="Warehouse ready stock se 1-click me BOS Kit bind karein"
+                      >
+                        <FaCheck className="text-xs" />
+                        <span>⚡ Allocate BOS Kit ({totalPreassembledKitsInStock} Ready)</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderDetailsModalOpen(false);
+                          setSelectedOrderForAssembly(ord);
+                          setMainSectionTab('boskit_station');
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-sm flex items-center gap-1.5"
+                        title="Warehouse buffer me kit nahi hai. Assembly workstation par build karein"
+                      >
+                        <FaTools className="text-xs" />
+                        <span>Open BOSKit Station</span>
+                      </button>
+                    )
                   )}
                 </div>
               </div>

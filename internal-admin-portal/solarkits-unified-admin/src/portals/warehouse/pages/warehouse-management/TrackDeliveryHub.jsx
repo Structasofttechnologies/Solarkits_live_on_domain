@@ -72,9 +72,13 @@ export default function TrackDeliveryHub() {
       }
       const res = await getDeliveryOrders(params);
       if (res.status === 'success') {
-        const list = res.data || [];
-        // By default prioritize active deliveries
+        const rawList = res.data || [];
+        // User rule: Track Delivery Hub shows ONLY dispatched orders (in_transit, delivered, delivery_exception)
+        const list = rawList.filter(o => ['in_transit', 'delivered', 'delivery_exception'].includes(o.delivery_status));
         setOrders(list);
+        if (res.summary) {
+          window.dispatchEvent(new CustomEvent('deliveryOrdersUpdated', { detail: res.summary }));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch tracked deliveries:', err);
