@@ -15,6 +15,7 @@ const {
   StoreStatusHistory,
 } = require('../models/india_solarshop_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
+const { ensureStoreSetupChecklist } = require('../services/store.setup.service');
 
 // Helper: Generate Store Setup ID (ST-YYYY-XXXX)
 const generateStoreSetupId = async () => {
@@ -109,6 +110,7 @@ const allocate_warehouse = async (req, res) => {
 
       store.store_setup_id = storeSetup._id;
       await store.save();
+      await ensureStoreSetupChecklist(storeSetup._id, store._id);
     } else {
       storeSetup.warehouse_id = warehouse._id;
       storeSetup.warehouse_allocated = true;

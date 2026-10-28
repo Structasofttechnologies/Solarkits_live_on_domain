@@ -2381,9 +2381,11 @@ exports.get_bde_store_setup_detail = async (req, res) => {
       .populate('current_bde_id', 'full_name bde_id email mobile_number')
       .lean();
 
-    if (!setup) return res.status(404).json({ status: 'error', message: 'Store Setup not found or unauthorized' });
-
-    const checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 }).lean();
+    let checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 }).lean();
+    if (!checklist || checklist.length === 0) {
+      const { ensureStoreSetupChecklist } = require('../../admin-panel/services/store.setup.service');
+      checklist = await ensureStoreSetupChecklist(setup._id, setup.franchisee_id?._id || setup.franchisee_id);
+    }
     const delays = await StoreSetupDelay.find({ store_setup_id: setup._id }).sort({ created_at: -1 }).lean();
     const verifications = await StoreSetupVerification.find({ store_setup_id: setup._id }).sort({ cycle_number: -1 }).lean();
 

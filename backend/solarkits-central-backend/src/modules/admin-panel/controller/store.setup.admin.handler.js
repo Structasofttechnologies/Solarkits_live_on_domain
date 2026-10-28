@@ -28,6 +28,7 @@ const {
   evaluateDelaysAndReminders,
   updateBdePerformanceMetrics,
   syncActiveStoreSetupsWithMasterSettings,
+  ensureStoreSetupChecklist,
 } = require('../services/store.setup.service');
 
 // ── 1. DASHBOARD STATS ────────────────────────────────────────────────────────
@@ -200,9 +201,13 @@ const get_store_setup_detail = async (req, res) => {
     }
 
     // Fetch checklist snapshot items grouped by category
-    const checklistItems = await StoreSetupChecklist.find({ store_setup_id: setup._id })
+    let checklistItems = await StoreSetupChecklist.find({ store_setup_id: setup._id })
       .sort({ display_order: 1 })
       .lean();
+
+    if (!checklistItems || checklistItems.length === 0) {
+      checklistItems = await ensureStoreSetupChecklist(setup._id, setup.franchisee_id?._id || setup.franchisee_id);
+    }
 
     // Fetch delay requests
     const delays = await StoreSetupDelay.find({ store_setup_id: setup._id })

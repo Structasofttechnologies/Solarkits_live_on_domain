@@ -25,6 +25,7 @@ const {
   BDEProfile,
 } = require('../models/india_solarshop_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
+const { ensureStoreSetupChecklist } = require('../services/store.setup.service');
 
 // Valid Onboarding Lifecycle Stages
 const LIFECYCLE_STAGES = [
@@ -320,6 +321,9 @@ const create_store = async (req, res) => {
 
     newReseller.store_setup_id = newStoreSetup._id;
     await newReseller.save();
+
+    // Auto-generate Master Checklist Snapshot for this newly created Store Setup
+    await ensureStoreSetupChecklist(newStoreSetup._id, newReseller._id);
 
     // 12. Record Initial Store Status History
     await StoreStatusHistory.create({
