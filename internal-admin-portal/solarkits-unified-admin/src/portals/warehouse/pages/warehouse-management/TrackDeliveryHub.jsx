@@ -75,6 +75,9 @@ export default function TrackDeliveryHub() {
         const list = res.data || [];
         // By default prioritize active deliveries
         setOrders(list);
+        if (res.summary) {
+          window.dispatchEvent(new CustomEvent('deliveryOrdersUpdated', { detail: res.summary }));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch tracked deliveries:', err);

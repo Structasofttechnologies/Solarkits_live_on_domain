@@ -552,7 +552,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       const res = await getDeliveryOrders(params);
       if (res.status === 'success') {
         setOrders(res.data || []);
-        if (res.summary) setSummary(res.summary);
+        if (res.summary) {
+          setSummary(res.summary);
+          window.dispatchEvent(new CustomEvent('deliveryOrdersUpdated', { detail: res.summary }));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch delivery orders:', err);
@@ -2665,18 +2668,18 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                 </div>
 
                 {/* Items Input Table */}
-                <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[380px] overflow-y-auto shadow-xs">
+                <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[460px] overflow-y-auto shadow-xs">
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-slate-200 border-b-2 border-slate-300 z-10 shadow-2xs">
                       <tr className="text-[12px] font-black uppercase tracking-wider text-slate-950">
                         <th className="p-3 text-slate-950 font-black">Product / SKU</th>
-                        <th className="p-3 text-center text-slate-950 font-black">Ordered</th>
-                        <th className="p-3 text-center text-slate-950 font-black">Inwarded</th>
-                        <th className="p-3 text-center text-slate-950 font-black">Pending</th>
+                        <th className="p-3 text-center w-20 text-slate-950 font-black">Ordered</th>
+                        <th className="p-3 text-center w-24 text-slate-950 font-black">Inwarded</th>
+                        <th className="p-3 text-center min-w-[110px] text-slate-950 font-black">Pending</th>
                         <th className="p-3 text-center w-28 text-slate-950 font-black">Inward (OK)</th>
                         <th className="p-3 text-center w-24 text-slate-950 font-black">Damaged</th>
                         <th className="p-3 text-center w-24 text-slate-950 font-black">Missing</th>
-                        <th className="p-3 text-center w-36 text-slate-950 font-black">Rack / Location</th>
+                        <th className="p-3 text-center w-40 text-slate-950 font-black">Rack / Location</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y-2 divide-slate-200">
@@ -2698,16 +2701,16 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               }`}
                             >
                               <td className="p-3">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <div className="font-black text-slate-950 text-sm flex items-center gap-1.5">
                                     <FaTools className="text-purple-700 text-sm shrink-0" />
                                     <span>{it.product_name}</span>
                                   </div>
-                                  <span className="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-xs shrink-0">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-xs shrink-0">
                                     ⚡ SolarKit BOS Package
                                   </span>
                                 </div>
-                                <div className="text-[11px] font-mono text-purple-950 font-black mt-1 flex flex-wrap items-center gap-2">
+                                <div className="text-[11px] font-mono text-purple-950 font-black mt-0.5 flex flex-wrap items-center gap-2">
                                   <span>{it.sku}</span>
                                   <span className="text-slate-800 font-bold">• In-house Pre-assembled Enclosure (ACDB / DCDB / Cables)</span>
                                 </div>
@@ -2735,7 +2738,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                 )}
 
                                 {/* Action controls directly on the BOS Kit row */}
-                                <div className="mt-3 pt-2.5 border-t-2 border-purple-200 flex flex-wrap items-center gap-2.5">
+                                <div className="mt-2.5 pt-2 border-t-2 border-purple-200 flex flex-wrap items-center gap-2">
                                   {/* Button 1: Inward from Ready Buffer Stock if available */}
                                   {totalPreassembledKitsInStock > 0 && !isDone && (
                                     <button
@@ -2756,7 +2759,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                           type: 'success'
                                         }));
                                       }}
-                                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-sm cursor-pointer transition-all active:scale-95"
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
                                       title="Directly inward from warehouse buffer stock"
                                     >
                                       <FaCheck className="text-xs" />
@@ -2781,7 +2784,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                         type: 'info'
                                       }));
                                     }}
-                                    className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-700 hover:bg-purple-800 text-white border border-purple-800 flex items-center gap-2 shadow-sm cursor-pointer transition-all active:scale-95"
+                                    className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-700 hover:bg-purple-800 text-white border border-purple-800 flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
                                     title="Open BOS Kit Assembly tab to build this kit or send procurement request to Account Manager"
                                   >
                                     <FaTools className="text-xs" />
@@ -2795,8 +2798,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               <td className="p-3 text-center font-black text-emerald-800 text-base">
                                 {it.received_qty}
                               </td>
-                              <td className="p-3 text-center">
-                                <span className={`px-3 py-1 rounded-full text-xs font-black shadow-2xs ${
+                              <td className="p-3 text-center whitespace-nowrap">
+                                <span className={`inline-flex items-center justify-center min-w-[75px] px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs ${
                                   isDone
                                     ? 'bg-emerald-100 text-emerald-950 border-2 border-emerald-500'
                                     : 'bg-amber-100 text-amber-950 border-2 border-amber-500'
@@ -2929,8 +2932,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                             <td className="p-3 text-center font-black text-emerald-800 text-base">
                               {it.received_qty}
                             </td>
-                            <td className="p-3 text-center">
-                              <span className={`px-3 py-1 rounded-full text-xs font-black shadow-2xs ${
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <span className={`inline-flex items-center justify-center min-w-[75px] px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs ${
                                 isDone
                                   ? 'bg-emerald-100 text-emerald-950 border-2 border-emerald-500'
                                   : 'bg-amber-100 text-amber-950 border-2 border-amber-500'

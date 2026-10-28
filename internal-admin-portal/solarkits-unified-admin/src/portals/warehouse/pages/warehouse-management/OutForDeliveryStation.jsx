@@ -100,6 +100,10 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
           const firstReady = allOrders.find(o => ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate'].includes(o.delivery_status)) || allOrders[0];
           setActiveOrderId(firstReady._id);
         }
+
+        if (res.summary) {
+          window.dispatchEvent(new CustomEvent('deliveryOrdersUpdated', { detail: res.summary }));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch dispatch orders:', err);

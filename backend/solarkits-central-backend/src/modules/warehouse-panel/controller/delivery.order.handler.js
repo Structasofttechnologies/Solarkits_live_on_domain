@@ -184,9 +184,20 @@ exports.get_delivery_orders = async (req, res) => {
     const summary = {
       total: await DeliveryOrder.countDocuments(baseQuery),
       new_orders: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: { $in: ['new_order', 'partially_inwarded'] } }),
+      bos_kit_assembly: await DeliveryOrder.countDocuments({
+        ...baseQuery,
+        kit_preparation_status: { $in: ['awaiting_components', 'ready_for_assembly', 'in_assembly'] },
+        delivery_status: { $ne: 'delivered' }
+      }),
+      material_inward: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: { $in: ['new_order', 'partially_inwarded'] } }),
       pending_inward: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: { $in: ['new_order', 'partially_inwarded'] } }),
       overdue_orders: overdueCount,
       ready_for_dispatch: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'ready_for_dispatch' }),
+      out_for_delivery: await DeliveryOrder.countDocuments({
+        ...baseQuery,
+        delivery_status: { $in: ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate'] }
+      }),
+      track_delivery: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'in_transit' }),
       in_transit: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'in_transit' }),
       delivered: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'delivered' })
     };

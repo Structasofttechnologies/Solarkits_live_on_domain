@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useSelector, shallowEqual } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
+import { getDeliveryOrders } from "../api/deliveryOrders";
 
 import Header from "../components/Header";
 import Drawer from "../components/Drawer";
@@ -65,35 +66,35 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel", badgeCoun
         icon: <FaClipboardList />,
         path: `${prefix}/new-orders`,
         unique_id: "WH_DELIVERY_MGMT",
-        badge: badgeCounts.new_orders ?? 3
+        badge: badgeCounts.new_orders || 0
       },
       {
         name: "BOS Kit Assembly",
         icon: <FaTools />,
         path: `${prefix}/bos-kit-assembly`,
         unique_id: "WH_DELIVERY_MGMT",
-        badge: badgeCounts.bos_kit_assembly ?? 2
+        badge: badgeCounts.bos_kit_assembly || 0
       },
       {
         name: "Material Inward",
         icon: <HiCube />,
         path: `${prefix}/material-inward`,
         unique_id: "WH_MAT_INWARD",
-        badge: badgeCounts.material_inward ?? 1
+        badge: badgeCounts.material_inward || 0
       },
       {
         name: "Out for Delivery",
         icon: <FaTruckLoading />,
         path: `${prefix}/out-for-delivery`,
         unique_id: "WH_DELIVERY_MGMT",
-        badge: badgeCounts.out_for_delivery ?? 3
+        badge: badgeCounts.out_for_delivery || 0
       },
       {
         name: "Track Delivery & POD",
         icon: <FaShippingFast />,
         path: `${prefix}/track-delivery`,
         unique_id: "WH_DELIVERY_MGMT",
-        badge: badgeCounts.track_delivery ?? 1
+        badge: badgeCounts.track_delivery || 0
       },
       {
         name: isInwardSub ? "Sub-Warehouse Outward" : "Master-Warehouse Outward",
@@ -304,12 +305,61 @@ export default function Dashboard() {
   }, [user]);
 
   const [sidebarBadges, setSidebarBadges] = useState({
-    new_orders: 3,
-    bos_kit_assembly: 2,
-    material_inward: 1,
-    out_for_delivery: 3,
-    track_delivery: 1
+    new_orders: 0,
+    bos_kit_assembly: 0,
+    material_inward: 0,
+    out_for_delivery: 0,
+    track_delivery: 0
   });
+
+  const fetchBadgeCounts = async () => {
+    try {
+      const res = await getDeliveryOrders({ limit: 1 });
+      if (res && res.summary) {
+        setSidebarBadges({
+          new_orders: res.summary.new_orders || 0,
+          bos_kit_assembly: res.summary.bos_kit_assembly || 0,
+          material_inward: res.summary.material_inward || res.summary.pending_inward || 0,
+          out_for_delivery: res.summary.out_for_delivery || 0,
+          track_delivery: res.summary.track_delivery || 0
+        });
+      }
+    } catch (err) {
+      // In case session expired or network error
+      console.warn('Unable to fetch sidebar badges:', err?.message || err);
+    }
+  };
+
+  // Fetch badges on mount and on route changes
+  useEffect(() => {
+    fetchBadgeCounts();
+  }, [location.pathname]);
+
+  // Real-time listener for order state mutations across all delivery workstation tabs
+  useEffect(() => {
+    const handleOrdersUpdated = (event) => {
+      if (event?.detail && typeof event.detail === 'object') {
+        const s = event.detail;
+        setSidebarBadges({
+          new_orders: s.new_orders || 0,
+          bos_kit_assembly: s.bos_kit_assembly || 0,
+          material_inward: s.material_inward || s.pending_inward || 0,
+          out_for_delivery: s.out_for_delivery || 0,
+          track_delivery: s.track_delivery || 0
+        });
+      } else {
+        fetchBadgeCounts();
+      }
+    };
+
+    window.addEventListener('deliveryOrdersUpdated', handleOrdersUpdated);
+    window.addEventListener('warehouseInventoryUpdated', fetchBadgeCounts);
+
+    return () => {
+      window.removeEventListener('deliveryOrdersUpdated', handleOrdersUpdated);
+      window.removeEventListener('warehouseInventoryUpdated', fetchBadgeCounts);
+    };
+  }, []);
 
   const currentPrefix = location.pathname.startsWith("/warehouse-management-panel")
     ? "/warehouse-management-panel"
