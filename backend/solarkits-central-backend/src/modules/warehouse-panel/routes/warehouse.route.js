@@ -56,6 +56,7 @@ router.put('/drivers/:id', check_auth, vehicle_handler.update_driver);
 router.delete('/drivers/:id', check_auth, vehicle_handler.delete_driver);
 
 // ─── Delivery Manager Workflow (New Orders, Inward, Out for Delivery, Track Delivery) ───
+router.get('/delivery-orders/bos-kit-catalog', check_auth, delivery_order_handler.get_bos_kit_catalog);
 router.get('/delivery-orders', check_auth, delivery_order_handler.get_delivery_orders);
 router.get('/delivery-orders/:id', check_auth, delivery_order_handler.get_delivery_order_by_id);
 router.post('/delivery-orders/:id/reserve-inventory', check_auth, delivery_order_handler.reserve_inventory);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineTruck, HiOutlineDocumentText, HiOutlineCheckCircle,
@@ -36,6 +37,8 @@ import CustomInput from '../../components/CustomInput';
 
 export default function OutForDeliveryStation({ onNavigateToTracking }) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -70,7 +73,13 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
       // Fetch orders that are in dispatch stages
       const res = await getDeliveryOrders({});
       if (res.status === 'success') {
-        const allOrders = res.data || [];
+        const rawOrders = res.data || [];
+        // User rule: Out for Delivery Station shows orders sent for delivery and NOT yet dispatched/delivered.
+        const allOrders = rawOrders.filter(ord => {
+          const isSent = ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate', 'dispatched_pending'].includes(ord.delivery_status) || !!ord.sent_for_delivery_at;
+          const isDispatched = ['in_transit', 'delivered', 'delivery_exception'].includes(ord.delivery_status);
+          return isSent && !isDispatched;
+        });
         setOrders(allOrders);
 
         // Pre-populate transport forms
@@ -334,7 +343,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
         if (onNavigateToTracking) {
           onNavigateToTracking(order);
         } else {
-          fetchReadyOrders();
+          const prefix = location.pathname.startsWith('/warehouse-management-panel')
+            ? '/warehouse-management-panel'
+            : '/warehouse';
+          navigate(`${prefix}/track-delivery`);
+          await fetchReadyOrders();
         }
       }
     } catch (err) {
