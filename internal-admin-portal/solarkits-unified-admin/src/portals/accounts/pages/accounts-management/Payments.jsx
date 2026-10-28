@@ -6364,6 +6364,7 @@ export default function Payments() {
         onPaymentUpdated={() => {
           fetchProcurementPIs();
           fetchOrders();
+          window.dispatchEvent(new CustomEvent("accounts:badge-refresh"));
         }}
       />
     </div>

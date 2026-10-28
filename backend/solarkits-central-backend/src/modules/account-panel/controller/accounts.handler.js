@@ -3224,14 +3224,22 @@ const get_new_orders_filter_options = async (req, res) => {
     let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).lean();
     if (!vehicles || vehicles.length === 0) vehicles = DEFAULT_VEHICLES;
 
-    const rawDb = mongoose.connection.db;
     let comboKits = [];
-    if (rawDb) {
-      comboKits = await rawDb.collection('pc_combo_kits').find({ is_active: { $ne: false } }).project({ name: 1, capacity: 1 }).toArray();
+    try {
+      comboKits = await ComboKit.find({ is_active: { $ne: false } }).select('name capacity').lean();
+    } catch (e) {
+      console.warn('Could not fetch ComboKit for filter options:', e.message);
     }
     const kitTypeNames = comboKits.length > 0
       ? [...new Set(comboKits.map(k => k.name).filter(Boolean))]
-      : ['ComboKit A', 'ComboKit B', 'ComboKit C', 'ComboKit D', 'BOSKIT Standard'];
+      : [
+          '3 KW Solarkits DCR Combokit',
+          '2 K.W. Solarkits DCR Combokit',
+          '1 K.W. Solarkits DCR Kit',
+          '5 kW Premium Bifacial Rooftop Solar Combo Kit',
+          '10 kW Three Phase Villa Hybrid Backup Kit',
+          '50 kW Commercial LT On-Grid Rooftop Solution',
+        ];
 
     return res.status(200).json({
       status: 'success',
@@ -3277,7 +3285,14 @@ const get_new_orders_filter_options = async (req, res) => {
         ],
         states: [{ _id: 'st_guj', name: 'Gujarat' }, { _id: 'st_mah', name: 'Maharashtra' }, { _id: 'st_raj', name: 'Rajasthan' }],
         districts: [{ _id: 'dt_raj', name: 'Rajkot', state_id: 'st_guj' }, { _id: 'dt_ahm', name: 'Ahmedabad', state_id: 'st_guj' }, { _id: 'dt_sur', name: 'Surat', state_id: 'st_guj' }],
-        kit_types: ['ComboKit A', 'ComboKit B', 'ComboKit C', 'ComboKit D', 'BOSKIT Standard'],
+        kit_types: [
+          '3 KW Solarkits DCR Combokit',
+          '2 K.W. Solarkits DCR Combokit',
+          '1 K.W. Solarkits DCR Kit',
+          '5 kW Premium Bifacial Rooftop Solar Combo Kit',
+          '10 kW Three Phase Villa Hybrid Backup Kit',
+          '50 kW Commercial LT On-Grid Rooftop Solution',
+        ],
         industry_types: ['Residential Rooftop', 'Commercial Rooftop', 'Industrial Heavy', 'Agricultural Pump', 'Institutional / Govt', 'Off-Grid Remote'],
         project_types: ['Rooftop On-Grid', 'Rooftop Hybrid', 'Ground Mount Utility', 'Solar Water Pumping', 'Govt Tender / KUSUM', 'Battery Energy Storage'],
         origins: ['Solar EPC', 'Franchisee Store', 'Company Store'],
@@ -3390,10 +3405,10 @@ const get_eligible_new_orders = async (req, res) => {
       (o.items || []).forEach(it => {
         const qty = Number(it.quantity) || 1;
         kitCount += qty;
-        kitNames.push(it.item_name || 'ComboKit A');
+        kitNames.push(it.item_name || o.kit_type || '3 KW Solarkits DCR Combokit');
       });
       if (kitCount === 0) kitCount = 1;
-      const primaryKit = kitNames[0] || (idx % 2 === 0 ? 'ComboKit A' : 'ComboKit B');
+      const primaryKit = kitNames[0] || o.kit_type || '3 KW Solarkits DCR Combokit';
 
       // Determine offline vs online
       const isOffline = (o.payment_method || '').toLowerCase().includes('offline') ||
@@ -3416,9 +3431,9 @@ const get_eligible_new_orders = async (req, res) => {
       const isOnlinePaid = (o.payment_method === 'icici_ecollection' || o.payment_gateway_used === 'icici_ecollection') && (o.payment_status === 'captured' || o.payment_status === 'paid');
       const isOfficial = o.is_official_order_generated !== false;
       const isPaymentVerified = (isApprovedOffline || isOnlinePaid || o.payment_status === 'captured') && isOfficial;
-      let calculatedStatus = 'New';
+      let calculatedStatus = 'New Order';
       if (isGrouped) calculatedStatus = 'Sent to Procurement';
-      else if (isPaymentVerified) calculatedStatus = 'Ready for Procurement';
+      else if (isPaymentVerified) calculatedStatus = 'New Order';
       else if (o.offline_payment?.verification_status === 'submitted_for_approval' || (o.offline_payment?.verification_status === 'approved' && !isApprovedOffline)) calculatedStatus = 'Awaiting Admin Approval';
       else if (o.payment_status === 'pending_verification' || o.offline_payment?.verification_status === 'pending') calculatedStatus = 'Pending Payment Verification';
       else calculatedStatus = 'Awaiting Payment';
@@ -3479,10 +3494,10 @@ const get_eligible_new_orders = async (req, res) => {
       (o.items || []).forEach(it => {
         const qty = Number(it.quantity) || 1;
         kitCount += qty;
-        kitNames.push(it.item_name || 'ComboKit C');
+        kitNames.push(it.item_name || o.kit_type || '3 KW Solarkits DCR Combokit');
       });
       if (kitCount === 0) kitCount = Number(o.total_quantity) || 2;
-      const primaryKit = kitNames[0] || (idx % 2 === 0 ? 'ComboKit C' : 'ComboKit D');
+      const primaryKit = kitNames[0] || o.kit_type || '3 KW Solarkits DCR Combokit';
 
       const isOffline = (o.payment_method || '').toLowerCase().includes('offline') || (idx % 2 === 0);
       const isGovtTender = (idx % 3 === 0);
@@ -3490,9 +3505,9 @@ const get_eligible_new_orders = async (req, res) => {
       const project = isGovtTender ? 'Govt Tender / KUSUM' : 'Rooftop On-Grid';
 
       const isGrouped = groupedOrderIds.has(idStr);
-      let calculatedStatus = 'New';
+      let calculatedStatus = 'New Order';
       if (isGrouped) calculatedStatus = 'Sent to Procurement';
-      else if (['APPROVED', 'CONFIRMED', 'PROCESSING'].includes(o.status)) calculatedStatus = 'Ready for Procurement';
+      else if (['APPROVED', 'CONFIRMED', 'PROCESSING'].includes(o.status)) calculatedStatus = 'New Order';
       else calculatedStatus = 'Pending Account Processing';
 
       standardizedOrders.push({
@@ -3632,7 +3647,7 @@ const get_eligible_new_orders = async (req, res) => {
       // 7. Status Filter
       if (order_status !== 'all') {
         const targetStatus = order_status.toLowerCase();
-        if (targetStatus === 'new' && order.status !== 'New') return false;
+        if ((targetStatus === 'new' || targetStatus === 'new_order') && order.status !== 'New' && order.status !== 'New Order') return false;
         if (targetStatus === 'pending' && !order.status.toLowerCase().includes('pending')) return false;
         if (targetStatus === 'ready_for_procurement' && order.status !== 'Ready for Procurement') return false;
         if (targetStatus === 'sent_to_procurement' && order.status !== 'Sent to Procurement') return false;
@@ -3746,7 +3761,38 @@ const calculate_procurement_grouping = async (req, res) => {
     const { order_ids, vehicle_id, vehicle_strategy = 'single', vehicle_count = 1 } = req.body;
 
     if (!order_ids || !Array.isArray(order_ids) || order_ids.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'No orders selected for calculation.' });
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          order_count: 0,
+          total_kits: 0,
+          total_weight_est_kg: 0,
+          kit_type_breakdown: [],
+          vehicle_assignment: {
+            vehicle_id: null,
+            vehicle_code: '',
+            vehicle_name: '',
+            single_capacity_kg: 0,
+            vehicle_count: 0,
+            vehicle_strategy: 'single',
+            total_capacity_kg: 0,
+            estimated_load_kg: 0,
+            utilization_pct: 0,
+            validation_status: 'Pass',
+            unallocated_kits: 0,
+            is_auto_recommended: false,
+          },
+          auto_recommendation: null,
+          procurement_summary: {
+            total_suppliers: 0,
+            total_products: 0,
+            total_quantity: 0,
+            procurement_groups: 0,
+          },
+          supplier_details: [],
+          exceptions: [],
+        },
+      });
     }
 
     const { EpcOrder, FpoOrder, DeliveryVehicleMaster, ComboKitWeightMaster } = require('../../admin-panel/models/india_solarshop_db');
@@ -3793,8 +3839,7 @@ const calculate_procurement_grouping = async (req, res) => {
       if (items.length > 0) {
         items.forEach(it => {
           const qty = Number(it.quantity) || 1;
-          const name = it.item_name || 'ComboKit A';
-          kitBreakdownMap[name] = (kitBreakdownMap[name] || 0) + qty;
+          const name = it.item_name || o.kit_type || '3 KW Solarkits DCR Combokit';
           orderKits += qty;
 
           const kitIdStr = (it.kit_id?._id || it.kit_id || it._id || '').toString();
@@ -3803,19 +3848,33 @@ const calculate_procurement_grouping = async (req, res) => {
 
           if (!unitWt || unitWt <= 0) {
             const kwMatch = (it.item_name || '').match(/(\d+(?:\.\d+)?)\s*kw/i);
-            const kw = kwMatch ? parseFloat(kwMatch[1]) : (Number(it.capacity_kw) || 10);
+            const kw = kwMatch ? parseFloat(kwMatch[1]) : (Number(it.capacity_kw) || 3);
             unitWt = Math.round(kw * 74); // Standard solar weight ~74 kg/kW
           }
-          orderWeight += unitWt * qty;
+          const itemWeight = unitWt * qty;
+          orderWeight += itemWeight;
+
+          if (!kitBreakdownMap[name]) {
+            kitBreakdownMap[name] = { quantity: 0, weight_kg: 0 };
+          }
+          kitBreakdownMap[name].quantity += qty;
+          kitBreakdownMap[name].weight_kg += itemWeight;
         });
       } else {
-        const fallbackName = o.kit_type || '10kW Premium Monocrystalline Solar Kit';
-        kitBreakdownMap[fallbackName] = (kitBreakdownMap[fallbackName] || 0) + (o.kits || 1);
-        orderKits = o.kits || 1;
-
+        const fallbackName = o.kit_type || '3 KW Solarkits DCR Combokit';
+        const orderKitsFallback = o.kits || 1;
         const kwMatch = fallbackName.match(/(\d+(?:\.\d+)?)\s*kw/i);
-        const kw = kwMatch ? parseFloat(kwMatch[1]) : 10;
-        orderWeight += Math.round(kw * 74) * orderKits;
+        const kw = kwMatch ? parseFloat(kwMatch[1]) : 3;
+        const itemWeight = Math.round(kw * 74) * orderKitsFallback;
+
+        if (!kitBreakdownMap[fallbackName]) {
+          kitBreakdownMap[fallbackName] = { quantity: 0, weight_kg: 0 };
+        }
+        kitBreakdownMap[fallbackName].quantity += orderKitsFallback;
+        kitBreakdownMap[fallbackName].weight_kg += itemWeight;
+
+        orderKits = orderKitsFallback;
+        orderWeight = itemWeight;
       }
 
       totalKits += orderKits;
@@ -3839,28 +3898,14 @@ const calculate_procurement_grouping = async (req, res) => {
     });
 
     if (totalKits === 0) totalKits = order_ids.length;
-    if (totalWeightEstKg === 0) totalWeightEstKg = totalKits * 740; // Default 740kg per standard kit
+    if (totalWeightEstKg === 0) totalWeightEstKg = totalKits * 276; // Default 276kg per 3kW kit
 
-    // Ensure balanced breakdown if kitBreakdownMap is small
-    const kitTypeBreakdown = Object.entries(kitBreakdownMap).map(([kit_type, quantity]) => ({
+    // Map true kit breakdown with accurate quantities and weights
+    const kitTypeBreakdown = Object.entries(kitBreakdownMap).map(([kit_type, val]) => ({
       kit_type,
-      quantity,
+      quantity: typeof val === 'object' ? val.quantity : val,
+      weight_kg: typeof val === 'object' ? val.weight_kg : 0,
     }));
-
-    if (kitTypeBreakdown.length === 1 && totalKits >= 10) {
-      // Distribute across standard ComboKits for rich demonstration
-      const qA = Math.round(totalKits * 0.28);
-      const qB = Math.round(totalKits * 0.26);
-      const qC = Math.round(totalKits * 0.23);
-      const qD = totalKits - (qA + qB + qC);
-      kitTypeBreakdown.length = 0;
-      kitTypeBreakdown.push(
-        { kit_type: 'ComboKit A', quantity: qA },
-        { kit_type: 'ComboKit B', quantity: qB },
-        { kit_type: 'ComboKit C', quantity: qC },
-        { kit_type: 'ComboKit D', quantity: qD }
-      );
-    }
 
     // Dynamic Vehicle Calculation from Admin Panel DeliveryVehicleMaster
     let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).sort({ max_load_kg: 1 }).lean();
@@ -3916,71 +3961,272 @@ const calculate_procurement_grouping = async (req, res) => {
       validationStatus = 'Warning';
     }
 
-    // Supplier-Wise BOM Grouping
-    // Real-world aggregation across Solar Panels, Inverters, and BOS Protection Kits
-    const totalPanels = totalKits * 9;   // 9 panels per 5kW kit
-    const totalInverters = totalKits * 1;
-    const totalMounting = totalKits * 1;
-    const totalACDB = totalKits * 1;
-    const totalCables = totalKits * 1;
+    // ── Real Supplier-Wise BOM & Procurement Aggregation from Database ────────
+    // ── Real Order-Specific Kit & Supplier-Wise BOM Aggregation ────────
+    const { solarkits_core_db } = require('../config/databases');
+    const { WarehouseKitPartnerMapping } = require('../../admin-panel/models/core_db');
 
-    const supplierDetails = [
-      {
-        supplier_id: new mongoose.Types.ObjectId(),
-        supplier_name: 'Supplier A (Structural Metals Ltd)',
-        product: 'BOSKIT Mounting Structure (Hot-Dip GI)',
-        qty: totalMounting,
-        warehouse: 'WH-01 (Rajkot Central)',
+    // 1. Resolve Primary Warehouse from orders
+    let primaryWarehouse = null;
+    const orderWithWarehouse = allOrders.find(o => o.warehouse_id);
+    if (orderWithWarehouse?.warehouse_id) {
+      primaryWarehouse = await CompanyWarehouse.findById(orderWithWarehouse.warehouse_id).lean();
+    }
+    if (!primaryWarehouse && statesSet.size > 0) {
+      const firstState = [...statesSet][0];
+      primaryWarehouse = await CompanyWarehouse.findOne({
+        deleted_at: null,
+        $or: [
+          { stateName: new RegExp(firstState, 'i') },
+          { address: new RegExp(firstState, 'i') },
+        ],
+      }).lean();
+    }
+    if (!primaryWarehouse) {
+      primaryWarehouse = await CompanyWarehouse.findOne({ deleted_at: null }).lean();
+    }
+
+    const whCode = primaryWarehouse?.warehouse_code || 'WH-IND-MH-001';
+    const whAddrParts = (primaryWarehouse?.address || '').split(',');
+    const whCity = whAddrParts.length > 2 ? whAddrParts[whAddrParts.length - 2].trim() : (whAddrParts[0]?.trim() || 'Mumbai');
+    const warehouseDisplayName = `${whCode} (${whCity})`;
+
+    // 2. Fetch all registered suppliers and brands
+    const [registeredSuppliers, registeredBrands] = await Promise.all([
+      Supplier.find({ is_deleted: { $ne: true } }).lean(),
+      Brand.find({ deleted_at: null }).lean(),
+    ]);
+
+    const supplierMap = new Map((registeredSuppliers || []).map(s => [s._id.toString(), s]));
+    const brandMap = new Map((registeredBrands || []).map(b => [b._id.toString(), b]));
+
+    const mindraSupplier = (registeredSuppliers || []).find(s => (s.company_name || '').toUpperCase().includes('MINDRA')) || registeredSuppliers?.[0];
+    const redrenSupplier = (registeredSuppliers || []).find(s => (s.company_name || '').toUpperCase().includes('REDREN')) || registeredSuppliers?.[1] || registeredSuppliers?.[0];
+
+    // 3. Extract kit IDs and detect order capacity
+    const selectedKitIds = [];
+    let detectedCapacityKw = 0;
+    allOrders.forEach(o => {
+      (o.items || []).forEach(it => {
+        const kId = (it.kit_id?._id || it.kit_id || '').toString();
+        if (kId && mongoose.Types.ObjectId.isValid(kId)) {
+          selectedKitIds.push(kId);
+        }
+        const kwMatch = (it.item_name || it.capacity || '').match(/(\d+(?:\.\d+)?)\s*kw/i);
+        if (kwMatch && !detectedCapacityKw) {
+          detectedCapacityKw = parseFloat(kwMatch[1]);
+        }
+      });
+      if (!detectedCapacityKw && o.kit_type) {
+        const kwMatch = o.kit_type.match(/(\d+(?:\.\d+)?)\s*kw/i);
+        if (kwMatch) detectedCapacityKw = parseFloat(kwMatch[1]);
+      }
+    });
+
+    const uniqueKitIds = [...new Set(selectedKitIds)];
+    const kitDocs = uniqueKitIds.length > 0
+      ? await ComboKit.find({ _id: { $in: uniqueKitIds } }).lean()
+      : [];
+
+    const supplierDetails = [];
+
+    if (kitDocs.length > 0) {
+      const primaryKit = kitDocs[0];
+      const kitCapacity = primaryKit.capacity || detectedCapacityKw || 3;
+
+      let panelBc = null;
+      let inverterBc = null;
+
+      for (const bc of (primaryKit.base_components || [])) {
+        const template = bc.template_id ? await ProductTemplate.findById(bc.template_id).lean() : null;
+        const tName = (template?.name || '').toLowerCase();
+        if (tName.includes('panel') || tName.includes('module')) {
+          panelBc = { ...bc, templateName: template?.name };
+        } else if (tName.includes('inverter')) {
+          inverterBc = { ...bc, templateName: template?.name };
+        }
+      }
+
+      // 1. Solar Panels from actual kit
+      if (panelBc) {
+        const sku = await ProductSku.findById(panelBc.sku_id).lean();
+        const product = sku?.product_id ? await Product.findById(sku.product_id).lean() : null;
+        const brand = (product?.brand_id || panelBc.brand_id) ? await Brand.findById(product?.brand_id || panelBc.brand_id).lean() : null;
+
+        const pName = product?.name ? `${product.name} DCR Solar Module` : 'Solarkits 500 Wp Bifacial DCR Solar Module';
+        const bName = brand ? `${brand.brand_name || 'Solarkits'} (${brand.company_name || 'Sunnovative Energy Systems Private Limited'})` : 'Solarkits (Sunnovative Energy Systems Private Limited)';
+        const totalPanelQty = (panelBc.quantity || 6) * totalKits;
+
+        supplierDetails.push({
+          supplier_id: brand?._id || new mongoose.Types.ObjectId(),
+          supplier_name: bName,
+          product: pName,
+          product_name: pName,
+          component_name: pName,
+          category: 'Solar Modules',
+          qty: totalPanelQty,
+          total_units: totalPanelQty,
+          warehouse: warehouseDisplayName,
+          is_oem: true,
+          is_mapped: true,
+        });
+      }
+
+      // 2. Solar Inverter from actual kit
+      if (inverterBc) {
+        const sku = await ProductSku.findById(inverterBc.sku_id).lean();
+        const product = sku?.product_id ? await Product.findById(sku.product_id).lean() : null;
+        const brand = (product?.brand_id || inverterBc.brand_id) ? await Brand.findById(product?.brand_id || inverterBc.brand_id).lean() : null;
+
+        const pName = product?.name || `SolarKits ${kitCapacity} kW On-Grid String Inverter`;
+        const bName = brand ? `${brand.brand_name || 'Solarkits'} (${brand.company_name || 'Sunnovative Energy Systems Private Limited'})` : 'Solarkits (Sunnovative Energy Systems Private Limited)';
+        const totalInverterQty = (inverterBc.quantity || 1) * totalKits;
+
+        supplierDetails.push({
+          supplier_id: brand?._id || new mongoose.Types.ObjectId(),
+          supplier_name: bName,
+          product: pName,
+          product_name: pName,
+          component_name: pName,
+          category: 'Solar Inverters',
+          qty: totalInverterQty,
+          total_units: totalInverterQty,
+          warehouse: warehouseDisplayName,
+          is_oem: false,
+          is_mapped: true,
+        });
+      }
+
+      // 3. Mounting Structure
+      supplierDetails.push({
+        supplier_id: redrenSupplier?._id || new mongoose.Types.ObjectId(),
+        supplier_name: `${redrenSupplier?.company_name || 'REDREN ENERGY PRIVATE LIMITED'} (Mounting Systems)`,
+        product: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${kitCapacity} kW)`,
+        product_name: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${kitCapacity} kW)`,
+        component_name: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${kitCapacity} kW)`,
+        category: 'Mounting Structure',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
         is_oem: false,
         is_mapped: true,
-      },
-      {
-        supplier_id: new mongoose.Types.ObjectId(),
-        supplier_name: 'Supplier A (Structural Metals Ltd)',
-        product: 'BOSKIT Protection Box (ACDB/DCDB IP65)',
-        qty: totalACDB,
-        warehouse: 'WH-01 (Rajkot Central)',
+      });
+
+      // 4. BOS Protection Box
+      supplierDetails.push({
+        supplier_id: mindraSupplier?._id || new mongoose.Types.ObjectId(),
+        supplier_name: `${mindraSupplier?.company_name || 'MINDRA GREEN ENERGY LLP'} (BOS Protection)`,
+        product: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${kitCapacity} kW)`,
+        product_name: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${kitCapacity} kW)`,
+        component_name: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${kitCapacity} kW)`,
+        category: 'Protection Kits',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
         is_oem: false,
         is_mapped: true,
-      },
-      {
-        supplier_id: new mongoose.Types.ObjectId(),
-        supplier_name: 'Supplier B (PowerTech Inverters)',
-        product: 'Solar Inverter 5kW/10kW String Inverter',
-        qty: totalInverters,
-        warehouse: 'WH-02 (Ahmedabad Hub)',
+      });
+
+      // 5. Cables & Earthing
+      supplierDetails.push({
+        supplier_id: mindraSupplier?._id || new mongoose.Types.ObjectId(),
+        supplier_name: `${mindraSupplier?.company_name || 'MINDRA GREEN ENERGY LLP'} (Electrical & Cabling)`,
+        product: 'Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit',
+        product_name: 'Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit',
+        component_name: 'Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit',
+        category: 'Cabling & Earthing',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
         is_oem: false,
         is_mapped: true,
-      },
-      {
+      });
+    } else {
+      // Fallback if kit document is not found in pc_comobo_kit
+      const cap = detectedCapacityKw || 3;
+      const panelsPerKit = cap === 3 ? 6 : (cap === 5 ? 9 : Math.round(cap * 1.82));
+
+      supplierDetails.push({
         supplier_id: new mongoose.Types.ObjectId(),
-        supplier_name: 'Supplier B (PowerTech Inverters)',
-        product: 'Solar DC 4/6 sq.mm Cable & Earthing Kit',
-        qty: totalCables,
-        warehouse: 'WH-02 (Ahmedabad Hub)',
-        is_oem: false,
-        is_mapped: true,
-      },
-      {
-        supplier_id: new mongoose.Types.ObjectId(),
-        supplier_name: 'OEM Partner C (SOLARKITS Manufacturing)',
-        product: 'SOLARKITS 540W Bifacial Mono PERC Module',
-        qty: totalPanels,
-        warehouse: 'WH-03 (Sanand Plant)',
+        supplier_name: 'Solarkits (Sunnovative Energy Systems Private Limited)',
+        product: `Solarkits ${cap === 3 ? '500 Wp' : '540W'} Bifacial DCR Solar Module`,
+        product_name: `Solarkits ${cap === 3 ? '500 Wp' : '540W'} Bifacial DCR Solar Module`,
+        component_name: `Solarkits ${cap === 3 ? '500 Wp' : '540W'} Bifacial DCR Solar Module`,
+        category: 'Solar Modules',
+        qty: panelsPerKit * totalKits,
+        total_units: panelsPerKit * totalKits,
+        warehouse: warehouseDisplayName,
         is_oem: true,
         is_mapped: true,
-      },
-    ];
+      });
+
+      supplierDetails.push({
+        supplier_id: new mongoose.Types.ObjectId(),
+        supplier_name: 'Solarkits (Sunnovative Energy Systems Private Limited)',
+        product: `SolarKits ${cap} kW On-Grid String Inverter`,
+        product_name: `SolarKits ${cap} kW On-Grid String Inverter`,
+        component_name: `SolarKits ${cap} kW On-Grid String Inverter`,
+        category: 'Solar Inverters',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
+        is_oem: false,
+        is_mapped: true,
+      });
+
+      supplierDetails.push({
+        supplier_id: redrenSupplier?._id || new mongoose.Types.ObjectId(),
+        supplier_name: `${redrenSupplier?.company_name || 'REDREN ENERGY PRIVATE LIMITED'} (Mounting Systems)`,
+        product: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${cap} kW)`,
+        product_name: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${cap} kW)`,
+        component_name: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${cap} kW)`,
+        category: 'Mounting Structure',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
+        is_oem: false,
+        is_mapped: true,
+      });
+
+      supplierDetails.push({
+        supplier_id: mindraSupplier?._id || new mongoose.Types.ObjectId(),
+        supplier_name: `${mindraSupplier?.company_name || 'MINDRA GREEN ENERGY LLP'} (BOS Protection)`,
+        product: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${cap} kW)`,
+        product_name: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${cap} kW)`,
+        component_name: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${cap} kW)`,
+        category: 'Protection Kits',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
+        is_oem: false,
+        is_mapped: true,
+      });
+
+      supplierDetails.push({
+        supplier_id: mindraSupplier?._id || new mongoose.Types.ObjectId(),
+        supplier_name: `${mindraSupplier?.company_name || 'MINDRA GREEN ENERGY LLP'} (Electrical & Cabling)`,
+        product: 'Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit',
+        product_name: 'Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit',
+        component_name: 'Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit',
+        category: 'Cabling & Earthing',
+        qty: totalKits,
+        total_units: totalKits,
+        warehouse: warehouseDisplayName,
+        is_oem: false,
+        is_mapped: true,
+      });
+    }
 
     const totalProductsCount = supplierDetails.length;
     const totalProcurementQuantity = supplierDetails.reduce((sum, item) => sum + item.qty, 0);
+    const totalSuppliersCount = new Set(supplierDetails.map(s => s.supplier_name)).size;
 
     const exceptions = [];
     // Check if any product mapping is flagged
     if (totalKits > 500) {
       exceptions.push({
         type: 'supplier_capacity',
-        message: 'High volume order: ensure Supplier A structural steel production schedule is aligned.',
+        message: 'High volume order: ensure structural steel production schedule is aligned with supplier.',
         severity: 'warning',
       });
     }
@@ -4034,7 +4280,7 @@ const calculate_procurement_grouping = async (req, res) => {
             })),
         },
         procurement_summary: {
-          total_suppliers: 3,
+          total_suppliers: totalSuppliersCount,
           total_products: totalProductsCount,
           total_quantity: totalProcurementQuantity,
           procurement_groups: 1,
@@ -4055,60 +4301,9 @@ const calculate_procurement_grouping = async (req, res) => {
     });
   } catch (err) {
     console.error('Error in calculate_procurement_grouping:', err);
-    const count = (req.body?.order_ids || []).length || 100;
-    const estKits = count * 28;
-    const estWeight = estKits * 50;
-    const cap = 200000;
-    const util = Math.min(100, Math.round((estWeight / cap) * 100)) || 71;
-
-    return res.status(200).json({
-      status: 'success',
-      data: {
-        order_count: count,
-        total_kits: estKits,
-        total_weight_est_kg: estWeight,
-        kit_type_breakdown: [
-          { kit_type: 'ComboKit A', quantity: Math.round(estKits * 0.28) },
-          { kit_type: 'ComboKit B', quantity: Math.round(estKits * 0.26) },
-          { kit_type: 'ComboKit C', quantity: Math.round(estKits * 0.23) },
-          { kit_type: 'ComboKit D', quantity: Math.round(estKits * 0.23) },
-        ],
-        vehicle_assignment: {
-          vehicle_code: 'VEH-12M-04',
-          vehicle_name: '12MT Truck',
-          single_capacity_kg: 15000,
-          vehicle_count: 1,
-          total_capacity_kg: cap,
-          estimated_load_kg: estWeight,
-          utilization_pct: util,
-          validation_status: util > 100 ? 'Fail' : (util > 85 ? 'Warning' : 'Pass'),
-          unallocated_kits: 0,
-        },
-        procurement_summary: {
-          total_suppliers: 3,
-          total_products: 18,
-          total_quantity: estKits * 5,
-          procurement_groups: 1,
-        },
-        supplier_details: [
-          { supplier_name: 'Supplier A (Structural Metals)', product: 'BOSKIT Component A', qty: estKits * 2, warehouse: 'WH-01' },
-          { supplier_name: 'Supplier A (Structural Metals)', product: 'BOSKIT Component B', qty: estKits, warehouse: 'WH-01' },
-          { supplier_name: 'Supplier B (PowerTech)', product: 'BOSKIT Component C', qty: estKits, warehouse: 'WH-02' },
-          { supplier_name: 'Supplier B (PowerTech)', product: 'BOSKIT Component D', qty: Math.round(estKits * 0.5), warehouse: 'WH-02' },
-          { supplier_name: 'OEM Partner C (SOLARKITS)', product: 'SOLARKITS Module X', qty: estKits * 9, warehouse: 'WH-03' },
-        ],
-        geography: {
-          states_count: 5,
-          districts_count: 12,
-          pincodes_count: 48,
-          states: ['Gujarat', 'Maharashtra', 'Rajasthan'],
-          districts: ['Rajkot', 'Ahmedabad', 'Surat'],
-          pincodes: ['360001', '380001', '395001'],
-        },
-        origins: ['EPC', 'Franchisee', 'Company'],
-        payment_mode: 'Mixed (Online / Offline)',
-        exceptions: [],
-      },
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to calculate procurement grouping: ' + err.message,
     });
   }
 };
@@ -4256,10 +4451,7 @@ const create_procurement_group = async (req, res) => {
       total_kits: totalKits,
       total_weight_kg: totalWeightKg,
       kit_type_breakdown: calc.kit_type_breakdown || [
-        { kit_type: 'ComboKit A', quantity: Math.round(totalKits * 0.28) },
-        { kit_type: 'ComboKit B', quantity: Math.round(totalKits * 0.26) },
-        { kit_type: 'ComboKit C', quantity: Math.round(totalKits * 0.23) },
-        { kit_type: 'ComboKit D', quantity: Math.round(totalKits * 0.23) },
+        { kit_type: '3 KW Solarkits DCR Combokit', quantity: totalKits, weight_kg: totalWeightKg },
       ],
       vehicle_strategy: vehicle_strategy,
       vehicle_details: {
@@ -4278,8 +4470,8 @@ const create_procurement_group = async (req, res) => {
         supplier_name: b.supplier_name || 'Standard Tier-1 Supplier',
         is_oem: b.category?.includes('Module') || b.category?.includes('Panel') || Boolean(b.is_oem),
         warehouse_id: (b.warehouse_id && mongoose.Types.ObjectId.isValid(b.warehouse_id)) ? b.warehouse_id : null,
-        warehouse_code: b.warehouse_code || b.warehouse || 'WH-01',
-        warehouse_name: b.warehouse_name || 'Central Warehouse',
+        warehouse_code: b.warehouse_code || (b.warehouse ? b.warehouse.split(' ')[0] : 'WH-IND-GJ-001'),
+        warehouse_name: b.warehouse_name || b.warehouse || 'WH-IND-GJ-001 (Sanand Hub, Ahmedabad)',
         items: [{
           product_name: b.component_name || b.product || b.product_name || 'Solar Kit Component',
           quantity: b.total_units || b.qty || b.quantity || totalKits,
@@ -4323,6 +4515,7 @@ const create_procurement_group = async (req, res) => {
           { _id: { $in: validMongoOrderIds } },
           {
             $set: {
+              is_grouped: true,
               account_processing_status: 'Sent to Procurement',
               procurement_group_id: newGroup._id,
               'procurement_status.overall_status': 'awaiting_supplier_procurement',
@@ -4333,6 +4526,7 @@ const create_procurement_group = async (req, res) => {
           { _id: { $in: validMongoOrderIds } },
           {
             $set: {
+              is_grouped: true,
               account_processing_status: 'Sent to Procurement',
               procurement_group_id: newGroup._id,
               'procurement_status.overall_status': 'awaiting_supplier_procurement',
@@ -4583,6 +4777,97 @@ const list_procurement_groups = async (req, res) => {
   }
 };
 
+/**
+ * 6. Get Sidebar Badge Counts for Accounts Navigation
+ */
+const get_sidebar_badge_counts = async (req, res) => {
+  try {
+    const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const { ProcurementGroup, PurchaseIndent, PurchaseOrder } = require('../models/company_warehouse_db');
+
+    // 1. Fetch all order IDs that are already included in active or completed procurement groups
+    const activeGroups = await ProcurementGroup.find({}).select('order_ids').lean();
+    const groupedOrderIds = new Set(
+      activeGroups.flatMap(g => (g.order_ids || []).map(id => (id ? id.toString() : null))).filter(Boolean)
+    );
+    const groupedArray = Array.from(groupedOrderIds);
+
+    // 2. Count un-grouped eligible orders (EPC + Franchise)
+    const epcFilter = {
+      is_grouped: { $ne: true },
+      is_official_order_generated: { $ne: false },
+    };
+    if (groupedArray.length > 0) {
+      epcFilter._id = { $nin: groupedArray };
+    }
+
+    const fpoFilter = {
+      is_grouped: { $ne: true },
+    };
+    if (groupedArray.length > 0) {
+      fpoFilter._id = { $nin: groupedArray };
+    }
+
+    const [epcCount, fpoCount, procurementCount, pendingPiPayments, pendingPoPayments] = await Promise.all([
+      EpcOrder.countDocuments(epcFilter),
+      FpoOrder.countDocuments(fpoFilter),
+      ProcurementGroup.countDocuments({
+        status: {
+          $in: [
+            'Batch Ready',
+            'Ready for Procurement',
+            'Sent to Procurement',
+            'Procurement In Progress',
+            'Awaiting Warehouse Inward',
+          ],
+        },
+      }),
+      PurchaseIndent.countDocuments({
+        'payment.payment_status': {
+          $in: [
+            'Payment Initiated',
+            'Awaiting Admin Approval',
+            'Advance Requested',
+            'Balance Requested',
+            'Approved',
+            'Payment Processing',
+            'Advance Paid',
+            'Balance Due',
+            'Partially Paid',
+          ],
+        },
+      }),
+      PurchaseOrder.countDocuments({
+        status: { $in: ['pending', 'accepted', 'invoiced', 'pending_price_approval'] },
+      }),
+    ]);
+
+    const newOrdersTotal = (Number(epcCount) || 0) + (Number(fpoCount) || 0);
+    const supplierPaymentsTotal = (Number(pendingPiPayments) || 0) + (Number(pendingPoPayments) || 0);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        new_orders: newOrdersTotal,
+        procurement: Number(procurementCount) || 0,
+        supplier_payments: supplierPaymentsTotal,
+        purchase_orders: Number(pendingPoPayments) || 0,
+      },
+    });
+  } catch (err) {
+    console.error('Error in get_sidebar_badge_counts:', err);
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        new_orders: 1,
+        procurement: 0,
+        supplier_payments: 0,
+        purchase_orders: 0,
+      },
+    });
+  }
+};
+
 module.exports = {
   get_pending_inwards,
   approve_inward,
@@ -4618,5 +4903,6 @@ module.exports = {
   calculate_procurement_grouping,
   create_procurement_group,
   list_procurement_groups,
+  get_sidebar_badge_counts,
 };
 

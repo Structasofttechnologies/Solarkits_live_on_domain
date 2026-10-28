@@ -161,6 +161,21 @@ export default function Procurement() {
             }
             return next;
           }, { replace: true });
+        } else {
+          setSelectedBatch(null);
+          setSelectedOrder(null);
+          setBomData(null);
+          setPurchaseIndents([]);
+          try {
+            localStorage.removeItem("active_procurement_group_id");
+          } catch (e) {}
+          setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            if (next.has("group_id")) {
+              next.delete("group_id");
+            }
+            return next;
+          }, { replace: true });
         }
       }
     } catch (err) {
@@ -814,8 +829,23 @@ export default function Procurement() {
               </div>
             </div>
           ) : (
-            <div className="bg-surface border border-border rounded-2xl p-8 text-center text-xs text-text-muted">
-              Select an order group or batch on the left to review BOM and begin procurement.
+            <div className="bg-surface border border-border rounded-2xl p-12 text-center shadow-xs space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary mx-auto flex items-center justify-center text-2xl">
+                <FaBoxes />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-text-primary">No Active Procurement Batches</h3>
+                <p className="text-xs text-text-muted max-w-md mx-auto">
+                  There are currently no active procurement batches. Group and dispatch customer orders from "New Orders" to create a live procurement batch.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/account-panel/new-orders-procurement")}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-xs font-bold rounded-xl shadow-xs hover:bg-primary/90 transition-all cursor-pointer"
+              >
+                Go to New Orders <FaArrowRight className="text-[10px]" />
+              </button>
             </div>
           )}
 

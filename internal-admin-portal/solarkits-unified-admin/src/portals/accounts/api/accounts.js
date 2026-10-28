@@ -437,4 +437,11 @@ export const syncWarehouseDeliveryOrders = async () => {
   return res.data;
 };
 
+export const getSidebarBadgeCounts = async () => {
+  const res = await axios.get(`${API_URL}/accounts/sidebar-badges`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 
