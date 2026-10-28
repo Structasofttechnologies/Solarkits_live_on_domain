@@ -4466,7 +4466,11 @@ const get_my_store_setup = async (req, res) => {
       return res.status(200).json({ status: 'success', data: null });
     }
 
-    const checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 }).lean();
+    let checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 }).lean();
+    if (!checklist || checklist.length === 0) {
+      const { ensureStoreSetupChecklist } = require('../../admin-panel/services/store.setup.service');
+      checklist = await ensureStoreSetupChecklist(setup._id, setup.franchisee_id?._id || setup.franchisee_id);
+    }
     const delays = await StoreSetupDelay.find({ store_setup_id: setup._id }).sort({ created_at: -1 }).lean();
 
 

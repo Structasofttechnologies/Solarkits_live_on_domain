@@ -104,55 +104,195 @@ function NavigationDrawer({
   const [openMenus, setOpenMenus] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
-  const { pipelineStatus } = usePipelineStatus();
+  const { pipelineStatus, sidebarCounts } = usePipelineStatus();
 
-  const getItemPendingStatus = (item) => {
-    if (!pipelineStatus || !item) return null;
+  const getItemBadgeInfo = (item) => {
+    if (!item) return null;
 
-    const marginPending = pipelineStatus.company_margin?.has_pending;
-    const marginCount = pipelineStatus.company_margin?.count || 0;
-
-    const activationPending = pipelineStatus.kit_activations?.has_pending;
-    const activationCount = pipelineStatus.kit_activations?.count || 0;
-
-    const isMarginItem =
-      item.unique_id === "ADM_CO_MARGIN" ||
-      item.name?.toLowerCase().includes("margin") ||
-      item.path?.includes("/company-margin");
-
-    if (isMarginItem && marginPending) {
+    // 1. Explicit badge provided on item
+    if (item.badge !== undefined && item.badge !== null && Number(item.badge) > 0) {
       return {
-        hasPending: true,
-        count: marginCount,
-        tooltip: `${marginCount} kit(s) pending company margin configuration`,
+        count: Number(item.badge),
+        hasPendingDot: false,
+        isUrgent: false,
+        tooltip: `${item.badge} active item(s)`,
       };
     }
 
-    const isActivationItem =
-      item.unique_id === "ADM_WH_KIT_ACT" ||
-      item.name?.toLowerCase().includes("kit activation") ||
-      item.path?.includes("/warehouse-kit-activations");
-
-    if (isActivationItem && activationPending) {
-      return {
-        hasPending: true,
-        count: activationCount,
-        tooltip: `${activationCount} kit(s) pending warehouse kit activation`,
-      };
-    }
-
-    // Check if any sub-item has pending
-    if (Array.isArray(item.subMenu)) {
+    // 2. Parent item with subMenu: Roll up sub-items count first
+    if (Array.isArray(item.subMenu) && item.subMenu.length > 0) {
+      let subTotal = 0;
+      let hasUrgent = false;
       for (const sub of item.subMenu) {
-        const subStatus = getItemPendingStatus(sub);
-        if (subStatus?.hasPending) {
-          return subStatus;
+        const subInfo = getItemBadgeInfo(sub);
+        if (subInfo?.count) {
+          subTotal += subInfo.count;
+          if (subInfo.isUrgent) hasUrgent = true;
         }
+      }
+      if (subTotal > 0) {
+        return {
+          count: subTotal,
+          hasPendingDot: hasUrgent,
+          isUrgent: hasUrgent,
+          tooltip: `${subTotal} active item(s) in ${item.name}`,
+        };
+      }
+      // If subTotal is 0, check if parent has a direct count in sidebarCounts
+      const key = item.step || item.badgeKey;
+      if (key && sidebarCounts && Number(sidebarCounts[key]) > 0) {
+        return {
+          count: Number(sidebarCounts[key]),
+          hasPendingDot: false,
+          isUrgent: false,
+          tooltip: `${sidebarCounts[key]} active item(s)`,
+        };
+      }
+      return null;
+    }
+
+    // 3. Leaf item resolution (check sub_counts first, then top-level sidebarCounts)
+    if (sidebarCounts) {
+      let count = 0;
+      let tooltip = "";
+      let isUrgent = false;
+
+      // 3A. Check granular sub_counts (for submenu pages)
+      if (sidebarCounts.sub_counts) {
+        const subCounts = sidebarCounts.sub_counts;
+        const lastSegment = item.path ? item.path.split("/").filter(Boolean).pop() : null;
+        const normalizedName = item.name ? item.name.toLowerCase().replace(/^[0-9.]+\s*/, "").trim() : "";
+
+        const candidateKeys = [
+          item.badgeKey,
+          item.unique_id,
+          lastSegment,
+          normalizedName,
+          item.name?.toLowerCase(),
+        ].filter(Boolean);
+
+        for (const k of candidateKeys) {
+          if (subCounts[k] !== undefined && subCounts[k] !== null) {
+            const data = subCounts[k];
+            if (typeof data === "number" && data > 0) {
+              count = data;
+              tooltip = `${count} active item(s)`;
+            } else if (data && typeof data === "object" && Number(data.count) > 0) {
+              count = Number(data.count);
+              isUrgent = Boolean(data.is_urgent);
+              tooltip = data.tooltip || `${count} active item(s)`;
+            }
+            if (count > 0) break;
+          }
+        }
+      }
+
+      // 3B. If not resolved from sub_counts, check top-level module keys
+      if (count === 0) {
+        const key = item.step || item.badgeKey;
+        if (key && sidebarCounts[key] !== undefined) {
+          count = Number(sidebarCounts[key]) || 0;
+        } else if (item.unique_id && sidebarCounts[item.unique_id] !== undefined) {
+          count = Number(sidebarCounts[item.unique_id]) || 0;
+        } else {
+          const n = item.name?.toLowerCase() || "";
+          const p = item.path?.toLowerCase() || "";
+          if (n.includes("epc") && n.includes("approve")) count = sidebarCounts["02"] || 0;
+          else if (n.includes("po order") || p.includes("po-orders")) count = sidebarCounts["04"] || 0;
+          else if (n.includes("loose order") || p.includes("loose-orders")) count = sidebarCounts["05"] || 0;
+          else if (n.includes("epc order") || p.includes("epc-orders")) count = sidebarCounts["06"] || 0;
+          else if (n.includes("stage approval") || p.includes("order-approvals")) count = sidebarCounts["07"] || 0;
+          else if (n.includes("delivery") || p.includes("delivery-management")) count = sidebarCounts["08"] || 0;
+          else if (n.includes("service ticket") || p.includes("service-tickets")) count = sidebarCounts["12"] || 0;
+          else if (n.includes("franchisee") || p.includes("reseller-management")) count = sidebarCounts["13"] || 0;
+          else if (n.includes("quote") || p.includes("quote-settings")) count = sidebarCounts["14"] || 0;
+          else if (n.includes("payment") && (n.includes("config") || p.includes("payment-configuration"))) count = sidebarCounts["16"] || 0;
+        }
+      }
+
+      // 3C. Urgent margin pipeline status
+      const isMarginItem =
+        item.step === "09" ||
+        item.badgeKey === "company-margin" ||
+        item.unique_id === "ADM_CO_MARGIN" ||
+        item.name?.toLowerCase().includes("margin") ||
+        item.path?.includes("/company-margin");
+
+      if (isMarginItem && (pipelineStatus?.company_margin?.has_pending || sidebarCounts?.company_margin?.has_pending)) {
+        const mCount = pipelineStatus?.company_margin?.count || sidebarCounts?.company_margin?.count || count;
+        return {
+          count: mCount,
+          hasPendingDot: true,
+          isUrgent: true,
+          tooltip: `${mCount} kit(s) pending company margin configuration`,
+        };
+      }
+
+      // 3D. Urgent kit activation pipeline status
+      const isActivationItem =
+        item.step === "10" ||
+        item.unique_id === "ADM_WH_KIT_ACT" ||
+        item.name?.toLowerCase().includes("kit activation") ||
+        item.path?.includes("/warehouse-kit-activations");
+
+      if (isActivationItem && (pipelineStatus?.kit_activations?.has_pending || sidebarCounts?.kit_activations?.has_pending)) {
+        const aCount = pipelineStatus?.kit_activations?.count || sidebarCounts?.kit_activations?.count || count;
+        return {
+          count: aCount,
+          hasPendingDot: true,
+          isUrgent: true,
+          tooltip: `${aCount} kit(s) pending warehouse kit activation`,
+        };
+      }
+
+      // 3E. Format tooltip and urgency if count > 0
+      if (count > 0) {
+        if (!tooltip) {
+          if (item.step === "02") {
+            tooltip = `${count} EPC registration(s) pending approval`;
+            isUrgent = true;
+          } else if (item.step === "04") {
+            tooltip = `${count} PO Order(s) in active pipeline`;
+          } else if (item.step === "05") {
+            tooltip = `${count} Loose Order(s) in active pipeline`;
+          } else if (item.step === "06") {
+            tooltip = `${count} EPC Order(s) pending verification`;
+            isUrgent = true;
+          } else if (item.step === "07") {
+            tooltip = `${count} Stage Approval(s) awaiting Admin action`;
+            isUrgent = true;
+          } else if (item.step === "08") {
+            tooltip = `${count} Order(s) in delivery queue / approval`;
+          } else if (item.step === "11") {
+            tooltip = `${count} Overdue order(s) requiring action`;
+            isUrgent = true;
+          } else if (item.step === "12") {
+            tooltip = `${count} Open Service Ticket(s)`;
+          } else if (item.step === "13") {
+            tooltip = `${count} Franchisee store(s) / payout(s) pending`;
+          } else if (item.step === "14") {
+            tooltip = `${count} Custom Quote request(s) pending`;
+          } else if (item.step === "16") {
+            tooltip = `${count} Offline payment(s) pending verification`;
+            isUrgent = true;
+          } else {
+            tooltip = `${count} active item(s)`;
+          }
+        }
+
+        return {
+          count,
+          hasPendingDot: isUrgent,
+          isUrgent,
+          tooltip,
+        };
       }
     }
 
     return null;
   };
+
+  const getItemPendingStatus = getItemBadgeInfo;
 
   const getTargetPath = (path) => {
     if (!path) return "";
@@ -307,7 +447,7 @@ function NavigationDrawer({
           const isLeafActive = !hasSub && activeLeafItem && (activeLeafItem.path === item.path && activeLeafItem.name === item.name);
           const isParentActive = hasSub && isParentOfActive(item);
           const targetPath = hasSub ? "" : getTargetPath(item.path);
-          const pendingStatus = getItemPendingStatus(item);
+          const badgeInfo = getItemBadgeInfo(item);
 
           return (
             <div key={item.name || Math.random()}>
@@ -317,13 +457,13 @@ function NavigationDrawer({
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     onClick={() => toggleMenu(item.name, depth)}
-                    className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group cursor-pointer
+                    className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group cursor-pointer
                       ${isParentActive
                         ? "bg-primary/10 text-primary border border-primary/20 font-semibold shadow-xs"
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
-                    <div className="flex gap-3 items-center max-w-[calc(100%-40px)]">
+                    <div className="flex gap-2.5 items-center min-w-0 flex-1 mr-1.5">
                       <span
                         className={`text-xl min-w-6 flex justify-center transition-colors ${
                           isParentActive ? "text-primary" : "text-primary group-hover:scale-110"
@@ -339,11 +479,25 @@ function NavigationDrawer({
                         {item.name}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      {pendingStatus?.hasPending && (
+                    <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                      {badgeInfo?.count > 0 && (
                         <span
-                          className="relative flex items-center justify-center shrink-0 mr-1"
-                          title={pendingStatus.tooltip}
+                          className={`px-2 py-0.5 rounded-full text-[10.5px] font-mono font-black shrink-0 transition-all ${
+                            isParentActive
+                              ? "bg-primary text-white shadow-xs"
+                              : badgeInfo.isUrgent
+                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                                : "bg-primary/15 text-primary border border-primary/25"
+                          }`}
+                          title={badgeInfo.tooltip}
+                        >
+                          {badgeInfo.count}
+                        </span>
+                      )}
+                      {badgeInfo?.hasPendingDot && (
+                        <span
+                          className="relative flex items-center justify-center shrink-0 mr-0.5"
+                          title={badgeInfo.tooltip}
                         >
                           <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-sm shadow-amber-500/50"></span>
@@ -366,37 +520,55 @@ function NavigationDrawer({
                     onClick={() => {
                       if (isMobile && setIsOpen) setIsOpen(false);
                     }}
-                    className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group
+                    className={`flex items-center justify-between w-full ${
+                      depth > 0 ? "px-3 py-2 pl-3.5 rounded-lg" : "px-3.5 py-2.5 rounded-xl"
+                    } transition-all duration-300 whitespace-nowrap group
                     ${isLeafActive
                         ? "gradient-primary text-white shadow-md shadow-primary/20"
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
-                    <div className="flex gap-3 items-center max-w-[calc(100%-24px)]">
+                    <div className="flex gap-2.5 items-center min-w-0 flex-1 mr-1.5">
                       <span
-                        className={`text-xl min-w-6 flex justify-center transition-colors ${
+                        className={`${depth > 0 ? "text-lg min-w-5" : "text-xl min-w-6"} flex justify-center transition-colors ${
                           isLeafActive ? "text-white" : "text-primary group-hover:scale-110"
                         }`}
                       >
                         {item.icon}
                       </span>
                       <span
-                        className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${
+                        className={`flex-1 font-semibold ${depth > 0 ? "text-[13px]" : "text-[13.5px]"} tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${
                           isLeafActive ? "text-white" : "text-text-primary"
                         }`}
                       >
                         {item.name}
                       </span>
                     </div>
-                    {pendingStatus?.hasPending && (
-                      <span
-                        className="relative flex items-center justify-center shrink-0 ml-auto"
-                        title={pendingStatus.tooltip}
-                      >
-                        <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-sm shadow-amber-500/50"></span>
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                      {badgeInfo?.count > 0 && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full ${depth > 0 ? "text-[10px]" : "text-[10.5px]"} font-mono font-black shrink-0 transition-all ${
+                            isLeafActive
+                              ? "bg-white text-primary shadow-xs"
+                              : badgeInfo.isUrgent
+                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                                : "bg-primary/15 text-primary border border-primary/25"
+                          }`}
+                          title={badgeInfo.tooltip}
+                        >
+                          {badgeInfo.count}
+                        </span>
+                      )}
+                      {badgeInfo?.hasPendingDot && !isLeafActive && (
+                        <span
+                          className="relative flex items-center justify-center shrink-0"
+                          title={badgeInfo.tooltip}
+                        >
+                          <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-sm shadow-amber-500/50"></span>
+                        </span>
+                      )}
+                    </div>
                   </MotionLink>
                 )}
               </li>

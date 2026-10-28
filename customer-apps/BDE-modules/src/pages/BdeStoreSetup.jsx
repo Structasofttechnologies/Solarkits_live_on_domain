@@ -575,8 +575,8 @@ export default function BdeStoreSetup() {
 
                   <div>
                     <span className="text-slate-400 font-bold uppercase text-[10px] block">Mandatory Steps Pending</span>
-                    <strong className={`text-sm block mt-0.5 ${mandatoryPendingCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {mandatoryPendingCount === 0 ? '✓ All Mandatory Completed!' : `${mandatoryPendingCount} Mandatory Remaining`}
+                    <strong className={`text-sm block mt-0.5 ${checklist.length === 0 ? 'text-slate-500' : mandatoryPendingCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {checklist.length === 0 ? 'No Steps Initialized' : mandatoryPendingCount === 0 ? '✓ All Mandatory Completed!' : `${mandatoryPendingCount} Mandatory Remaining`}
                     </strong>
                     <span className="text-[11px] text-slate-500">
                       {completedCount} of {checklist.length} total steps finished
@@ -630,7 +630,18 @@ export default function BdeStoreSetup() {
 
                 {/* 16 Checklist Items List */}
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-                  {filteredChecklist.map((item, idx) => {
+                  {filteredChecklist.length === 0 ? (
+                    <div className="py-12 px-4 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50">
+                      <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-slate-700">No Checklist / Document Activities Found</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {checklist.length === 0
+                          ? 'Checklist activities have not been initialized yet.'
+                          : `No activities found in category "${activeCategory}".`}
+                      </p>
+                    </div>
+                  ) : (
+                    filteredChecklist.map((item, idx) => {
                     const isSelected = selectedActivity?._id === item._id;
                     const isCompleted = item.status === 'completed';
 
@@ -836,7 +847,7 @@ export default function BdeStoreSetup() {
                         )}
                       </div>
                     );
-                  })}
+                  }))}
                 </div>
 
                 {/* Footer Buttons */}

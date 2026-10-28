@@ -750,6 +750,59 @@ const syncActiveStoreSetupsWithMasterSettings = async (actorId = null) => {
   };
 };
 
+/**
+ * Ensure a StoreSetup has its checklist snapshot items populated from Master Settings.
+ * Idempotent: If items already exist, it returns them directly.
+ * If empty, it populates all active master activities, recalculates progress, and returns the checklist items.
+ */
+const ensureStoreSetupChecklist = async (storeSetupId, franchiseeId = null) => {
+  if (!storeSetupId) return [];
+
+  let checklist = await StoreSetupChecklist.find({ store_setup_id: storeSetupId })
+    .sort({ display_order: 1 })
+    .lean();
+
+  if (checklist && checklist.length > 0) {
+    return checklist;
+  }
+
+  // If franchiseeId is not provided, fetch it from StoreSetup
+  let effectiveFranchiseeId = franchiseeId;
+  if (!effectiveFranchiseeId) {
+    const setupRecord = await StoreSetup.findById(storeSetupId).select('franchisee_id').lean();
+    effectiveFranchiseeId = setupRecord?.franchisee_id || null;
+  }
+
+  const settings = await getOrCreateSettings();
+  const masterActivities = (settings.master_checklist_activities || DEFAULT_ACTIVITIES).filter(
+    (a) => a.is_active !== false
+  );
+
+  const snapshotItems = masterActivities.map((activity) => ({
+    store_setup_id: storeSetupId,
+    franchisee_id: effectiveFranchiseeId,
+    activity_code: activity.activity_code,
+    title: activity.title,
+    description: activity.description,
+    category: activity.category,
+    is_mandatory: activity.is_mandatory !== false,
+    proof_required: activity.proof_required !== false,
+    proof_type: activity.proof_type || 'image_or_pdf',
+    display_order: activity.display_order || 0,
+    status: 'pending',
+  }));
+
+  if (snapshotItems.length > 0) {
+    await StoreSetupChecklist.insertMany(snapshotItems);
+    await calculateStoreSetupProgress(storeSetupId);
+    checklist = await StoreSetupChecklist.find({ store_setup_id: storeSetupId })
+      .sort({ display_order: 1 })
+      .lean();
+  }
+
+  return checklist;
+};
+
 module.exports = {
   getOrCreateSettings,
   createStoreSetupForFranchisee,
@@ -759,4 +812,6 @@ module.exports = {
   updateBdePerformanceMetrics,
   getMasterChecklistTemplate,
   syncActiveStoreSetupsWithMasterSettings,
+  ensureStoreSetupChecklist,
 };
+

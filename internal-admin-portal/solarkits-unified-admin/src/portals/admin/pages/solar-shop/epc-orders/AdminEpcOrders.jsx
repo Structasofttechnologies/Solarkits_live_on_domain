@@ -281,6 +281,8 @@ export default function AdminEpcOrders() {
           duplicateCheck: { checked: false, isDuplicate: false, matchingOrder: null },
         });
         fetchOrders();
+        window.dispatchEvent(new Event('sidebar-counts-refresh'));
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       } else {
         showAlert("error", res?.message || "Failed to submit admin decision.");
       }
