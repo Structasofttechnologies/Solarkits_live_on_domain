@@ -457,13 +457,13 @@ function NavigationDrawer({
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     onClick={() => toggleMenu(item.name, depth)}
-                    className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group cursor-pointer
+                    className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group cursor-pointer text-left
                       ${isParentActive
                         ? "bg-primary/10 text-primary border border-primary/20 font-semibold shadow-xs"
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
-                    <div className="flex gap-2.5 items-center min-w-0 flex-1 mr-1.5">
+                    <div className="flex gap-2.5 items-center min-w-0 flex-1 mr-1.5 text-left">
                       <span
                         className={`text-xl min-w-6 flex justify-center transition-colors ${
                           isParentActive ? "text-primary" : "text-primary group-hover:scale-110"
@@ -472,7 +472,7 @@ function NavigationDrawer({
                         {item.icon}
                       </span>
                       <span
-                        className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${
+                        className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap text-left ${
                           isParentActive ? "text-primary font-bold" : "text-text-primary"
                         }`}
                       >
@@ -528,7 +528,7 @@ function NavigationDrawer({
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
-                    <div className="flex gap-2.5 items-center min-w-0 flex-1 mr-1.5">
+                    <div className="flex gap-2.5 items-center min-w-0 flex-1 mr-1.5 text-left">
                       <span
                         className={`${depth > 0 ? "text-lg min-w-5" : "text-xl min-w-6"} flex justify-center transition-colors ${
                           isLeafActive ? "text-white" : "text-primary group-hover:scale-110"
@@ -537,7 +537,7 @@ function NavigationDrawer({
                         {item.icon}
                       </span>
                       <span
-                        className={`flex-1 font-semibold ${depth > 0 ? "text-[13px]" : "text-[13.5px]"} tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${
+                        className={`flex-1 font-semibold ${depth > 0 ? "text-[13px]" : "text-[13.5px]"} tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap text-left ${
                           isLeafActive ? "text-white" : "text-text-primary"
                         }`}
                       >
