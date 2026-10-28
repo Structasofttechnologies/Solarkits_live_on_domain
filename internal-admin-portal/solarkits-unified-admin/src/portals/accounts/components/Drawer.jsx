@@ -56,7 +56,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                     }`}
                 >
                   <div
-                    className="flex gap-3 items-center max-w-[calc(100%-20px)]"
+                    className="flex gap-3 items-center max-w-[calc(100%-50px)]"
                   >
                     <span
                       className={`text-xl min-w-6 flex justify-center transition-colors ${isActive ? "text-white" : "text-primary group-hover:scale-110"
@@ -68,9 +68,18 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                       {item.name}
                     </span>
                   </div>
-                  <span className={`text-lg flex justify-center transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}>
-                    <MdExpandMore />
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {item.badge !== undefined && item.badge !== null && Number(item.badge) > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black shrink-0 ${
+                        isActive ? "bg-white text-primary shadow-xs" : "bg-primary/15 text-primary border border-primary/25"
+                      }`}>
+                        {Number(item.badge) > 99 ? "99+" : item.badge}
+                      </span>
+                    )}
+                    <span className={`text-lg flex justify-center transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}>
+                      <MdExpandMore />
+                    </span>
+                  </div>
                 </motion.button>
               ) : (
                 <MotionLink
@@ -86,7 +95,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                       : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                     }`}
                 >
-                  <div className="flex gap-3 items-center max-w-full">
+                  <div className="flex gap-3 items-center max-w-[calc(100%-36px)]">
                     <span
                       className={`text-xl min-w-6 flex justify-center transition-colors ${isActive ? "text-white" : "text-primary group-hover:scale-110"
                         }`}
@@ -97,6 +106,19 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                       {item.name}
                     </span>
                   </div>
+                  {item.badge !== undefined && item.badge !== null && Number(item.badge) > 0 && (
+                    <motion.span
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black shrink-0 transition-all ${
+                        isActive
+                          ? "bg-white text-primary shadow-xs"
+                          : "bg-primary/15 text-primary border border-primary/25 group-hover:bg-primary group-hover:text-white"
+                      }`}
+                    >
+                      {Number(item.badge) > 99 ? "99+" : item.badge}
+                    </motion.span>
+                  )}
                 </MotionLink>
               )}
             </li>

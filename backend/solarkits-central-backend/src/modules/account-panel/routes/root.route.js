@@ -70,6 +70,7 @@ router.get('/warehouse/vehicles', check_auth, solarshop_handler.get_warehouse_ve
 
 // New Orders & Bulk Procurement Grouping
 const procurement_handler = require('../controller/procurement.handler');
+router.get('/accounts/sidebar-badges', check_auth, accounts_handler.get_sidebar_badge_counts);
 router.get('/accounts/new-orders', check_auth, accounts_handler.get_eligible_new_orders);
 router.get('/accounts/new-orders/filter-options', check_auth, accounts_handler.get_new_orders_filter_options);
 router.get('/accounts/vehicles-master', check_auth, accounts_handler.get_vehicles_master);

@@ -79,7 +79,7 @@ export default function NewOrdersProcurement() {
   // Order Selection Controls
   const [orderCountLimit, setOrderCountLimit] = useState(100); // 50 | 100 | 500 | 1000
   const [vehicleStrategy, setVehicleStrategy] = useState("single"); // 'single' | 'multiple_same' | 'multiple_types'
-  const [selectionMethod, setSelectionMethod] = useState("auto"); // 'auto' | 'manual'
+  const [selectionMethod, setSelectionMethod] = useState("manual"); // 'auto' | 'manual'
   const [searchTerm, setSearchTerm] = useState("");
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -177,6 +177,9 @@ export default function NewOrdersProcurement() {
         if (selectionMethod === "auto") {
           const autoSelected = list.slice(0, orderCountLimit).map((o) => o.id);
           setSelectedOrderIds(autoSelected);
+        } else {
+          // In manual mode, retain only previously selected orders that still exist in the new list
+          setSelectedOrderIds((prev) => prev.filter((id) => list.some((o) => o.id === id)));
         }
       }
     } catch (err) {
@@ -349,6 +352,7 @@ export default function NewOrdersProcurement() {
         showNotification("success", `Procurement Group #${createdGroupId} successfully marked Batch Ready! Redirecting to Procurement...`);
         // Refresh orders to reflect updated status
         fetchOrders();
+        window.dispatchEvent(new CustomEvent("accounts:badge-refresh"));
         // Direct seamless handoff to Procurement Module!
         setTimeout(() => {
           navigate(`/account-panel/procurement?group_id=${createdGroupId}`);
@@ -384,12 +388,12 @@ export default function NewOrdersProcurement() {
       const kits = Number(o.kits) || 1;
       wt += Math.round(kw * 74) * kits;
     });
-    return wt > 0 ? wt : (selectedKitsCount > 0 ? selectedKitsCount * 740 : 1480);
+    return wt > 0 ? wt : (selectedKitsCount > 0 ? selectedKitsCount * 276 : 0);
   }, [calculationData, selectedOrdersList, selectedKitsCount]);
 
   // Dynamically evaluate active fleet from Admin Panel DeliveryVehicleMaster
   const dynamicVehicleSuggestion = useMemo(() => {
-    if (!vehicles || vehicles.length === 0) return null;
+    if (!vehicles || vehicles.length === 0 || selectedOrdersList.length === 0) return null;
 
     const activeFleet = [...vehicles]
       .filter((v) => v.status !== "Inactive" && (Number(v.max_load_kg) || 0) > 0)
@@ -397,7 +401,8 @@ export default function NewOrdersProcurement() {
 
     if (activeFleet.length === 0) return null;
 
-    const targetWeight = calculatedTotalWeight > 0 ? calculatedTotalWeight : (selectedKitsCount > 0 ? selectedKitsCount * 740 : 1480);
+    const targetWeight = calculatedTotalWeight > 0 ? calculatedTotalWeight : (selectedKitsCount > 0 ? selectedKitsCount * 276 : 0);
+    if (targetWeight === 0) return null;
 
     // 1. Smallest active vehicle whose max_load_kg >= targetWeight
     const bestFit = activeFleet.find((v) => Number(v.max_load_kg) >= targetWeight);
@@ -465,21 +470,34 @@ export default function NewOrdersProcurement() {
 
   // Dynamic Kit Type Breakdown derived from selected orders
   const dynamicKitBreakdown = useMemo(() => {
+    if (selectedOrdersList.length === 0) {
+      return [];
+    }
     if (calculationData?.kit_type_breakdown && calculationData.kit_type_breakdown.length > 0) {
       return calculationData.kit_type_breakdown;
     }
     const map = {};
     selectedOrdersList.forEach((o) => {
-      const type = o.kit_type || "ComboKit A";
-      map[type] = (map[type] || 0) + (o.kits || 1);
+      if (Array.isArray(o.raw_items) && o.raw_items.length > 0) {
+        o.raw_items.forEach((it) => {
+          const type = it.item_name || o.kit_type || "Solar Combokit";
+          const qty = Number(it.quantity) || 1;
+          map[type] = (map[type] || 0) + qty;
+        });
+      } else {
+        const type = o.kit_type || "Solar Combokit";
+        map[type] = (map[type] || 0) + (o.kits || 1);
+      }
     });
     const entries = Object.entries(map).map(([kit_type, quantity]) => ({ kit_type, quantity }));
-    if (entries.length > 0) return entries;
-    return [{ kit_type: "ComboKit A", quantity: selectedKitsCount || 1 }];
-  }, [calculationData, selectedOrdersList, selectedKitsCount]);
+    return entries;
+  }, [calculationData, selectedOrdersList]);
 
   // Dynamic Supplier BOM derived from selected equipment
   const dynamicSupplierBOM = useMemo(() => {
+    if (selectedOrdersList.length === 0) {
+      return [];
+    }
     if (calculationData?.supplier_details && calculationData.supplier_details.length > 0) {
       return calculationData.supplier_details.map((s) => ({
         ...s,
@@ -488,15 +506,67 @@ export default function NewOrdersProcurement() {
         total_units: s.qty || s.total_units || s.quantity,
       }));
     }
-    const kits = selectedKitsCount > 0 ? selectedKitsCount : 1;
+    const kits = selectedKitsCount;
+    if (!kits || kits === 0) return [];
+    const firstOrder = selectedOrdersList[0];
+    const kwMatch = (firstOrder?.kit_type || firstOrder?.order_number || "").match(/(\d+(?:\.\d+)?)\s*kw/i);
+    const cap = kwMatch ? parseFloat(kwMatch[1]) : 3;
+    const panelsPerKit = cap === 3 ? 6 : (cap === 5 ? 9 : Math.round(cap * 1.82));
+    const whName = firstOrder?.warehouse_name || (firstOrder?.warehouse_code ? `${firstOrder.warehouse_code} (${firstOrder.district_name || firstOrder.state_name || 'Hub'})` : "WH-IND-MH-001 (Mumbai)");
+
     return [
-      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Mounting Structure (Hot-Dip GI)", component_name: "BOSKIT Mounting Structure (Hot-Dip GI)", product_name: "BOSKIT Mounting Structure (Hot-Dip GI)", qty: kits, total_units: kits, warehouse: "WH-01" },
-      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Protection Box (ACDB/DCDB IP65)", component_name: "BOSKIT Protection Box (ACDB/DCDB IP65)", product_name: "BOSKIT Protection Box (ACDB/DCDB IP65)", qty: kits, total_units: kits, warehouse: "WH-01" },
-      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar Inverter 5kW/10kW String Inverter", component_name: "Solar Inverter 5kW/10kW String Inverter", product_name: "Solar Inverter 5kW/10kW String Inverter", qty: kits, total_units: kits, warehouse: "WH-02" },
-      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar DC 4/6 sq.mm Cable & Earthing Kit", component_name: "Solar DC 4/6 sq.mm Cable & Earthing Kit", product_name: "Solar DC 4/6 sq.mm Cable & Earthing Kit", qty: kits, total_units: kits, warehouse: "WH-02" },
-      { supplier_name: "OEM Partner C (SOLARKITS Manufacturing)", product: "SOLARKITS 540W Bifacial Mono PERC Module", component_name: "SOLARKITS 540W Bifacial Mono PERC Module", product_name: "SOLARKITS 540W Bifacial Mono PERC Module", qty: kits * 9, total_units: kits * 9, warehouse: "WH-03" },
+      {
+        supplier_name: "Solarkits (Sunnovative Energy Systems Private Limited)",
+        product: `Solarkits ${cap === 3 ? "500 Wp" : "540W"} Bifacial DCR Solar Module`,
+        component_name: `Solarkits ${cap === 3 ? "500 Wp" : "540W"} Bifacial DCR Solar Module`,
+        product_name: `Solarkits ${cap === 3 ? "500 Wp" : "540W"} Bifacial DCR Solar Module`,
+        qty: kits * panelsPerKit,
+        total_units: kits * panelsPerKit,
+        warehouse: whName,
+        is_oem: true,
+      },
+      {
+        supplier_name: "Solarkits (Sunnovative Energy Systems Private Limited)",
+        product: `SolarKits ${cap} kW On-Grid String Inverter`,
+        component_name: `SolarKits ${cap} kW On-Grid String Inverter`,
+        product_name: `SolarKits ${cap} kW On-Grid String Inverter`,
+        qty: kits,
+        total_units: kits,
+        warehouse: whName,
+        is_oem: false,
+      },
+      {
+        supplier_name: "REDREN ENERGY PRIVATE LIMITED (Mounting Systems)",
+        product: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${cap} kW)`,
+        component_name: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${cap} kW)`,
+        product_name: `Hot-Dip Galvanized (GI) Rooftop Mounting Structure (${cap} kW)`,
+        qty: kits,
+        total_units: kits,
+        warehouse: whName,
+        is_oem: false,
+      },
+      {
+        supplier_name: "MINDRA GREEN ENERGY LLP (BOS Protection)",
+        product: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${cap} kW)`,
+        component_name: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${cap} kW)`,
+        product_name: `BOSKIT Protection Box (ACDB/DCDB IP65 Enclosure - ${cap} kW)`,
+        qty: kits,
+        total_units: kits,
+        warehouse: whName,
+        is_oem: false,
+      },
+      {
+        supplier_name: "MINDRA GREEN ENERGY LLP (Electrical & Cabling)",
+        product: "Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit",
+        component_name: "Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit",
+        product_name: "Solar DC 4/6 sq.mm Double Insulated Cable & Complete Earthing Kit",
+        qty: kits,
+        total_units: kits,
+        warehouse: whName,
+        is_oem: false,
+      },
     ];
-  }, [calculationData, selectedKitsCount]);
+  }, [calculationData, selectedKitsCount, selectedOrdersList]);
 
   // Suggested group ID
   const displayGroupId = submittedGroup?.group_id || `PG-${new Date().getFullYear()}-0001`;
@@ -1089,14 +1159,15 @@ export default function NewOrdersProcurement() {
                       </td>
                       <td className="py-2.5 px-3">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${o.status === "New"
-                              ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            o.status === "New" || o.status === "New Order"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
                               : o.status === "Ready for Procurement"
                                 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                                 : o.status === "Sent to Procurement"
                                   ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
                                   : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                            }`}
+                          }`}
                         >
                           {o.status}
                         </span>
@@ -1447,20 +1518,44 @@ export default function NewOrdersProcurement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {dynamicKitBreakdown.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-surface-hover/40">
-                        <td className="py-2 px-3 font-semibold text-text-primary">{row.kit_type}</td>
-                        <td className="py-2 px-3 text-right font-bold text-text-primary font-mono">
-                          {row.quantity.toLocaleString()}
+                    {dynamicKitBreakdown.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="py-6 text-center text-text-muted italic text-[11px]">
+                          No orders selected. Please select orders from the list above.
                         </td>
                       </tr>
-                    ))}
-                    <tr className="bg-surface-hover/80 font-black">
-                      <td className="py-2 px-3 text-text-primary">Total</td>
-                      <td className="py-2 px-3 text-right text-text-primary font-mono">
-                        {(calculationData?.total_kits || selectedKitsCount).toLocaleString()}
-                      </td>
-                    </tr>
+                    ) : (
+                      <>
+                        {dynamicKitBreakdown.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-surface-hover/40">
+                            <td className="py-2 px-3 font-semibold text-text-primary">
+                              <span>{row.kit_type}</span>
+                              {row.weight_kg > 0 && (
+                                <span className="ml-2 text-[10px] text-text-muted font-normal">
+                                  ({row.weight_kg.toLocaleString()} kg)
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-bold text-text-primary font-mono">
+                              {row.quantity.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-surface-hover/80 font-black">
+                          <td className="py-2 px-3 text-text-primary">
+                            <span>Total</span>
+                            {calculationData?.total_weight_est_kg > 0 && (
+                              <span className="ml-2 text-[10px] text-text-muted font-normal">
+                                ({calculationData.total_weight_est_kg.toLocaleString()} kg)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right text-text-primary font-mono">
+                            {(calculationData?.total_kits || selectedKitsCount || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1490,20 +1585,25 @@ export default function NewOrdersProcurement() {
                 <div>
                   <span className="text-[10px] text-text-muted block">Capacity</span>
                   <span className="font-bold text-text-primary font-mono">
-                    {((activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1)).toLocaleString()} kg
+                    {activeVehicleObj?.max_load_kg ? `${((activeVehicleObj.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1)).toLocaleString()} kg` : "—"}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-muted block">Estimated Load</span>
                   <span className="font-bold text-text-primary font-mono">
-                    {calculatedTotalWeight.toLocaleString()} kg
+                    {selectedOrdersList.length > 0 ? `${(calculationData?.total_weight_est_kg || calculatedTotalWeight).toLocaleString()} kg` : "0 kg"}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-muted block">Utilization</span>
                   {(() => {
-                    const totalCap = (activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1);
-                    const util = totalCap > 0 ? Math.round((calculatedTotalWeight / totalCap) * 100) : 100;
+                    if (selectedOrdersList.length === 0) {
+                      return <span className="font-bold font-mono text-text-muted">0%</span>;
+                    }
+                    const totalCap = (activeVehicleObj?.max_load_kg || calculationData?.vehicle_assignment?.total_capacity_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1);
+                    const util = calculationData?.vehicle_assignment?.utilization_pct != null
+                      ? calculationData.vehicle_assignment.utilization_pct
+                      : (totalCap > 0 && calculatedTotalWeight > 0 ? Math.round((calculatedTotalWeight / totalCap) * 100) : 0);
                     return (
                       <span
                         className={`font-bold font-mono ${util > 100 ? "text-red-600" : util > 85 ? "text-amber-600" : "text-emerald-600"
@@ -1561,7 +1661,7 @@ export default function NewOrdersProcurement() {
           <div className="bg-surface border border-cyan-200/60 dark:border-cyan-900/30 rounded-xl p-3 text-center">
             <span className="text-[11px] font-bold text-text-secondary block">Procurement Groups</span>
             <p className="text-xl font-black text-cyan-900 dark:text-cyan-300 mt-0.5">
-              1
+              {selectedOrdersList.length > 0 ? 1 : 0}
             </p>
           </div>
         </div>
@@ -1578,24 +1678,39 @@ export default function NewOrdersProcurement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {dynamicSupplierBOM.map((item, idx) => (
-                <tr key={idx} className="hover:bg-cyan-50/40 dark:hover:bg-cyan-950/20">
-                  <td className="py-2 px-3 font-bold text-cyan-900 dark:text-cyan-300">
-                    {item.supplier_name}
-                  </td>
-                  <td className="py-2 px-3 font-medium text-text-primary">
-                    {item.product}
-                  </td>
-                  <td className="py-2 px-3 text-center font-bold text-text-primary font-mono">
-                    {(item.qty || 0).toLocaleString()}
-                  </td>
-                  <td className="py-2 px-3 text-text-secondary">
-                    <span className="px-2 py-0.5 rounded-md bg-surface-hover text-[11px] font-mono">
-                      {item.warehouse || "WH-01"}
-                    </span>
+              {dynamicSupplierBOM.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-text-muted italic text-[11px]">
+                    No orders selected. Please select orders above to calculate supplier-wise procurement breakdown.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                dynamicSupplierBOM.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-cyan-50/40 dark:hover:bg-cyan-950/20">
+                    <td className="py-2.5 px-3 font-bold text-cyan-900 dark:text-cyan-300">
+                      <div className="flex items-center gap-2">
+                        <span>{item.supplier_name}</span>
+                        {item.is_oem && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-200">
+                            OEM
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 font-medium text-text-primary">
+                      {item.product || item.product_name || item.component_name}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-text-primary font-mono">
+                      {(item.qty || item.total_units || 0).toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-text-secondary">
+                      <span className="px-2 py-0.5 rounded-md bg-surface-hover text-[11px] font-mono">
+                        {item.warehouse || "WH-IND-GJ-001 (Sanand Hub, Ahmedabad)"}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

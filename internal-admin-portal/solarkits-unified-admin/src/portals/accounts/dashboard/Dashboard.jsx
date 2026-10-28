@@ -2,12 +2,13 @@ import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import Header from "../components/Header"
 import Drawer from "../components/Drawer";
 import { FaHome, FaFileInvoice, FaCreditCard, FaCheckCircle, FaHandshake, FaBoxes, FaLayerGroup } from "react-icons/fa"
-import { lazy, Suspense, useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { PermissionGuard } from "../components/PermissionGuard";
 import { useSelector } from "react-redux";
 import Loader from "../components/Loader";
 import { selectAllowedUniqueIds, selectNoModulesForTier } from "../features/modules.slice";
+import { getSidebarBadgeCounts } from "../api/accounts";
 
 const Home = lazy(() => import("../pages/Home"));
 const Profile = lazy(() => import("../pages/Profile"));
@@ -24,7 +25,7 @@ const Payments = lazy(() => import("../pages/accounts-management/Payments"));
 const NewOrdersProcurement = lazy(() => import("../pages/accounts-management/NewOrdersProcurement"));
 const Procurement = lazy(() => import("../pages/accounts-management/Procurement"));
 
-const menus = [
+const getMenusWithBadges = (badgeCounts = {}) => [
   [
     {
       name: "Accounts Dashboard",
@@ -36,13 +37,15 @@ const menus = [
       name: "New Orders",
       icon: <FaBoxes />,
       path: "/account-panel/new-orders",
-      unique_id: "ACC_NEW_ORDERS"
+      unique_id: "ACC_NEW_ORDERS",
+      badge: badgeCounts.new_orders || 0
     },
     {
       name: "Procurement",
       icon: <FaLayerGroup />,
       path: "/account-panel/procurement",
-      unique_id: "ACC_PROCUREMENT"
+      unique_id: "ACC_PROCUREMENT",
+      badge: badgeCounts.procurement || 0
     },
     {
       name: "Supplier Registry",
@@ -54,7 +57,8 @@ const menus = [
       name: "Purchase Orders",
       icon: <FaFileInvoice />,
       path: "/account-panel/purchase-orders",
-      unique_id: "ACC_PO"
+      unique_id: "ACC_PO",
+      badge: badgeCounts.purchase_orders || 0
     },
     // {
     //   name: "OEM Partner Orders",
@@ -72,7 +76,8 @@ const menus = [
       name: "Supplier Payments",
       icon: <FaCreditCard />,
       path: "/account-panel/payments",
-      unique_id: "ACC_PAYMENTS"
+      unique_id: "ACC_PAYMENTS",
+      badge: badgeCounts.supplier_payments || 0
     },
     {
       name: "Inventory Inward Invoices",
@@ -155,7 +160,40 @@ export default function Dashboard() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const filteredMenus = filterMenusByPermission(menus, allowedUniqueIds);
+  const [sidebarBadges, setSidebarBadges] = useState({
+    new_orders: 0,
+    procurement: 0,
+    supplier_payments: 0,
+    purchase_orders: 0,
+  });
+
+  const fetchBadges = useCallback(async () => {
+    try {
+      const res = await getSidebarBadgeCounts();
+      if (res?.data) {
+        setSidebarBadges(res.data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch accounts sidebar badges:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBadges();
+    const interval = setInterval(fetchBadges, 45000);
+    const handleRefresh = () => fetchBadges();
+    window.addEventListener("accounts:badge-refresh", handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("accounts:badge-refresh", handleRefresh);
+    };
+  }, [fetchBadges, location.pathname]);
+
+  const filteredMenus = useMemo(() => {
+    const rawMenus = getMenusWithBadges(sidebarBadges);
+    return filterMenusByPermission(rawMenus, allowedUniqueIds);
+  }, [sidebarBadges, allowedUniqueIds]);
   return (
     <div className="flex h-screen bg-bg w-screen theme-transition">
       <Drawer
