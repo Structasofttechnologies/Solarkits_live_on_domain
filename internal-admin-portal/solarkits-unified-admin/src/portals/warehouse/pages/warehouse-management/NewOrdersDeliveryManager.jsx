@@ -13,7 +13,7 @@ import {
   FaPhoneAlt, FaEnvelope, FaShieldAlt, FaExternalLinkAlt,
   FaLayerGroup, FaArrowRight, FaArrowLeft, FaLock, FaWarehouse,
   FaBuilding, FaTools, FaBarcode, FaExclamationTriangle,
-  FaCheckDouble, FaWrench, FaClipboardCheck, FaPlus, FaCube, FaCheck
+  FaCheckDouble, FaWrench, FaClipboardCheck, FaPlus, FaCube, FaCheck, FaPaperPlane
 } from 'react-icons/fa';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '@/features/alert.slice';
@@ -112,13 +112,13 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   // Mode: 'order_specific' (Order Fulfillment) vs 'stock_inventory' (Pre-Assembly for Warehouse Stock)
   const [boskitWorkstationMode, setBoskitWorkstationMode] = useState('order_specific');
 
-  // Pre-Assembled Warehouse Stock Models (Connected to Solar Shop DCR Combo Kits)
+  // Pre-Assembled Warehouse Stock Models (Balance of System Packages ONLY - Panels & Inverters are inwarded separately)
   const DEFAULT_STOCK_MODELS = [
     {
       id: '1kw-dcr',
-      name: '1 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
-      catalog_name: '1 K.W. Solarkits DCR Kit',
-      category: 'Residential',
+      name: '1 kW Solarkits BOS Kit (Balance of System & Wiring Package)',
+      catalog_name: '1 kW Solarkits BOS Kit',
+      category: 'Residential BOS Kit',
       capacity: '1 kW',
       storage_location: 'Bay 1 / Pallet A-01',
       ready_stock: 4,
@@ -136,9 +136,9 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     },
     {
       id: '2kw-dcr',
-      name: '2 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
-      catalog_name: '2 K.W. Solarkits DCR Kit',
-      category: 'Residential',
+      name: '2 kW Solarkits BOS Kit (Balance of System & Wiring Package)',
+      catalog_name: '2 kW Solarkits BOS Kit',
+      category: 'Residential BOS Kit',
       capacity: '2 kW',
       storage_location: 'Bay 1 / Pallet B-02',
       ready_stock: 3,
@@ -156,9 +156,9 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     },
     {
       id: '3kw-dcr',
-      name: '3 KW Solarkits DCR Kit (BOS & Wiring Package)',
-      catalog_name: '3 KW Solarkits DCR Kit',
-      category: 'Residential',
+      name: '3 kW Solarkits BOS Kit (Balance of System & Wiring Package)',
+      catalog_name: '3 kW Solarkits BOS Kit',
+      category: 'Residential BOS Kit',
       capacity: '3 kW',
       storage_location: 'Bay 2 / Pallet C-03',
       ready_stock: 2,
@@ -271,7 +271,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   const [procureModalOpen, setProcureModalOpen] = useState(false);
   const [selectedOrderForProcure, setSelectedOrderForProcure] = useState(null);
   const [selectedItemForProcure, setSelectedItemForProcure] = useState(null);
-  const [procureQtyInput, setProcureQtyInput] = useState(0);
+  const [selectedProcureModelId, setSelectedProcureModelId] = useState('1kw-dcr');
+  const [procureQtyInput, setProcureQtyInput] = useState(1);
   const [procureNotes, setProcureNotes] = useState('');
   const [submittingProcure, setSubmittingProcure] = useState(false);
 
@@ -1028,35 +1029,56 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   };
 
   // Open Procurement Requisition Modal for Account Manager
-  const handleOpenProcureModal = (order, item) => {
+  const handleOpenProcureModal = (order, item = null) => {
     setSelectedOrderForProcure(order);
     setSelectedItemForProcure(item);
-    const shortage = Math.max(0, (item.pending_qty || 0) - (item.available_inventory_stock || 0));
-    setProcureQtyInput(shortage > 0 ? shortage : item.pending_qty);
-    setProcureNotes(`BOS Kit stock shortage for Order #${order.order_number} (${order.customer_name}). Please procure from vendor.`);
+
+    // Auto-detect matching model from order's system_capacity or item
+    const cap = item?.capacity || order?.system_capacity || '1 kW';
+    const matched = preassembledStock.find(m =>
+      (item?.model_id && m.id === item.model_id) ||
+      (m.capacity && cap.toLowerCase().includes(m.capacity.toLowerCase())) ||
+      (m.name && cap.toLowerCase().includes(m.name.toLowerCase()))
+    ) || preassembledStock[0];
+
+    setSelectedProcureModelId(matched?.id || '1kw-dcr');
+    setProcureQtyInput(1);
+    setProcureNotes(`BOS Kit (${matched?.capacity || cap}) raw material booking request for Order #${order?.order_number || ''} (${order?.customer_name || ''}). Please approve and book materials from suppliers.`);
     setProcureModalOpen(true);
   };
 
   const handleSaveProcureRequest = async (e) => {
     if (e) e.preventDefault();
-    if (!selectedOrderForProcure || !selectedItemForProcure) return;
-    const qty = parseInt(procureQtyInput);
-    if (isNaN(qty) || qty <= 0) {
-      dispatch(setAlert({ message: 'Enter a valid quantity to requisition.', type: 'error' }));
+    if (!selectedOrderForProcure) return;
+    const numKits = parseInt(procureQtyInput) || 1;
+    if (numKits <= 0) {
+      dispatch(setAlert({ message: 'Enter a valid number of kits to requisition.', type: 'error' }));
       return;
     }
+
+    const matchedModel = preassembledStock.find(m => m.id === selectedProcureModelId) || preassembledStock[0];
 
     try {
       setSubmittingProcure(true);
       const res = await requestDeliveryOrderProcurement(selectedOrderForProcure._id, {
-        sku: selectedItemForProcure.sku,
-        requested_qty: qty,
+        sku: selectedItemForProcure?.sku || 'BOS-RAW-MAT-PKG',
+        requested_qty: numKits,
+        kit_capacity: matchedModel?.capacity,
+        model_name: matchedModel?.name,
+        num_kits: numKits,
+        items: (matchedModel?.bom_components || []).map(c => ({
+          name: c.name,
+          sku: c.sku,
+          sku_id: c.sku_id,
+          qty: (c.qty || 1) * numKits,
+          unit: c.unit
+        })),
         notes: procureNotes
       });
 
       if (res.status === 'success') {
         dispatch(setAlert({
-          message: res.message || 'Requisition forwarded to Account Manager login!',
+          message: res.message || `Requisition for ${matchedModel?.capacity} BOS Kit materials sent to Account Manager login successfully!`,
           type: 'success'
         }));
         setProcureModalOpen(false);
@@ -1658,8 +1680,9 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedStockModelId('5kw-std');
+                  setSelectedStockModelId(preassembledStock[0]?.id || '1kw-dcr');
                   setStockAssembleQty(1);
+                  setStockAssemblyRack(preassembledStock[0]?.storage_location || 'Bay 1 / Pallet A-01');
                   setStockAssemblyModalOpen(true);
                 }}
                 className="px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/25 flex items-center gap-2 cursor-pointer transition-all active:scale-95 shrink-0"
@@ -1780,19 +1803,36 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedStockModelId(model.id);
-                      setStockAssembleQty(1);
-                      setStockAssemblyRack(model.storage_location);
-                      setStockAssemblyModalOpen(true);
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-surface-hover hover:bg-emerald-600 hover:text-white border border-border hover:border-emerald-500 text-text-primary flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <FaPlus className="text-xs" />
-                    <span>Assemble This Model for WH</span>
-                  </button>
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStockModelId(model.id);
+                        setStockAssembleQty(1);
+                        setStockAssemblyRack(model.storage_location);
+                        setStockAssemblyModalOpen(true);
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-surface-hover hover:bg-emerald-600 hover:text-white border border-border hover:border-emerald-500 text-text-primary flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <FaPlus className="text-xs" />
+                      <span>Assemble This Model for WH</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const dummyOrder = orders.find(o => !o.kit_preparation_status || o.kit_preparation_status !== 'kit_ready') || orders[0];
+                        if (dummyOrder) {
+                          handleOpenProcureModal(dummyOrder, { model_id: model.id, capacity: model.capacity });
+                        } else {
+                          dispatch(setAlert({ message: 'No active delivery order found to attach requisition to.', type: 'info' }));
+                        }
+                      }}
+                      className="w-full py-1.5 px-3 rounded-lg text-[11px] font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <FaPaperPlane className="text-[10px]" />
+                      <span>Request Materials from Account Manager</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1914,6 +1954,21 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
              allocate ready stock if available, else assemble on-demand)
            ───────────────────────────────────────────────────────────── */
         <div className="space-y-6">
+          {/* Warehouse Operations Scope Clarification */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-surface to-emerald-500/10 border border-purple-500/30 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm shrink-0 mt-0.5 font-bold">
+              <FaShieldAlt />
+            </div>
+            <div className="text-xs">
+              <div className="font-bold text-text-primary">
+                Warehouse Standard: BOS Kits (Balance of System) Advance Assembly Only
+              </div>
+              <p className="text-text-secondary mt-0.5 leading-relaxed">
+                Warehouse me <strong>Solar Panels aur Inverters assemble nahi hote</strong> (wo suppliers/manufacturers se direct finished units inward hote hain). Yahan Account Manager ke orders ke hisab se har kW ki <strong>BOS Kit (Mounting Rails, Clamps, DCDB/ACDB, DC/AC Cables, Earthing)</strong> ko advance me assemble karke buffer stock me rakha jata hai taaki order aane par turant 1-click allocation ho sake.
+              </p>
+            </div>
+          </div>
+
           {/* BOS Kit Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="card p-4 rounded-2xl border border-border bg-surface shadow-xs">
@@ -2208,6 +2263,30 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                             </button>
                           </div>
                         </div>
+                      ) : ord.procurement_requested ? (
+                        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                          <div className="flex items-center gap-2.5">
+                            <FaClipboardCheck className="text-base shrink-0 text-blue-400" />
+                            <div>
+                              <div className="font-bold flex items-center gap-2">
+                                <span>Material Booking Request Sent to Account Manager</span>
+                                <span className="font-mono px-2 py-0.5 rounded bg-blue-950/70 border border-blue-500/40 text-blue-300 text-[10px]">
+                                  {ord.procurement_request_number || 'REQ-BOS-PENDING'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-text-secondary mt-0.5">
+                                Is order ({ord.procurement_details?.kit_capacity || ord.system_capacity || 'BOS Kit'}) ke raw materials ki booking request Account Manager login me bhej di gayi hai. Awaiting supplier order & inward.
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenProcureModal(ord, { product_name: 'BOS Kit Electrical & Structure Raw Materials Package', sku: 'BOS-RAW-MAT-PKG', is_bos_kit: true })}
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all cursor-pointer shrink-0"
+                          >
+                            View / Re-request
+                          </button>
+                        </div>
                       ) : (
                         /* User Rule 3: Shortage Alert shown only when 0 stock in buffer */
                         <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -2219,10 +2298,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleOpenProcureModal(ord, { product_name: 'BOS Kit Electrical & Structure Raw Materials Package', sku: 'BOS-RAW-MAT-PKG' })}
+                            onClick={() => handleOpenProcureModal(ord, { product_name: 'BOS Kit Electrical & Structure Raw Materials Package', sku: 'BOS-RAW-MAT-PKG', is_bos_kit: true })}
                             className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all cursor-pointer shrink-0"
                           >
-                            Request Account Manager
+                            ⚡ Request Account Manager (Raw Material Booking)
                           </button>
                         </div>
                       )}
@@ -3304,77 +3383,166 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
         )}
       </Dialog>
 
-      {/* ── Procurement Requisition to Account Manager Modal ── */}
+      {/* ── Procurement & Material Booking Requisition to Account Manager Modal ── */}
       <Dialog
         isOpen={procureModalOpen}
         onClose={() => setProcureModalOpen(false)}
-        title="Send Procurement Requisition to Account Panel"
-        size="md"
+        title="Send BOS Material Booking Requisition to Account Manager"
+        size="lg"
       >
-        {selectedItemForProcure && (
-          <form onSubmit={handleSaveProcureRequest} className="space-y-4 p-1">
-            <div className="p-4 bg-amber-50 border-2 border-amber-400 rounded-2xl text-xs space-y-2">
-              <div className="font-black text-slate-950 text-sm">{selectedItemForProcure.product_name}</div>
-              <div className="text-amber-950 font-mono font-bold">{selectedItemForProcure.sku}</div>
-              <div className="flex justify-between text-slate-700 font-semibold pt-2 border-t-2 border-amber-300">
-                <span>Order Qty: <strong className="text-slate-950">{selectedItemForProcure.ordered_qty}</strong></span>
-                <span>Current Stock: <strong className="text-slate-950">{selectedItemForProcure.available_inventory_stock || 0}</strong></span>
-                <span className="text-rose-700 font-black">
-                  Deficit: {Math.max(0, (selectedItemForProcure.pending_qty || 0) - (selectedItemForProcure.available_inventory_stock || 0))} Pcs
-                </span>
+        {selectedOrderForProcure && (() => {
+          const ord = selectedOrderForProcure;
+          const currentModel = preassembledStock.find(m => m.id === selectedProcureModelId) || preassembledStock[0];
+          const numKits = parseInt(procureQtyInput) || 1;
+
+          return (
+            <form onSubmit={handleSaveProcureRequest} className="space-y-4 p-1">
+              {/* Order & Recipient Banner */}
+              <div className="p-3.5 bg-surface-hover border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div>
+                  <div className="font-extrabold text-text-primary text-sm flex items-center gap-2">
+                    <span className="text-primary font-mono">{ord.delivery_order_id}</span>
+                    <span>• Order #{ord.order_number}</span>
+                    <span className="text-text-muted">• {ord.customer_name}</span>
+                  </div>
+                  <div className="text-text-secondary mt-0.5">
+                    Order System Capacity: <strong className="text-primary">{ord.system_capacity || '1 kW'}</strong>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    Recipient: Account Manager
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <div className="text-xs text-slate-800 font-semibold leading-relaxed">
-              Warehouse stock is insufficient for this BOS component. Submit an official purchase requisition directly to the <strong className="text-slate-950 font-black">Account Manager</strong> login so they can issue a Purchase Order to the supplier.
-            </div>
+              {/* Model Selector for kW Capacity */}
+              <div>
+                <label className="text-xs font-black text-text-primary uppercase tracking-wider block mb-2">
+                  1. Select kW BOS Kit Model for Component Recipe:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {preassembledStock.map((m) => {
+                    const isSelected = selectedProcureModelId === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => setSelectedProcureModelId(m.id)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 shadow-sm'
+                            : 'bg-surface hover:bg-surface-hover border-border text-text-secondary'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase">{m.category}</span>
+                          <span className="text-[11px] font-mono font-bold text-amber-400">
+                            {m.capacity}
+                          </span>
+                        </div>
+                        <div className="text-xs font-bold text-text-primary mt-1 line-clamp-1">{m.name}</div>
+                        <div className="text-[10px] text-text-muted mt-1">
+                          {m.bom_components?.length || 0} BOM Materials
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-            <div>
-              <label className="text-xs font-black text-slate-900 block mb-1.5">
-                Requisition Quantity to Procure
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={procureQtyInput}
-                onChange={(e) => setProcureQtyInput(e.target.value)}
-                className="w-full p-3 text-sm font-black bg-white border-2 border-slate-400 rounded-xl text-slate-950 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
-                required
-              />
-            </div>
+              {/* Number of Kits to Procure For */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-text-primary uppercase tracking-wider block mb-1.5">
+                    Number of BOS Kits to Assemble (Procure Qty):
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={procureQtyInput}
+                    onChange={(e) => setProcureQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full p-2.5 text-xs font-bold font-mono bg-surface border border-border rounded-xl text-text-primary focus:border-primary"
+                    required
+                  />
+                </div>
+                <div className="flex items-end">
+                  <div className="p-2.5 rounded-xl bg-surface-hover/70 border border-border text-[11px] text-text-secondary w-full">
+                    Total components to requisition: <strong className="text-primary font-bold">{(currentModel?.bom_components?.length || 0) * numKits} units</strong> across {currentModel?.bom_components?.length || 0} SKUs.
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="text-xs font-black text-slate-900 block mb-1.5">
-                Notes for Account Manager & Procurement
-              </label>
-              <textarea
-                rows={3}
-                value={procureNotes}
-                onChange={(e) => setProcureNotes(e.target.value)}
-                placeholder="Mention priority, supplier preference, or required delivery timeline..."
-                className="w-full p-3 text-xs font-semibold bg-white border-2 border-slate-400 rounded-xl text-slate-950 placeholder:text-slate-500 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
-              />
-            </div>
+              {/* BOM Materials Requisition Table */}
+              <div>
+                <div className="text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>2. BOS Kit BOM Recipe Components ({currentModel?.bom_components?.length || 0} Items):</span>
+                  <span className="text-[10px] text-text-muted">Direct from {currentModel?.name}</span>
+                </div>
+                <div className="border border-border rounded-xl overflow-hidden bg-surface max-h-48 overflow-y-auto scrollbar-thin">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-hover border-b border-border text-[10px] font-black uppercase text-text-muted sticky top-0">
+                      <tr>
+                        <th className="p-2.5">Component / SKU</th>
+                        <th className="p-2.5 text-center">BOM Qty / Kit</th>
+                        <th className="p-2.5 text-center">Requisition Total</th>
+                        <th className="p-2.5 text-right">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {(currentModel?.bom_components || []).map((c, i) => (
+                        <tr key={i} className="hover:bg-surface-hover/30">
+                          <td className="p-2.5">
+                            <div className="font-bold text-text-primary">{c.name}</div>
+                            <div className="text-[10px] font-mono text-purple-400">{c.sku}</div>
+                          </td>
+                          <td className="p-2.5 text-center font-mono font-semibold">{c.qty}</td>
+                          <td className="p-2.5 text-center font-mono font-bold text-primary">
+                            {c.qty * numKits}
+                          </td>
+                          <td className="p-2.5 text-right text-text-secondary text-[11px]">{c.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-            <div className="flex justify-end gap-2.5 pt-3.5 border-t-2 border-slate-200">
-              <button
-                type="button"
-                onClick={() => setProcureModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl text-xs font-black bg-slate-200 hover:bg-slate-300 border-2 border-slate-400 text-slate-900 cursor-pointer transition-all shadow-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submittingProcure}
-                className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-600 text-white hover:bg-amber-700 transition-all cursor-pointer shadow-md flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-              >
-                {submittingProcure ? <FaSpinner className="animate-spin text-sm" /> : null}
-                <span>{submittingProcure ? 'Sending Requisition...' : 'Send to Account Panel'}</span>
-              </button>
-            </div>
-          </form>
-        )}
+              {/* Notes for Account Manager */}
+              <div>
+                <label className="text-xs font-bold text-text-primary uppercase tracking-wider block mb-1.5">
+                  3. Notes for Account Manager & Supplier Purchase Order:
+                </label>
+                <textarea
+                  rows={2}
+                  value={procureNotes}
+                  onChange={(e) => setProcureNotes(e.target.value)}
+                  placeholder="Mention delivery urgency, preferred vendor, or site dispatch deadline..."
+                  className="w-full p-2.5 text-xs bg-surface border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:border-primary"
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setProcureModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-surface-hover border border-border text-text-secondary cursor-pointer hover:bg-surface"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingProcure}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {submittingProcure ? <FaSpinner className="animate-spin text-xs" /> : <FaPaperPlane className="text-xs" />}
+                  <span>{submittingProcure ? 'Forwarding Requisition...' : '⚡ Send Booking Request to Account Manager'}</span>
+                </button>
+              </div>
+            </form>
+          );
+        })()}
       </Dialog>
 
       {/* ── Boss Specification: BOSKIT Preparation & Assembly Station Modal ── */}

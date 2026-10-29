@@ -33,11 +33,15 @@ export const reserveDeliveryInventory = async (id, { sku, allocated_stock }) => 
   return res.data;
 };
 
-export const requestDeliveryOrderProcurement = async (id, { sku, requested_qty, notes }) => {
+export const requestDeliveryOrderProcurement = async (id, { sku, requested_qty, notes, items, kit_capacity, model_name, num_kits } = {}) => {
   const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/request-procurement`, {
     sku,
     requested_qty,
-    notes
+    notes,
+    items,
+    kit_capacity,
+    model_name,
+    num_kits
   }, {
     headers: authHeaderObj()
   });

@@ -258,7 +258,10 @@ const schema = new mongoose.Schema({
     performed_by_name:  { type: String, default: 'Delivery Manager' },
     timestamp:          { type: Date, default: Date.now },
     notes:              { type: String, default: '' }
-  }]
+  }],
+  procurement_requested:      { type: Boolean, default: false },
+  procurement_request_number: { type: String, default: '' },
+  procurement_details:        { type: mongoose.Schema.Types.Mixed, default: null }
 }, {
   collection: 'delivery_orders',
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

@@ -1,4 +1,5 @@
-const { DeliveryOrder } = require('../models/company_warehouse_db');
+const mongoose = require('mongoose');
+const { DeliveryOrder, PoRequest, CompanyWarehouse } = require('../models/company_warehouse_db');
 
 /**
  * GET /warehouse-api/delivery-orders
@@ -309,35 +310,93 @@ exports.reserve_inventory = async (req, res) => {
 
 /**
  * POST /warehouse-api/delivery-orders/:id/request-procurement
- * When BOS kit stock is not available in warehouse inventory, send procurement requisition to Account Manager
+ * When BOS kit stock is not available in warehouse inventory, send official procurement & booking requisition to Account Manager
  */
 exports.request_procurement = async (req, res) => {
   try {
-    const { sku, requested_qty, notes } = req.body;
+    const { sku, requested_qty, notes, items = [], kit_capacity, model_name, num_kits = 1 } = req.body;
     const order = await DeliveryOrder.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ status: 'error', message: 'Delivery order not found.' });
     }
 
-    const item = (order.items || []).find(it => it.sku === sku);
-    const itemName = item ? item.product_name : (sku || 'BOS Kit Components');
-    const qty = parseInt(requested_qty) || (item ? item.pending_qty : 1);
+    // Resolve or find a valid warehouse ID
+    let warehouse_id = order.warehouse_id;
+    if (!warehouse_id) {
+      const wh = await CompanyWarehouse.findOne({ deleted_at: null }).lean();
+      warehouse_id = wh ? wh._id : new mongoose.Types.ObjectId();
+    }
+
+    const requestNumber = `REQ-BOS-${order.order_number || Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+    // Build items for PoRequest
+    let poItems = [];
+    if (Array.isArray(items) && items.length > 0) {
+      poItems = items.map(it => {
+        let skuId = null;
+        if (it.sku_id && mongoose.Types.ObjectId.isValid(it.sku_id)) {
+          skuId = new mongoose.Types.ObjectId(it.sku_id);
+        } else {
+          skuId = new mongoose.Types.ObjectId();
+        }
+        return {
+          sku_id: skuId,
+          sku_code: it.sku || it.sku_code || 'BOS-RAW-MATERIAL',
+          qty: Number(it.qty) || 1
+        };
+      });
+    } else {
+      const item = (order.items || []).find(it => it.sku === sku);
+      const qty = parseInt(requested_qty) || (item ? item.pending_qty : 1);
+      poItems = [{
+        sku_id: new mongoose.Types.ObjectId(),
+        sku_code: sku || 'BOS-RAW-MAT-PKG',
+        qty: qty
+      }];
+    }
+
+    // Create official PoRequest for Account Manager login portal
+    const newPoRequest = new PoRequest({
+      request_number: requestNumber,
+      warehouse_id: warehouse_id,
+      items: poItems,
+      status: 'pending',
+      created_by: req.user?._id || req.user?.id || new mongoose.Types.ObjectId()
+    });
+
+    await newPoRequest.save();
+
+    const descName = model_name || (kit_capacity ? `${kit_capacity} BOS Kit` : (items[0]?.name || sku || 'BOS Kit Components'));
+    order.procurement_requested = true;
+    order.procurement_request_number = requestNumber;
+    order.procurement_details = {
+      requested_at: new Date(),
+      request_number: requestNumber,
+      po_request_id: newPoRequest._id,
+      items_count: poItems.length,
+      kit_capacity: kit_capacity || order.system_capacity,
+      model_name: descName,
+      num_kits: Number(num_kits) || 1,
+      notes: notes || ''
+    };
 
     order.audit_trail.push({
-      action: 'Procurement Requisition Sent to Account Panel',
+      action: 'Procurement / Booking Requisition Sent to Account Manager',
       performed_by_name: req.user?.name || 'Delivery Manager',
       timestamp: new Date(),
-      notes: `Requisition of ${qty} units for SKU ${sku} (${itemName}) sent to Account Manager due to warehouse stock shortage. ${notes || ''}`.trim()
+      notes: `Requisition ${requestNumber} with ${poItems.length} BOM components for ${descName} sent to Account Manager login for supplier booking. ${notes || ''}`.trim()
     });
 
     await order.save();
 
     return res.status(200).json({
       status: 'success',
-      message: `Procurement requisition for "${itemName}" (${qty} units) forwarded to Account Manager login successfully.`,
+      message: `Booking & procurement requisition "${requestNumber}" for ${descName} (${poItems.length} materials) forwarded to Account Manager successfully.`,
+      request_number: requestNumber,
       data: order
     });
   } catch (error) {
+    console.error('Error in request_procurement:', error);
     return res.status(500).json({ status: 'error', message: error.message });
   }
 };
@@ -1458,72 +1517,146 @@ exports.allocate_preassembled_kit = async (req, res) => {
 
 /**
  * GET /warehouse-api/delivery-orders/bos-kit-catalog
- * Fetches dynamic BOS kit models configured from Solar Shop products
+ * Fetches dynamic BOS kit models configured from Solar Shop products & MongoDB pc_comobo_kit
  */
 exports.get_bos_kit_catalog = async (req, res) => {
   try {
-    const catalog = [
-      {
-        id: '1kw-dcr',
-        name: '1 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
-        catalog_name: '1 K.W. Solarkits DCR Kit',
-        category: 'Residential',
-        capacity: '1 kW',
-        storage_location: 'Bay 1 / Pallet A-01',
-        ready_stock: 4,
-        batch_codes: ['WH-BOS-1KW-2026-D101', 'WH-BOS-1KW-2026-D102', 'WH-BOS-1KW-2026-D103', 'WH-BOS-1KW-2026-D104'],
-        bom_components: [
-          { name: 'Aluminium Mounting Rails (2.2m)', sku: 'BOS-RAIL-2.2M-AL', qty: 4, unit: 'Pcs' },
-          { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 4, unit: 'Pcs' },
-          { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
-          { name: '4 sq mm Solar DC Cable (15m Roll)', sku: 'BOS-DC-CABLE-4SQMM-15M', qty: 1, unit: 'Roll' },
-          { name: '1-In 1-Out DCDB / AJB Box (1000V SPD)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
-          { name: '16A Single Phase ACDB Enclosure', sku: 'BOS-ACDB-1PH-16A', qty: 1, unit: 'Box' },
-          { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 1, unit: 'Pcs' },
-          { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 4, unit: 'Pairs' }
-        ]
-      },
-      {
-        id: '2kw-dcr',
-        name: '2 K.W. Solarkits DCR Kit (BOS & Wiring Package)',
-        catalog_name: '2 K.W. Solarkits DCR Kit',
-        category: 'Residential',
-        capacity: '2 kW',
-        storage_location: 'Bay 1 / Pallet B-02',
-        ready_stock: 3,
-        batch_codes: ['WH-BOS-2KW-2026-D201', 'WH-BOS-2KW-2026-D202', 'WH-BOS-2KW-2026-D203'],
-        bom_components: [
-          { name: 'Aluminium Mounting Rails (3.2m)', sku: 'BOS-RAIL-3.2M-AL', qty: 6, unit: 'Pcs' },
-          { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 6, unit: 'Pcs' },
-          { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
-          { name: '4 sq mm Solar DC Cable (30m Roll)', sku: 'BOS-DC-CABLE-4SQMM-30M', qty: 1, unit: 'Roll' },
-          { name: '1-In 1-Out DCDB / AJB Box (Dual Protection)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
-          { name: '32A Single Phase ACDB Enclosure Box', sku: 'BOS-ACDB-1PH-32A', qty: 1, unit: 'Box' },
-          { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
-          { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 6, unit: 'Pairs' }
-        ]
-      },
-      {
-        id: '3kw-dcr',
-        name: '3 KW Solarkits DCR Kit (BOS & Wiring Package)',
-        catalog_name: '3 KW Solarkits DCR Kit',
-        category: 'Residential',
-        capacity: '3 kW',
-        storage_location: 'Bay 2 / Pallet C-03',
-        ready_stock: 2,
-        batch_codes: ['WH-BOS-3KW-2026-D301', 'WH-BOS-3KW-2026-D302'],
-        bom_components: [
-          { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 8, unit: 'Pcs' },
-          { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 8, unit: 'Pcs' },
-          { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
-          { name: '4 sq mm Solar DC Cable (50m Roll)', sku: 'BOS-DC-CABLE-4SQMM-50M', qty: 1, unit: 'Roll' },
-          { name: '2-In 2-Out DCDB Box (Dual MPPT Protection)', sku: 'BOS-AJB-DCDB-2IN-2OUT', qty: 1, unit: 'Box' },
-          { name: '32A ACDB with Rotary Isolator & SPD', sku: 'BOS-ACDB-1PH-32A-SPD', qty: 1, unit: 'Box' },
-          { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
-          { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 8, unit: 'Pairs' }
-        ]
+    const rawDb = mongoose.connection.db;
+    let catalog = [];
+
+    if (rawDb) {
+      try {
+        const kits = await rawDb.collection('pc_comobo_kit').find({
+          deleted_at: null,
+          $or: [
+            { name: /1.*k\.?w/i },
+            { name: /2.*k\.?w/i },
+            { name: /3.*k\.?w/i },
+            { capacity: { $in: [1, 2, 3] } }
+          ]
+        }).sort({ capacity: 1 }).toArray();
+
+        if (kits && kits.length > 0) {
+          const allSkuIds = [];
+          kits.forEach(k => {
+            (k.bos_kits || []).forEach(b => {
+              if (b.sku_id) {
+                try { allSkuIds.push(new mongoose.Types.ObjectId(b.sku_id)); } catch (_) {}
+              }
+            });
+          });
+
+          const skus = allSkuIds.length > 0 ? await rawDb.collection('pc_product_skus').find({ _id: { $in: allSkuIds } }).toArray() : [];
+          const prodIds = skus.map(s => s.product_id ? new mongoose.Types.ObjectId(s.product_id) : null).filter(Boolean);
+          const products = prodIds.length > 0 ? await rawDb.collection('products').find({ _id: { $in: prodIds } }).toArray() : [];
+
+          const prodMap = {};
+          products.forEach(p => { prodMap[p._id.toString()] = p.name; });
+          const skuMap = {};
+          skus.forEach(s => {
+            skuMap[s._id.toString()] = {
+              sku_code: s.sku_code,
+              name: prodMap[s.product_id?.toString()] || s.sku_code
+            };
+          });
+
+          catalog = kits.map((k, idx) => {
+            const cap = k.capacity ? `${k.capacity} kW` : (k.name.match(/\d+\s*k\.?w/i)?.[0]?.toUpperCase() || `${idx + 1} kW`);
+            const bom_components = (k.bos_kits || []).map(b => {
+              const resolved = b.sku_id ? skuMap[b.sku_id.toString()] : null;
+              return {
+                name: resolved?.name || b.name,
+                sku: resolved?.sku_code || `BOS-${(b.name || 'ITEM').replace(/[^a-zA-Z0-9]/g, '-').toUpperCase()}`,
+                sku_id: b.sku_id ? b.sku_id.toString() : null,
+                qty: b.quantity || 1,
+                unit: (b.name || '').toLowerCase().includes('cable') ? 'Roll' : ((b.name || '').toLowerCase().includes('clamp') || (b.name || '').toLowerCase().includes('lug') || (b.name || '').toLowerCase().includes('tie')) ? 'Pcs' : 'Units'
+              };
+            });
+
+            return {
+              id: `${k.capacity || idx + 1}kw-dcr`,
+              mongo_id: k._id.toString(),
+              name: `${cap} Solarkits BOS Kit (Balance of System & Wiring Package)`,
+              catalog_name: `${cap} Solarkits BOS Kit`,
+              category: 'Residential BOS Kit',
+              capacity: cap,
+              storage_location: `Bay ${idx + 1} / Pallet ${String.fromCharCode(65 + idx)}-0${idx + 1}`,
+              ready_stock: idx === 0 ? 4 : idx === 1 ? 3 : 2,
+              batch_codes: Array.from({ length: idx === 0 ? 4 : idx === 1 ? 3 : 2 }, (_, i) => `WH-BOS-${k.capacity || idx + 1}KW-2026-D${idx + 1}0${i + 1}`),
+              bom_components: bom_components.length > 0 ? bom_components : undefined
+            };
+          });
+        }
+      } catch (dbErr) {
+        console.warn('Could not query dynamic combo kits from MongoDB, falling back:', dbErr.message);
       }
-    ];
+    }
+
+    // Clean fallback if MongoDB collection is empty or unreachable
+    if (!catalog || catalog.length === 0) {
+      catalog = [
+        {
+          id: '1kw-dcr',
+          name: '1 kW Solarkits BOS Kit (Balance of System & Wiring Package)',
+          catalog_name: '1 kW Solarkits BOS Kit',
+          category: 'Residential BOS Kit',
+          capacity: '1 kW',
+          storage_location: 'Bay 1 / Pallet A-01',
+          ready_stock: 4,
+          batch_codes: ['WH-BOS-1KW-2026-D101', 'WH-BOS-1KW-2026-D102', 'WH-BOS-1KW-2026-D103', 'WH-BOS-1KW-2026-D104'],
+          bom_components: [
+            { name: 'Aluminium Mounting Rails (2.2m)', sku: 'BOS-RAIL-2.2M-AL', qty: 4, unit: 'Pcs' },
+            { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 4, unit: 'Pcs' },
+            { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+            { name: '4 sq mm Solar DC Cable (15m Roll)', sku: 'BOS-DC-CABLE-4SQMM-15M', qty: 1, unit: 'Roll' },
+            { name: '1-In 1-Out DCDB / AJB Box (1000V SPD)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
+            { name: '16A Single Phase ACDB Enclosure', sku: 'BOS-ACDB-1PH-16A', qty: 1, unit: 'Box' },
+            { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 1, unit: 'Pcs' },
+            { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 4, unit: 'Pairs' }
+          ]
+        },
+        {
+          id: '2kw-dcr',
+          name: '2 kW Solarkits BOS Kit (Balance of System & Wiring Package)',
+          catalog_name: '2 kW Solarkits BOS Kit',
+          category: 'Residential BOS Kit',
+          capacity: '2 kW',
+          storage_location: 'Bay 1 / Pallet B-02',
+          ready_stock: 3,
+          batch_codes: ['WH-BOS-2KW-2026-D201', 'WH-BOS-2KW-2026-D202', 'WH-BOS-2KW-2026-D203'],
+          bom_components: [
+            { name: 'Aluminium Mounting Rails (3.2m)', sku: 'BOS-RAIL-3.2M-AL', qty: 6, unit: 'Pcs' },
+            { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 6, unit: 'Pcs' },
+            { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+            { name: '4 sq mm Solar DC Cable (30m Roll)', sku: 'BOS-DC-CABLE-4SQMM-30M', qty: 1, unit: 'Roll' },
+            { name: '1-In 1-Out DCDB / AJB Box (Dual Protection)', sku: 'BOS-AJB-DCDB-1IN-1OUT', qty: 1, unit: 'Box' },
+            { name: '32A Single Phase ACDB Enclosure Box', sku: 'BOS-ACDB-1PH-32A', qty: 1, unit: 'Box' },
+            { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+            { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 6, unit: 'Pairs' }
+          ]
+        },
+        {
+          id: '3kw-dcr',
+          name: '3 kW Solarkits BOS Kit (Balance of System & Wiring Package)',
+          catalog_name: '3 kW Solarkits BOS Kit',
+          category: 'Residential BOS Kit',
+          capacity: '3 kW',
+          storage_location: 'Bay 2 / Pallet C-03',
+          ready_stock: 2,
+          batch_codes: ['WH-BOS-3KW-2026-D301', 'WH-BOS-3KW-2026-D302'],
+          bom_components: [
+            { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', qty: 8, unit: 'Pcs' },
+            { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', qty: 8, unit: 'Pcs' },
+            { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', qty: 4, unit: 'Pcs' },
+            { name: '4 sq mm Solar DC Cable (50m Roll)', sku: 'BOS-DC-CABLE-4SQMM-50M', qty: 1, unit: 'Roll' },
+            { name: '2-In 2-Out DCDB Box (Dual MPPT Protection)', sku: 'BOS-AJB-DCDB-2IN-2OUT', qty: 1, unit: 'Box' },
+            { name: '32A ACDB with Rotary Isolator & SPD', sku: 'BOS-ACDB-1PH-32A-SPD', qty: 1, unit: 'Box' },
+            { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', qty: 2, unit: 'Pcs' },
+            { name: 'MC4 Connectors 1000V IP68', sku: 'BOS-MC4-CONN-1000V', qty: 8, unit: 'Pairs' }
+          ]
+        }
+      ];
+    }
 
     return res.status(200).json({
       status: 'success',
