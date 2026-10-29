@@ -247,6 +247,13 @@ export const getBosKitCatalog = async () => {
   return res.data;
 };
 
+export const getVehiclePresets = async () => {
+  const res = await axios.get(`${API_URL}/warehouse/delivery-orders/vehicle-presets`, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
 
 
 

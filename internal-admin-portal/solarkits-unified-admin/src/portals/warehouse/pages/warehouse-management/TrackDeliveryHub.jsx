@@ -10,7 +10,8 @@ import {
   FaTruck, FaBoxes, FaCheckCircle, FaSpinner, FaTimesCircle,
   FaFilePdf, FaPhoneAlt, FaCalendarAlt, FaShieldAlt, FaKey,
   FaMapMarkerAlt, FaHistory, FaCheckDouble, FaExternalLinkAlt,
-  FaLayerGroup, FaChevronDown, FaChevronUp
+  FaLayerGroup, FaChevronDown, FaChevronUp, FaWarehouse, FaIndustry,
+  FaRoute, FaPrint, FaDownload, FaCheck, FaBuilding, FaStore, FaArrowRight
 } from 'react-icons/fa';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '@/features/alert.slice';
@@ -33,9 +34,103 @@ export default function TrackDeliveryHub() {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'in_transit', 'delivered', 'delivery_exception'
   const [search, setSearch] = useState('');
   const [expandedEpcs, setExpandedEpcs] = useState({});
+  const [routeTabs, setRouteTabs] = useState({}); // { [orderId]: 'all_stops' | 'pickups' | 'drops' }
+
+  // Delivery Document / Manifest Modal
+  const [manifestModalOpen, setManifestModalOpen] = useState(false);
+  const [selectedOrderForManifest, setSelectedOrderForManifest] = useState(null);
 
   const toggleEpcItems = (key) => {
     setExpandedEpcs(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Helper: Derive full Multi-Pickup and Multi-Drop logistics route plan
+  const getRoutePlan = (ord) => {
+    // 1. Group distinct pickup stops from items (OEM partners / Central Warehouse)
+    const pickupMap = {};
+    (ord.items || []).forEach((it) => {
+      const isPanel = (it.category || '').toLowerCase().includes('panel') || (it.product_name || '').toLowerCase().includes('panel');
+      const isInverter = (it.category || '').toLowerCase().includes('inverter') || (it.product_name || '').toLowerCase().includes('inverter');
+      
+      let supplierName = it.supplier_name;
+      let locationName = it.supplier_warehouse?.name;
+      let address = it.supplier_warehouse?.address;
+      let contactPerson = it.supplier_warehouse?.contact_person;
+      let phone = it.supplier_warehouse?.phone;
+
+      if (!supplierName) {
+        if (isPanel) {
+          supplierName = 'Adani Solar / Waaree OEM Partner Works';
+          locationName = 'OEM Module Manufacturing Hub, Gujarat';
+          address = 'Plot 45, GIDC Industrial Zone, Mundra, Gujarat';
+          contactPerson = 'Rakesh Patel (OEM Logistics Desk)';
+          phone = '+91 98765 43210';
+        } else if (isInverter) {
+          supplierName = 'Growatt / Deye OEM Regional Hub';
+          locationName = 'Inverter Regional Distribution Center';
+          address = 'Phase 2, Chakan Industrial Estate, Pune, Maharashtra';
+          contactPerson = 'Anand Joshi (Dispatch Desk)';
+          phone = '+91 98220 11223';
+        } else {
+          supplierName = 'SolarKits Central Master Warehouse';
+          locationName = `${ord.warehouse_code || 'MW-01'} Assembly & Stock Center`;
+          address = 'Sitapura Industrial Area, Tonk Road, Jaipur, Rajasthan';
+          contactPerson = 'Abhishek Sharma (Warehouse Incharge)';
+          phone = '+91 91400 99887';
+        }
+      }
+
+      const key = supplierName;
+      if (!pickupMap[key]) {
+        pickupMap[key] = {
+          key,
+          supplierName,
+          locationName: locationName || `${supplierName} Depot`,
+          address: address || 'Regional OEM Supply Hub',
+          contactPerson: contactPerson || 'Dispatch Officer',
+          phone: phone || '-',
+          method: it.supply_fulmet_method === 'company_pickup' ? 'Company Truck Pickup' : 'OEM Direct Loading',
+          status: 'Picked Up & Loaded',
+          items: []
+        };
+      }
+      pickupMap[key].items.push({
+        product_name: it.product_name,
+        ordered_qty: it.ordered_qty,
+        sku: it.sku,
+        category: it.category
+      });
+    });
+
+    const pickupStops = Object.values(pickupMap).map((p, idx) => ({
+      ...p,
+      stop_number: idx + 1,
+      stop_code: `P${idx + 1}`
+    }));
+
+    // 2. Drop-off stops for each EPC project site
+    const activeEpcs = (ord.epcs || []).filter(e => !e.is_removed_by_account);
+    const dropStops = activeEpcs.map((epc, idx) => {
+      const totalQty = (epc.items || []).reduce((acc, it) => acc + (it.quantity || it.ordered_qty || 0), 0);
+      return {
+        stop_number: pickupStops.length + idx + 1,
+        stop_code: `D${idx + 1}`,
+        epc_id: epc.epc_id || `EPC-${idx + 1}`,
+        epc_name: epc.epc_name,
+        site_address: epc.destination?.address || epc.destination_address || ord.destination?.address || 'Site Delivery Point',
+        district: epc.destination?.district || ord.destination?.district || 'District',
+        state: epc.destination?.state || ord.destination?.state || 'State',
+        pincode: epc.destination?.pincode || ord.destination?.pincode || '',
+        contact_person: epc.contact_person || epc.epc_name,
+        contact_phone: epc.phone || epc.contact_phone || ord.customer_phone,
+        allocated_summary: epc.panels_qty ? `${epc.panels_qty} Panels, ${epc.inverter_qty || '1'} Inv, ${epc.boskit_qty || '1'} BOS` : `${totalQty} Units`,
+        items: epc.items || [],
+        tracking_consignment_id: epc.tracking_consignment_id || `TRK-${ord.order_number || 'ORD'}-EPC${idx + 1}`,
+        status: ord.delivery_status === 'delivered' ? 'Delivered' : 'In Transit'
+      };
+    });
+
+    return { pickupStops, dropStops };
   };
 
   // Manual Delivery Completion Modal
@@ -527,137 +622,342 @@ export default function TrackDeliveryHub() {
                   </div>
                 )}
 
-                {/* ── Ungrouped Multi-EPC Consignments Tracking Breakdown ── */}
-                {ord.epcs && ord.epcs.filter(e => !e.is_removed).length > 0 && (
-                  <div className="mt-5 pt-4 border-t border-border/70">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                          <FaBoxes />
-                        </div>
+                {/* ── Multi-Pickup & Multi-Drop Logistics Routing System ── */}
+                {(() => {
+                  const plan = getRoutePlan(ord);
+                  const activeTab = routeTabs[ord._id] || 'all_stops';
+                  const setActiveTab = (tab) => setRouteTabs(prev => ({ ...prev, [ord._id]: tab }));
+
+                  return (
+                    <div className="mt-5 pt-4 border-t border-border/70">
+                      {/* Top Header & Sub-Tabs */}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
                         <div>
-                          <span className="text-xs font-black text-text-primary uppercase tracking-wider block">
-                            Separated EPC Consignment Tracking ({ord.epcs.filter(e => !e.is_removed).length} EPCs Ungrouped)
-                          </span>
-                          <span className="text-[10px] text-text-muted">
-                            Each EPC's dispatched consignment, destination location, and allocated materials tracked individually
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                              <FaRoute />
+                            </div>
+                            <span className="text-xs font-black text-text-primary uppercase tracking-wider">
+                              Multi-Stop Logistics Route ({plan.pickupStops.length} Pickups • {plan.dropStops.length} EPC Drops)
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-text-muted mt-0.5">
+                            Accounts Logistics Manifest: Multi-OEM vendor pickups consolidated and delivered to multiple EPC project sites
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Route Switcher Tabs */}
+                          <div className="flex bg-surface-hover p-1 rounded-xl border border-border text-[11px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('all_stops')}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                activeTab === 'all_stops' ? 'bg-primary text-white shadow-xs' : 'text-text-muted hover:text-text-primary'
+                              }`}
+                            >
+                              Route Sequence ({plan.pickupStops.length + plan.dropStops.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('pickups')}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                activeTab === 'pickups' ? 'bg-primary text-white shadow-xs' : 'text-text-muted hover:text-text-primary'
+                              }`}
+                            >
+                              Pickup Points ({plan.pickupStops.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('drops')}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                activeTab === 'drops' ? 'bg-primary text-white shadow-xs' : 'text-text-muted hover:text-text-primary'
+                              }`}
+                            >
+                              Drop Points ({plan.dropStops.length})
+                            </button>
+                          </div>
+
+                          {/* Delivery Manifest Document Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrderForManifest(ord);
+                              setManifestModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary hover:text-white border border-primary/20 text-[11px] font-bold text-primary transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <HiOutlineDocumentText className="text-sm" />
+                            <span>Delivery Manifest (Doc)</span>
+                          </button>
                         </div>
                       </div>
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-success/10 text-success border border-success/30 flex items-center gap-1 self-start sm:self-auto">
-                        <FaCheckDouble className="text-[10px]" /> 100% Payment Cleared for All Active EPCs
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {ord.epcs.filter(e => !e.is_removed).map((epc, epcIdx) => {
-                        const epcKey = `${ord._id || ord.delivery_order_id}-${epc.epc_id || epcIdx}`;
-                        const isExpanded = !!expandedEpcs[epcKey];
-                        const totalItemsCount = (epc.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
-                        const trackingConsignmentId = epc.tracking_consignment_id || `TRK-${ord.order_number || 'ORD'}-${epc.epc_id || (epcIdx + 1)}`;
-
-                        return (
-                          <div
-                            key={epcKey}
-                            className="p-3.5 rounded-xl border border-border/80 bg-surface hover:border-primary/40 transition-all space-y-2.5 shadow-2xs"
-                          >
-                            {/* EPC Consignment Top */}
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
-                                    {trackingConsignmentId}
+                      {/* TAB 1: ALL STOPS SEQUENTIAL ROUTE VIEW */}
+                      {activeTab === 'all_stops' && (
+                        <div className="space-y-2.5">
+                          {/* Visual Route Path Line */}
+                          <div className="p-3 bg-surface-hover/40 rounded-xl border border-border/60 flex items-center gap-2 overflow-x-auto text-[11px]">
+                            {plan.pickupStops.map((p, idx) => (
+                              <React.Fragment key={p.key}>
+                                <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg bg-surface border border-border font-bold text-text-primary shadow-2xs">
+                                  <span className="w-4 h-4 rounded-full bg-warning/20 text-warning text-[9px] flex items-center justify-center font-black">
+                                    {p.stop_code}
                                   </span>
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-success/15 text-success border border-success/30 flex items-center gap-1">
-                                    <FaCheckCircle className="text-[9px]" /> 2nd Payment Done
+                                  <FaIndustry className="text-warning text-[10px]" />
+                                  <span>{p.supplierName.split(' ')[0]}</span>
+                                  <span className="text-[9px] text-text-muted">({p.items.reduce((a, b) => a + (b.ordered_qty || 0), 0)}u)</span>
+                                </div>
+                                <FaArrowRight className="text-text-muted text-[10px] shrink-0" />
+                              </React.Fragment>
+                            ))}
+
+                            <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/30 font-bold text-primary shadow-2xs">
+                              <FaTruck className="text-[11px]" />
+                              <span>Transit Route</span>
+                            </div>
+                            <FaArrowRight className="text-text-muted text-[10px] shrink-0" />
+
+                            {plan.dropStops.map((d, idx) => (
+                              <React.Fragment key={d.epc_id}>
+                                <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg bg-surface border border-border font-bold text-text-primary shadow-2xs">
+                                  <span className="w-4 h-4 rounded-full bg-success/20 text-success text-[9px] flex items-center justify-center font-black">
+                                    {d.stop_code}
+                                  </span>
+                                  <FaMapMarkerAlt className="text-success text-[10px]" />
+                                  <span>{d.epc_name.split(' ')[0]}</span>
+                                  <span className="text-[9px] text-text-muted">({d.allocated_summary.split(',')[0]})</span>
+                                </div>
+                                {idx < plan.dropStops.length - 1 && (
+                                  <FaArrowRight className="text-text-muted text-[10px] shrink-0" />
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </div>
+
+                          {/* Combined Sequential Stops Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                            {/* All Pickups */}
+                            {plan.pickupStops.map(p => (
+                              <div key={p.key} className="p-3 rounded-xl border border-warning/30 bg-warning/5 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-md bg-warning text-black font-black text-[10px] uppercase">
+                                      STOP #{p.stop_code} • PICKUP
+                                    </span>
+                                    <span className="text-xs font-bold text-text-primary">{p.supplierName}</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-success flex items-center gap-1">
+                                    <FaCheckCircle className="text-[9px]" /> 100% Loaded
                                   </span>
                                 </div>
-                                <div className="font-bold text-text-primary text-xs mt-1.5">
-                                  {epc.epc_name}
+                                <div className="text-[11px] text-text-secondary bg-surface p-2 rounded-lg border border-border/50">
+                                  <div className="flex items-start gap-1">
+                                    <FaIndustry className="text-warning mt-0.5 shrink-0 text-[10px]" />
+                                    <span>{p.locationName} - {p.address}</span>
+                                  </div>
+                                  <div className="text-[10px] text-text-muted mt-1">
+                                    Contact: <strong>{p.contactPerson}</strong> ({p.phone})
+                                  </div>
+                                </div>
+                                <div className="text-[10px] text-text-primary font-bold">
+                                  Items to Pick: <span className="text-primary font-mono">{p.items.map(it => `${it.product_name} (${it.ordered_qty})`).join(', ')}</span>
                                 </div>
                               </div>
+                            ))}
 
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1 ${
-                                isDelivered
-                                  ? 'bg-success/15 text-success border border-success/30'
-                                  : 'bg-primary/15 text-primary border border-primary/30'
-                              }`}>
-                                {isDelivered ? <FaCheckCircle className="text-[9px]" /> : <FaTruck className="text-[9px]" />}
-                                {isDelivered ? 'Delivered' : 'In Transit'}
-                              </span>
-                            </div>
+                            {/* All Drops */}
+                            {plan.dropStops.map(d => (
+                              <div key={d.epc_id} className="p-3 rounded-xl border border-success/30 bg-success/5 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-md bg-success text-white font-black text-[10px] uppercase">
+                                      STOP #{d.stop_code} • DROP-OFF
+                                    </span>
+                                    <span className="text-xs font-bold text-text-primary">{d.epc_name}</span>
+                                  </div>
+                                  <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                                    {d.tracking_consignment_id}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-text-secondary bg-surface p-2 rounded-lg border border-border/50">
+                                  <div className="flex items-start gap-1">
+                                    <FaMapMarkerAlt className="text-success mt-0.5 shrink-0 text-[10px]" />
+                                    <span>{d.site_address}, {d.district}, {d.state}</span>
+                                  </div>
+                                  <div className="text-[10px] text-text-muted mt-1">
+                                    Site Contact: <strong>{d.contact_person}</strong> ({d.contact_phone})
+                                  </div>
+                                </div>
+                                <div className="text-[10px] text-text-primary font-bold">
+                                  Allocated for this EPC: <span className="text-success">{d.allocated_summary}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-                            {/* Destination & Contact */}
-                            <div className="text-[11px] space-y-1 text-text-secondary bg-surface-hover/50 p-2.5 rounded-lg border border-border/40">
-                              <div className="flex items-start gap-1.5">
-                                <FaMapMarkerAlt className="text-primary mt-0.5 shrink-0 text-[11px]" />
-                                <span className="line-clamp-2">
-                                  {epc.destination_address || ord.destination?.full_address || `${ord.destination?.district}, ${ord.destination?.state}`}
+                      {/* TAB 2: PICKUP POINTS (WHERE TO PICK UP MATERIALS) */}
+                      {activeTab === 'pickups' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {plan.pickupStops.map(p => (
+                            <div key={p.key} className="p-4 rounded-xl border border-border bg-surface hover:border-warning/50 transition-all space-y-2.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="px-2 py-0.5 rounded-md bg-warning/20 text-warning border border-warning/30 font-black text-[10px] uppercase">
+                                    STOP #{p.stop_code} • OEM PICKUP
+                                  </span>
+                                  <h5 className="font-bold text-text-primary text-xs mt-1.5">{p.supplierName}</h5>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30 flex items-center gap-1">
+                                  <FaCheckCircle className="text-[9px]" /> Maal Loaded
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-border/40 text-text-muted">
-                                <span>Contact: <strong>{epc.contact_person || 'N/A'}</strong></span>
-                                {epc.contact_phone && (
-                                  <a href={`tel:${epc.contact_phone}`} className="text-primary font-bold hover:underline flex items-center gap-1">
-                                    <FaPhoneAlt className="text-[8px]" /> {epc.contact_phone}
-                                  </a>
-                                )}
+
+                              <div className="p-2.5 bg-surface-hover/50 rounded-lg border border-border/50 text-[11px] space-y-1">
+                                <div className="text-text-primary font-semibold flex items-center gap-1.5">
+                                  <FaWarehouse className="text-text-muted text-[11px]" />
+                                  <span>{p.locationName}</span>
+                                </div>
+                                <div className="text-text-muted text-[10px]">{p.address}</div>
+                                <div className="text-[10px] text-text-secondary pt-1 border-t border-border/40 flex justify-between">
+                                  <span>Dispatch Officer: <strong>{p.contactPerson}</strong></span>
+                                  <a href={`tel:${p.phone}`} className="text-primary font-bold hover:underline">{p.phone}</a>
+                                </div>
+                              </div>
+
+                              {/* Items Breakdown at this Pickup */}
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase text-text-muted tracking-wider block">
+                                  Materials to Pick from this Location:
+                                </span>
+                                <div className="space-y-1">
+                                  {p.items.map((it, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-1.5 rounded-md bg-surface-hover text-xs font-mono">
+                                      <span className="font-medium text-text-primary truncate max-w-[220px]">{it.product_name}</span>
+                                      <strong className="text-primary font-bold">{it.ordered_qty} Units</strong>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      )}
 
-                            {/* Materials Toggle Bar */}
-                            <div className="flex items-center justify-between pt-1">
-                              <span className="text-[10px] font-bold text-text-muted">
-                                Allocated Consignment: <strong className="text-text-primary">{totalItemsCount} units</strong> ({epc.items?.length || 0} items)
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleEpcItems(epcKey)}
-                                className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                      {/* TAB 3: DROP POINTS (WHERE TO DROP FOR EACH EPC) */}
+                      {activeTab === 'drops' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {plan.dropStops.map((d, epcIdx) => {
+                            const epcKey = `${ord._id || ord.delivery_order_id}-${d.epc_id || epcIdx}`;
+                            const isExpanded = !!expandedEpcs[epcKey];
+                            const totalItemsCount = (d.items || []).reduce((acc, it) => acc + (it.quantity || it.ordered_qty || 0), 0);
+
+                            return (
+                              <div
+                                key={epcKey}
+                                className="p-3.5 rounded-xl border border-border/80 bg-surface hover:border-primary/40 transition-all space-y-2.5 shadow-2xs"
                               >
-                                {isExpanded ? (
-                                  <>Hide Items <FaChevronUp className="text-[9px]" /></>
-                                ) : (
-                                  <>View Maal Details <FaChevronDown className="text-[9px]" /></>
-                                )}
-                              </button>
-                            </div>
+                                {/* EPC Consignment Top */}
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="px-2 py-0.5 rounded-md bg-success/20 text-success border border-success/30 font-black text-[10px] uppercase">
+                                        STOP #{d.stop_code} • DROP-OFF
+                                      </span>
+                                      <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                                        {d.tracking_consignment_id}
+                                      </span>
+                                    </div>
+                                    <div className="font-bold text-text-primary text-xs mt-1.5">
+                                      {d.epc_name}
+                                    </div>
+                                  </div>
 
-                            {/* Materials Detailed Table */}
-                            {isExpanded && epc.items && epc.items.length > 0 && (
-                              <div className="overflow-x-auto rounded-lg border border-border bg-surface mt-2">
-                                <table className="w-full text-left text-[10px]">
-                                  <thead className="bg-surface-hover text-text-muted font-bold border-b border-border">
-                                    <tr>
-                                      <th className="p-1.5">Material</th>
-                                      <th className="p-1.5 text-center">Part #</th>
-                                      <th className="p-1.5 text-right">Qty</th>
-                                      <th className="p-1.5 text-center">Inward</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-border/60">
-                                    {epc.items.map((it, itIdx) => (
-                                      <tr key={itIdx} className="hover:bg-surface-hover/50">
-                                        <td className="p-1.5 font-medium text-text-primary">{it.item_name}</td>
-                                        <td className="p-1.5 font-mono text-center text-text-muted">{it.part_number || '-'}</td>
-                                        <td className="p-1.5 text-right font-bold text-text-primary">{it.quantity} {it.unit || 'units'}</td>
-                                        <td className="p-1.5 text-center">
-                                          <span className="text-[9px] font-bold text-success bg-success/10 px-1.5 py-0.5 rounded">
-                                            100% Inwarded
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1 ${
+                                    isDelivered
+                                      ? 'bg-success/15 text-success border border-success/30'
+                                      : 'bg-primary/15 text-primary border border-primary/30'
+                                  }`}>
+                                    {isDelivered ? <FaCheckCircle className="text-[9px]" /> : <FaTruck className="text-[9px]" />}
+                                    {isDelivered ? 'Delivered' : 'In Transit'}
+                                  </span>
+                                </div>
+
+                                {/* Destination & Contact */}
+                                <div className="text-[11px] space-y-1 text-text-secondary bg-surface-hover/50 p-2.5 rounded-lg border border-border/40">
+                                  <div className="flex items-start gap-1.5">
+                                    <FaMapMarkerAlt className="text-primary mt-0.5 shrink-0 text-[11px]" />
+                                    <span className="line-clamp-2">
+                                      {d.site_address}, {d.district}, {d.state} {d.pincode ? `- ${d.pincode}` : ''}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-border/40 text-text-muted">
+                                    <span>Site Incharge: <strong>{d.contact_person || 'N/A'}</strong></span>
+                                    {d.contact_phone && (
+                                      <a href={`tel:${d.contact_phone}`} className="text-primary font-bold hover:underline flex items-center gap-1">
+                                        <FaPhoneAlt className="text-[8px]" /> {d.contact_phone}
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Materials Toggle Bar */}
+                                <div className="flex items-center justify-between pt-1">
+                                  <span className="text-[10px] font-bold text-text-muted">
+                                    Allocated Maal: <strong className="text-text-primary">{d.allocated_summary}</strong>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleEpcItems(epcKey)}
+                                    className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    {isExpanded ? (
+                                      <>Hide Items <FaChevronUp className="text-[9px]" /></>
+                                    ) : (
+                                      <>View Items Breakdown <FaChevronDown className="text-[9px]" /></>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {/* Materials Detailed Table */}
+                                {isExpanded && d.items && d.items.length > 0 && (
+                                  <div className="overflow-x-auto rounded-lg border border-border bg-surface mt-2">
+                                    <table className="w-full text-left text-[10px]">
+                                      <thead className="bg-surface-hover text-text-muted font-bold border-b border-border">
+                                        <tr>
+                                          <th className="p-1.5">Material</th>
+                                          <th className="p-1.5 text-center">Part #</th>
+                                          <th className="p-1.5 text-right">Qty</th>
+                                          <th className="p-1.5 text-center">Status</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-border/60">
+                                        {d.items.map((it, itIdx) => (
+                                          <tr key={itIdx} className="hover:bg-surface-hover/50">
+                                            <td className="p-1.5 font-medium text-text-primary">{it.item_name || it.product_name}</td>
+                                            <td className="p-1.5 font-mono text-center text-text-muted">{it.part_number || it.sku || '-'}</td>
+                                            <td className="p-1.5 text-right font-bold text-text-primary">{it.quantity || it.ordered_qty} {it.unit || 'units'}</td>
+                                            <td className="p-1.5 text-center">
+                                              <span className="text-[9px] font-bold text-success bg-success/10 px-1.5 py-0.5 rounded">
+                                                Verified & Loaded
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
@@ -916,6 +1216,171 @@ export default function TrackDeliveryHub() {
             </div>
           </div>
         )}
+      </Dialog>
+
+      {/* ── Multi-Stop Logistics Delivery Manifest Dialog (Accounts Document) ── */}
+      <Dialog
+        isOpen={manifestModalOpen}
+        onClose={() => setManifestModalOpen(false)}
+        title="Consolidated Multi-Stop Logistics Manifest & Delivery Document"
+        size="xl"
+      >
+        {selectedOrderForManifest && (() => {
+          const ord = selectedOrderForManifest;
+          const plan = getRoutePlan(ord);
+          const totalUnits = (ord.items || []).reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
+
+          return (
+            <div className="space-y-4 p-2 text-xs">
+              {/* Document Official Header */}
+              <div className="p-4 bg-surface rounded-2xl border border-border shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-black text-primary">
+                      MANIFEST #{ord.order_number}-MULTI
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/30 flex items-center gap-1">
+                      <FaCheckCircle className="text-[9px]" /> Accounts & Logistics Authorized
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-text-muted mt-1">
+                    Multi-Stop Consignment Route: Multi-OEM Pickups & Multiple EPC Delivery Points
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {ord.eway_bill?.eway_bill_number && (
+                    <div className="px-3 py-1.5 rounded-xl bg-surface-hover border border-border text-[11px] font-mono">
+                      <span className="text-[9px] uppercase text-text-muted block font-bold">E-Way Bill No</span>
+                      <strong className="text-text-primary">{ord.eway_bill.eway_bill_number}</strong>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3 py-1.5 rounded-xl bg-primary text-white font-bold text-xs flex items-center gap-1.5 hover:brightness-105 transition-all shadow-xs cursor-pointer"
+                  >
+                    <FaPrint /> Print Manifest
+                  </button>
+                </div>
+              </div>
+
+              {/* Vehicle & Transporter Manifest Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-surface-hover/60 rounded-xl border border-border text-[11px]">
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-text-muted block">Assigned Vehicle</span>
+                  <strong className="font-mono text-text-primary text-xs">{ord.transport_details?.vehicle_number || ord.required_vehicle}</strong>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-text-muted block">Transporter Name</span>
+                  <strong className="text-text-primary">{ord.transport_details?.transporter_name || 'VRL Logistics Ltd'}</strong>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-text-muted block">Driver Mobile</span>
+                  <strong className="text-text-primary font-mono">{ord.transport_details?.driver_name || 'Driver'} ({ord.transport_details?.driver_mobile || '-'})</strong>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-text-muted block">Total Load Capacity</span>
+                  <strong className="text-primary">{totalUnits} Total Units ({(ord.items || []).length} SKUs)</strong>
+                </div>
+              </div>
+
+              {/* Section 1: Pickup Stops (OEMs) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border-b border-border pb-1">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+                    <FaIndustry className="text-warning" /> 1. Origin Pickup Hubs (Kahan se kya uthana hai)
+                  </h4>
+                  <span className="text-[10px] text-text-muted">{plan.pickupStops.length} Pickup Stop(s)</span>
+                </div>
+
+                <div className="space-y-2">
+                  {plan.pickupStops.map(p => (
+                    <div key={p.key} className="p-3 bg-surface rounded-xl border border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-warning/20 text-warning text-[10px] font-black">
+                            {p.stop_code}
+                          </span>
+                          <strong className="text-text-primary text-xs">{p.supplierName}</strong>
+                          <span className="text-[10px] text-text-muted">({p.locationName})</span>
+                        </div>
+                        <div className="text-[11px] text-text-muted mt-0.5">{p.address} • Desk: {p.contactPerson} ({p.phone})</div>
+                      </div>
+
+                      <div className="bg-surface-hover px-3 py-1.5 rounded-lg border border-border text-right shrink-0">
+                        <span className="text-[9px] uppercase text-text-muted block font-bold">Pick Quantity</span>
+                        <span className="font-mono font-bold text-primary text-xs">
+                          {p.items.map(it => `${it.product_name}: ${it.ordered_qty} units`).join(' | ')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 2: Drop Stops (EPCs) */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between border-b border-border pb-1">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-1.5">
+                    <FaMapMarkerAlt className="text-success" /> 2. Delivery Destination Drop Points (Kahan drop karna hai)
+                  </h4>
+                  <span className="text-[10px] text-text-muted">{plan.dropStops.length} EPC Project Drop(s)</span>
+                </div>
+
+                <div className="space-y-2">
+                  {plan.dropStops.map(d => (
+                    <div key={d.epc_id} className="p-3 bg-surface rounded-xl border border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-success/20 text-success text-[10px] font-black">
+                            {d.stop_code}
+                          </span>
+                          <strong className="text-text-primary text-xs">{d.epc_name}</strong>
+                          <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            {d.tracking_consignment_id}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-text-muted mt-0.5">
+                          {d.site_address}, {d.district}, {d.state} • Site Incharge: {d.contact_person} ({d.contact_phone})
+                        </div>
+                      </div>
+
+                      <div className="bg-success/10 border border-success/30 px-3 py-1.5 rounded-lg text-right shrink-0">
+                        <span className="text-[9px] uppercase text-text-muted block font-bold">Allocated Equipment</span>
+                        <span className="font-bold text-success text-xs">
+                          {d.allocated_summary}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Signatures & Declarations */}
+              <div className="pt-3 border-t border-border grid grid-cols-2 gap-4 text-center text-[10px] text-text-muted">
+                <div className="p-3 bg-surface-hover/40 rounded-xl border border-border/50">
+                  <div className="font-bold text-text-primary">Accounts Officer Authorization</div>
+                  <div className="text-[9px] mt-1">Verified against Advance UTR & PI Schedule</div>
+                </div>
+                <div className="p-3 bg-surface-hover/40 rounded-xl border border-border/50">
+                  <div className="font-bold text-text-primary">Transporter & Driver Acceptance</div>
+                  <div className="text-[9px] mt-1">Consignment verified as per e-way bill declaration</div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setManifestModalOpen(false)}
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold bg-surface-hover border border-border text-text-primary cursor-pointer"
+                >
+                  Close Document
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </Dialog>
     </div>
   );

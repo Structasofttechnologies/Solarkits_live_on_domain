@@ -21,6 +21,9 @@ const schema = new mongoose.Schema({
   },
   required_vehicle:   { type: String, default: 'Tata Ace (1.5 Ton)' },
   order_date:        { type: Date, default: Date.now },
+  num_kits:          { type: Number, default: 1 },
+  system_capacity:   { type: String, default: '' },
+  solarkit_model:    { type: String, default: '' },
   items: [{
     sku:             { type: String, required: true },
     product_name:    { type: String, required: true },

@@ -28,7 +28,8 @@ import {
   toggleUngroupOrder,
   accountRemoveEpc,
   verifyEpcPayment,
-  dispatchOrderForDelivery
+  dispatchOrderForDelivery,
+  getVehiclePresets
 } from '../../api/deliveryOrders';
 
 import Button from '../../components/Button';
@@ -67,6 +68,32 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
   const [uploadingRearPhoto, setUploadingRearPhoto] = useState(false);
   const [uploadingDocket, setUploadingDocket] = useState(false);
 
+  // Live Vehicle Presets from Admin Panel Vehicle Master & Fleet
+  const [vehiclePresets, setVehiclePresets] = useState({
+    vehicle_types: [],
+    fleet_vehicles: [],
+    transporters: []
+  });
+  const [loadingPresets, setLoadingPresets] = useState(false);
+
+  const fetchPresets = async () => {
+    try {
+      setLoadingPresets(true);
+      const res = await getVehiclePresets();
+      if (res.status === 'success' && res.data) {
+        setVehiclePresets({
+          vehicle_types: res.data.vehicle_types || [],
+          fleet_vehicles: res.data.fleet_vehicles || [],
+          transporters: res.data.transporters || []
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load vehicle presets:', err);
+    } finally {
+      setLoadingPresets(false);
+    }
+  };
+
   const fetchReadyOrders = async () => {
     try {
       setLoading(true);
@@ -74,9 +101,9 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
       const res = await getDeliveryOrders({});
       if (res.status === 'success') {
         const rawOrders = res.data || [];
-        // User rule: Out for Delivery Station shows orders sent for delivery and NOT yet dispatched/delivered.
+        // User rule: Out for Delivery Station shows orders explicitly sent for delivery and NOT yet dispatched/delivered.
         const allOrders = rawOrders.filter(ord => {
-          const isSent = ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate', 'dispatched_pending'].includes(ord.delivery_status) || !!ord.sent_for_delivery_at;
+          const isSent = Boolean(ord.sent_for_delivery_at);
           const isDispatched = ['in_transit', 'delivered', 'delivery_exception'].includes(ord.delivery_status);
           return isSent && !isDispatched;
         });
@@ -124,6 +151,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
 
   useEffect(() => {
     fetchReadyOrders();
+    fetchPresets();
   }, []);
 
   const handleInputChange = (orderId, field, value) => {
@@ -134,6 +162,41 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
         [field]: value
       }
     }));
+  };
+
+  const handleVehicleNumberChange = (orderId, rawVal) => {
+    const val = (rawVal || '').toUpperCase();
+    const matchedFleet = (vehiclePresets.fleet_vehicles || []).find(
+      f => f.registration_number.toUpperCase() === val
+    );
+
+    setTransportForms(prev => {
+      const current = prev[orderId] || {};
+      const updated = {
+        ...current,
+        vehicle_number: val,
+      };
+
+      if (matchedFleet) {
+        if (matchedFleet.vehicle_type) {
+          updated.vehicle_type = matchedFleet.vehicle_type;
+        }
+        if (matchedFleet.transporter_name && !current.transporter_name) {
+          updated.transporter_name = matchedFleet.transporter_name;
+        }
+        if (matchedFleet.driver_name && !current.driver_name) {
+          updated.driver_name = matchedFleet.driver_name;
+        }
+        if (matchedFleet.driver_mobile && !current.driver_mobile) {
+          updated.driver_mobile = matchedFleet.driver_mobile;
+        }
+      }
+
+      return {
+        ...prev,
+        [orderId]: updated
+      };
+    });
   };
 
   // Save Transport Details
@@ -793,20 +856,22 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     </div>
                   </div>
 
-                  {/* Multi-EPC Auto-Ungrouped Status Badge (Boss Requirement: Default Ungrouped View) */}
-                  <div className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary border border-primary/25 flex items-center gap-1.5 shadow-xs">
-                    <FaLayerGroup className="text-xs" />
-                    <span>Auto-Ungrouped ({activeEpcs.length} EPCs)</span>
+                  {/* Consolidated Group Packages Badge */}
+                  <div className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface-hover text-text-secondary border border-border flex items-center gap-1.5 shadow-xs">
+                    <FaLayerGroup className="text-xs text-primary" />
+                    <span>Consolidated Group ({activeEpcs.length} Active EPCs)</span>
                   </div>
                 </div>
 
                 {/* Payment Clearance Status Alert */}
                 {unpaidEpcs.length > 0 ? (
-                  <div className="p-3 rounded-xl bg-danger/10 border border-danger/30 text-xs flex items-start gap-2.5">
+                  <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/30 text-xs flex items-start gap-2.5">
                     <FaExclamationTriangle className="text-danger text-sm shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-danger">2nd Half Payment Pending for {unpaidEpcs.length} EPC(s): </span>
-                      <span className="text-text-secondary">{unpaidEpcs.map(e => e.epc_name).join(', ')}. Must clear payment or remove unpaid EPCs before dispatch.</span>
+                      <span className="font-bold text-danger">⚠️ 2nd Half Payment Pending for {unpaidEpcs.length} EPC(s) — Dispatch Blocked: </span>
+                      <span className="text-text-secondary">
+                        <strong className="text-danger">{unpaidEpcs.map(e => e.epc_name).join(', ')}</strong> ka 2nd payment due hai. Jab Account Manager payment verify karenge ya is delayed EPC ko group se ungroup/remove karenge, tabhi dispatch button appear hoga.
+                      </span>
                     </div>
                   </div>
                 ) : (
@@ -816,8 +881,8 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                   </div>
                 )}
 
-                {/* Ungrouped EPC Detail Cards */}
-                {isUngrouped && activeEpcs.length > 0 && (
+                {/* EPC Detail Cards */}
+                {activeEpcs.length > 0 && (
                   <div className="space-y-3 pt-2">
                     {activeEpcs.map((epc, idx) => {
                       const isSecondPaid = epc.payment_second_half?.status === 'done';
@@ -837,7 +902,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                                   </span>
                                 ) : (
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                                    ⚠️ 2nd Pay Due
+                                    ⚠️ 2nd Pay Due (Account Manager Action Required)
                                   </span>
                                 )}
                               </div>
@@ -848,15 +913,10 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
 
                             <div className="flex items-center gap-2">
                               {!isSecondPaid && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleAccountRemoveEpc(activeOrder._id, epc.epc_id, epc.epc_name)}
-                                  disabled={removingEpcId === epc.epc_id}
-                                  className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-danger/10 text-danger border border-danger/30 hover:bg-danger hover:text-white transition-all flex items-center gap-1 cursor-pointer"
-                                >
-                                  {removingEpcId === epc.epc_id ? <FaSpinner className="animate-spin text-xs" /> : <FaUserMinus className="text-xs" />}
-                                  <span>Remove EPC</span>
-                                </button>
+                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/25 flex items-center gap-1">
+                                  <HiOutlineClock className="text-xs" />
+                                  <span>Awaiting AM Clearance</span>
+                                </span>
                               )}
 
                               <button
@@ -1003,47 +1063,88 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pl-8 text-xs">
                     <div>
-                      <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
-                        Vehicle Number *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block">
+                          Vehicle Number *
+                        </label>
+                        {vehiclePresets.fleet_vehicles.length > 0 && (
+                          <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            {vehiclePresets.fleet_vehicles.length} Fleet Registered
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        list={`fleet-suggestions-${activeOrder._id}`}
                         placeholder="e.g. MH 12 AB 1234"
                         value={activeForm.vehicle_number || ''}
-                        onChange={(e) => handleInputChange(activeOrder._id, 'vehicle_number', e.target.value.toUpperCase())}
+                        onChange={(e) => handleVehicleNumberChange(activeOrder._id, e.target.value)}
                         className="w-full p-2 bg-surface-hover border border-border rounded-lg text-text-primary font-mono font-bold uppercase focus:outline-none focus:border-primary"
                       />
+                      <datalist id={`fleet-suggestions-${activeOrder._id}`}>
+                        {vehiclePresets.fleet_vehicles.map((fv) => (
+                          <option key={fv.registration_number} value={fv.registration_number}>
+                            {fv.vehicle_type ? `${fv.vehicle_type} • ${fv.transporter_name || 'Fleet'}` : fv.transporter_name || 'Fleet'}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
-                        Vehicle Type
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block">
+                          Vehicle Type
+                        </label>
+                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                          Live Master
+                        </span>
+                      </div>
                       <select
                         value={activeForm.vehicle_type || ''}
                         onChange={(e) => handleInputChange(activeOrder._id, 'vehicle_type', e.target.value)}
                         className="w-full p-2 bg-surface-hover border border-border rounded-lg text-text-primary font-medium focus:outline-none focus:border-primary"
                       >
-                        <option value="3-Wheeler Electric (500 Kg)">3-Wheeler Electric (500 Kg)</option>
-                        <option value="Tata Ace (1.5 Ton)">Tata Ace (1.5 Ton)</option>
-                        <option value="Mahindra Bolero Pickup (1.7 Ton)">Mahindra Bolero Pickup (1.7 Ton)</option>
-                        <option value="14ft Eicher (4.0 Ton)">14ft Eicher (4.0 Ton)</option>
-                        <option value="17ft Canter (5.0 Ton)">17ft Canter (5.0 Ton)</option>
-                        <option value="20ft Container (7.0 Ton)">20ft Container (7.0 Ton)</option>
+                        <option value="">-- Select Configured Vehicle --</option>
+                        {/* Preserve currently pre-selected vehicle if from Account Manager / Procurement Group */}
+                        {activeForm.vehicle_type && !vehiclePresets.vehicle_types.some(vt => vt.value === activeForm.vehicle_type || vt.label === activeForm.vehicle_type) && (
+                          <option value={activeForm.vehicle_type}>
+                            {activeForm.vehicle_type} (Assigned by Account Manager)
+                          </option>
+                        )}
+                        {vehiclePresets.vehicle_types.map((vt) => (
+                          <option key={vt.value || vt.label} value={vt.value || vt.label}>
+                            {vt.label || vt.value}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
-                        Transporter Name
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block">
+                          Transporter Name
+                        </label>
+                        {vehiclePresets.transporters.length > 0 && (
+                          <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                            {vehiclePresets.transporters.length} Vendors
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        list={`transporter-suggestions-${activeOrder._id}`}
                         placeholder="e.g. VRL Logistics / Local"
                         value={activeForm.transporter_name || ''}
                         onChange={(e) => handleInputChange(activeOrder._id, 'transporter_name', e.target.value)}
                         className="w-full p-2 bg-surface-hover border border-border rounded-lg text-text-primary focus:outline-none focus:border-primary"
                       />
+                      <datalist id={`transporter-suggestions-${activeOrder._id}`}>
+                        {vehiclePresets.transporters.map((tp) => (
+                          <option key={tp._id || tp.name} value={tp.name}>
+                            {tp.code ? `[${tp.code}] ${tp.name}` : tp.name}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
 
                     <div>
@@ -1325,7 +1426,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                           <span>Dispatch Clearance Status:</span>
                           {allEpcsPaymentDone ? (
                             <span className="text-emerald-400 font-bold flex items-center gap-1">
-                              <FaCheckCircle className="text-xs" /> All EPCs 100% Paid
+                              <FaCheckCircle className="text-xs" /> All EPCs 100% Paid (Cleared)
                             </span>
                           ) : (
                             <span className="text-danger font-bold flex items-center gap-1">
@@ -1334,44 +1435,45 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                           )}
                         </div>
                         <div className="text-[11px] text-text-muted mt-0.5">
-                          {isDispatchAllowed
-                            ? 'Ready for dispatch! Clicking button will move order and all ungrouped EPCs to Track Delivery.'
-                            : !allEpcsPaymentDone
-                            ? 'Locked: 2nd half payment pending for some EPCs.'
-                            : 'Locked: Please upload loaded vehicle photo and docket.'}
+                          {!allEpcsPaymentDone
+                            ? `Dispatch blocked! ${unpaidEpcs.map(e => e.epc_name).join(', ')} ka 2nd payment pending hai. Account Manager ko payment verify ya EPC ungroup/remove karna hoga.`
+                            : isDispatchAllowed
+                            ? 'Ready for dispatch! Clicking button will move order and all EPCs to Track Delivery.'
+                            : 'Vehicle photo and docket upload required to release vehicle.'}
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={!isDispatchAllowed || initiatingDispatch}
-                        onClick={() => handleInitiateDelivery(activeOrder)}
-                        className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
-                          isDispatchAllowed
-                            ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer animate-pulse'
-                            : unpaidEpcs.length > 0
-                            ? 'bg-rose-500/10 border border-rose-500/40 text-rose-400 cursor-not-allowed opacity-90'
-                            : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
-                        }`}
-                      >
-                        {initiatingDispatch ? (
-                          <>
-                            <FaSpinner className="animate-spin text-sm" />
-                            <span>Dispatching Order...</span>
-                          </>
-                        ) : unpaidEpcs.length > 0 ? (
-                          <>
-                            <FaLock className="text-xs text-rose-400" />
-                            <span>⚠️ 2nd Payment Pending ({unpaidEpcs.length} EPCs) - Dispatch Blocked</span>
-                          </>
-                        ) : (
-                          <>
-                            {isDispatchAllowed ? <FaTruck className="text-base" /> : <FaLock className="text-xs" />}
-                            <span>Dispatch for Delivery</span>
-                            {isDispatchAllowed && <FaArrowRight className="text-xs" />}
-                          </>
-                        )}
-                      </button>
+                      {/* User Rule: Tab tak dispatch button nahi show hoga jab tak sabhi EPCs ka 2nd payment done nahi ho jata! */}
+                      {!allEpcsPaymentDone ? (
+                        <div className="px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center gap-2 shrink-0">
+                          <FaLock className="text-xs" />
+                          <span>Dispatch Blocked (Awaiting 2nd Payment for {unpaidEpcs.length} EPCs)</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={!isDispatchAllowed || initiatingDispatch}
+                          onClick={() => handleInitiateDelivery(activeOrder)}
+                          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
+                            isDispatchAllowed
+                              ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer animate-pulse'
+                              : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          {initiatingDispatch ? (
+                            <>
+                              <FaSpinner className="animate-spin text-sm" />
+                              <span>Dispatching Order...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FaTruck className="text-base" />
+                              <span>Dispatch for Delivery</span>
+                              {isDispatchAllowed && <FaArrowRight className="text-xs" />}
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1407,6 +1509,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                   <span>Next Step</span>
                   <FaArrowRight className="text-xs" />
                 </button>
+              ) : !allEpcsPaymentDone ? (
+                <div className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center gap-2">
+                  <FaLock className="text-xs" />
+                  <span>Dispatch Blocked (Awaiting 2nd Payment)</span>
+                </div>
               ) : (
                 <button
                   type="button"
@@ -1415,8 +1522,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                   className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-md ${
                     isDispatchAllowed
                       ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer'
-                      : unpaidEpcs.length > 0
-                      ? 'bg-rose-500/10 border border-rose-500/40 text-rose-400 cursor-not-allowed opacity-90'
                       : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
                   }`}
                 >
@@ -1424,11 +1529,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     <>
                       <FaSpinner className="animate-spin text-xs" />
                       <span>Dispatching...</span>
-                    </>
-                  ) : unpaidEpcs.length > 0 ? (
-                    <>
-                      <FaLock className="text-xs text-rose-400" />
-                      <span>Dispatch Blocked (2nd Payment Due)</span>
                     </>
                   ) : (
                     <>

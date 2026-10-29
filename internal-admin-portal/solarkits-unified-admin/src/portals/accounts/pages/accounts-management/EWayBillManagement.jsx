@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   FaExchangeAlt, FaFilePdf, FaCheckCircle, FaExclamationTriangle, 
-  FaPlus, FaSearch, FaWarehouse, FaTruck, FaRegFileAlt, FaLock
+  FaPlus, FaSearch, FaWarehouse, FaTruck, FaRegFileAlt, FaLock, FaSpinner, FaHistory
 } from 'react-icons/fa';
+import { setAlert } from "@/features/alert.slice";
+import { getDeliveryOrders, verifyEwayBill } from "../../../warehouse/api/deliveryOrders";
 
 const initialTransfers = [
   {
@@ -28,11 +30,16 @@ const initialTransfers = [
 ];
 
 export default function EWayBillManagement() {
+  const dispatch = useDispatch();
   const { selectedScope } = useSelector((state) => state.user_slice);
   const clusterName = selectedScope?.clusterName || "Selected Cluster";
 
   const [activeTab, setActiveTab] = useState('compliance'); // 'compliance', 'generate'
   const [transfers, setTransfers] = useState(initialTransfers);
+  const [deliveryOrders, setDeliveryOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [selectedDO, setSelectedDO] = useState(null);
+  const [submittingEwb, setSubmittingEwb] = useState(false);
 
   // Form states
   const [form, setForm] = useState({
@@ -42,8 +49,27 @@ export default function EWayBillManagement() {
     toWarehouse: `${clusterName} Sub-Warehouse`,
     invoiceRef: '',
     value: '450000',
-    itemDetails: ''
+    itemDetails: '',
+    deliveryOrderId: null
   });
+
+  const fetchLiveDeliveryOrders = async () => {
+    try {
+      setLoadingOrders(true);
+      const res = await getDeliveryOrders({});
+      if (res.status === 'success' && res.data) {
+        setDeliveryOrders(res.data);
+      }
+    } catch (err) {
+      console.warn('Could not fetch warehouse delivery orders for eway bills:', err);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveDeliveryOrders();
+  }, []);
 
   useEffect(() => {
     setForm(f => ({
@@ -59,7 +85,24 @@ export default function EWayBillManagement() {
 
   const [generatedEWB, setGeneratedEWB] = useState(null);
 
-  const handleGenerateEWB = (e) => {
+  const handleSelectOrderForEwb = (ord) => {
+    setSelectedDO(ord);
+    const totalQty = (ord.items || []).reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
+    const itemNames = (ord.items || []).map(it => `${it.product_name} (${it.ordered_qty})`).join(', ');
+    setForm({
+      transporterName: ord.transport_details?.transporter_name || 'VRL Logistics Ltd',
+      vehicleNo: ord.transport_details?.vehicle_number || 'RJ-14-GB-9901',
+      fromWarehouse: `${ord.warehouse_code || 'MW-01'} Jaipur Master Hub`,
+      toWarehouse: `${ord.destination?.district || 'Jaipur'}, ${ord.destination?.state || 'Rajasthan'} (${ord.customer_name})`,
+      invoiceRef: ord.delivery_order_id || ord.order_number,
+      value: '650000',
+      itemDetails: itemNames || `${totalQty} Units Solar Equipment`,
+      deliveryOrderId: ord._id
+    });
+    setActiveTab('generate');
+  };
+
+  const handleGenerateEWB = async (e) => {
     e.preventDefault();
     const ewayNo = `EWB-${Math.floor(100000 + Math.random() * 900000)}`;
     const newEWB = {
@@ -74,21 +117,52 @@ export default function EWayBillManagement() {
       dateGenerated: new Date().toISOString().split('T')[0]
     };
 
-    // Update transfer list compliance
-    setTransfers(transfers.map(t => 
-      t.transferId === form.invoiceRef ? { ...t, complianceStatus: "Compliant", ewayBillNo: ewayNo } : t
-    ));
+    try {
+      setSubmittingEwb(true);
+      // If connected to a real warehouse delivery order, update via backend API!
+      if (form.deliveryOrderId) {
+        await verifyEwayBill(form.deliveryOrderId, {
+          eway_bill_number: ewayNo,
+          valid_until: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
+          eway_bill_pdf: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+        });
+        dispatch(setAlert({
+          type: "success",
+          message: `E-Way Bill #${ewayNo} generated and synced to Warehouse Out for Delivery!`
+        }));
+        await fetchLiveDeliveryOrders();
+      } else {
+        dispatch(setAlert({
+          type: "success",
+          message: `E-Way Bill #${ewayNo} generated successfully!`
+        }));
+      }
 
-    setGeneratedEWB(newEWB);
-    setForm({
-      transporterName: '',
-      vehicleNo: '',
-      fromWarehouse: 'Jaipur Main Hub (Master)',
-      toWarehouse: 'Sanganer Sub-Warehouse',
-      invoiceRef: '',
-      value: '450000',
-      itemDetails: ''
-    });
+      // Update transfer list compliance
+      setTransfers(transfers.map(t => 
+        t.transferId === form.invoiceRef ? { ...t, complianceStatus: "Compliant", ewayBillNo: ewayNo } : t
+      ));
+
+      setGeneratedEWB(newEWB);
+      setForm({
+        transporterName: '',
+        vehicleNo: '',
+        fromWarehouse: 'Jaipur Main Hub (Master)',
+        toWarehouse: `${clusterName} Sub-Warehouse`,
+        invoiceRef: '',
+        value: '450000',
+        itemDetails: '',
+        deliveryOrderId: null
+      });
+    } catch (err) {
+      console.error(err);
+      dispatch(setAlert({
+        type: "error",
+        message: err.response?.data?.message || "Failed to sync E-Way Bill to Warehouse."
+      }));
+    } finally {
+      setSubmittingEwb(false);
+    }
   };
 
   return (
@@ -143,6 +217,122 @@ export default function EWayBillManagement() {
             className="card overflow-hidden"
           >
             <div className="overflow-x-auto px-6 pb-6 pt-2">
+              {/* Section Header: Live Warehouse Delivery Orders */}
+              <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                    <FaTruck className="text-primary" />
+                    Warehouse Out for Delivery Dispatch Queue ({deliveryOrders.length} Shipments)
+                  </h3>
+                  <p className="text-[11px] text-text-secondary">
+                    Live orders sent from Warehouse Out for Delivery awaiting GST & E-Way Bill generation before vehicle gate clearance.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchLiveDeliveryOrders}
+                  disabled={loadingOrders}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border bg-surface hover:bg-surface-hover flex items-center gap-1.5 font-bold cursor-pointer"
+                >
+                  <FaHistory className={loadingOrders ? "animate-spin" : ""} /> Refresh
+                </button>
+              </div>
+
+              {loadingOrders ? (
+                <div className="py-8 text-center text-xs text-text-muted flex items-center justify-center gap-2">
+                  <FaSpinner className="animate-spin text-primary" /> Loading live delivery orders...
+                </div>
+              ) : deliveryOrders.length === 0 ? (
+                <div className="py-6 text-center text-xs text-text-muted italic bg-surface/30 rounded-xl border border-dashed border-border mb-6">
+                  No active warehouse dispatch orders at this time.
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse mb-8">
+                  <thead>
+                    <tr className="bg-bg text-text-secondary uppercase text-[10px] font-bold border-b border-border">
+                      <th className="p-3">Order / DO Ref</th>
+                      <th className="p-3">Consignor Hub</th>
+                      <th className="p-3">Consignee (EPC)</th>
+                      <th className="p-3">Vehicle & Transporter</th>
+                      <th className="p-3">Material Summary</th>
+                      <th className="p-3">E-Way Status</th>
+                      <th className="p-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border text-xs">
+                    {deliveryOrders.map((ord) => {
+                      const isEwbGenerated = ord.eway_bill?.status === 'generated';
+                      const isRequested = ord.eway_bill?.requested || ord.delivery_status === 'awaiting_eway_bill';
+                      const totalUnits = (ord.items || []).reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
+                      const epcNames = (ord.epcs || []).filter(e => !e.is_removed_by_account).map(e => e.epc_name).join(', ') || ord.customer_name;
+
+                      return (
+                        <tr key={ord._id} className="hover:bg-primary/5 transition-colors">
+                          <td className="p-3">
+                            <span className="font-mono font-bold text-primary block">{ord.delivery_order_id || ord.order_number}</span>
+                            <span className="text-[10px] text-text-muted font-mono">#{ord.order_number}</span>
+                          </td>
+                          <td className="p-3 font-semibold text-text-primary text-[11px]">
+                            {ord.warehouse_code || 'MW-01'} Jaipur Hub
+                          </td>
+                          <td className="p-3">
+                            <span className="font-bold text-text-primary block text-[11px]">{epcNames}</span>
+                            <span className="text-[10px] text-text-muted">{ord.destination?.district}, {ord.destination?.state}</span>
+                          </td>
+                          <td className="p-3 font-mono text-[11px]">
+                            <strong className="text-text-primary block">{ord.transport_details?.vehicle_number || ord.required_vehicle || 'Tata Ace'}</strong>
+                            <span className="text-[10px] text-text-muted">{ord.transport_details?.transporter_name || 'Direct Transport'}</span>
+                          </td>
+                          <td className="p-3 text-[11px] text-text-secondary font-medium">
+                            {totalUnits} Units ({(ord.items || []).length} SKUs)
+                          </td>
+                          <td className="p-3">
+                            {isEwbGenerated ? (
+                              <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-success/15 text-success border border-success/30 flex items-center gap-1 w-max">
+                                <FaCheckCircle className="text-[9px]" /> EWB #{ord.eway_bill.eway_bill_number}
+                              </span>
+                            ) : isRequested ? (
+                              <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-warning/15 text-warning border border-warning/30 flex items-center gap-1 w-max animate-pulse">
+                                <FaExclamationTriangle className="text-[9px]" /> Requested by WH
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-surface text-text-muted border border-border w-max block">
+                                Pending Release
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {isEwbGenerated ? (
+                              <a
+                                href={ord.eway_bill?.eway_bill_pdf || '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1 bg-surface border border-border rounded-lg text-primary hover:bg-primary/10 text-[10px] font-bold inline-flex items-center gap-1"
+                              >
+                                <FaFilePdf className="text-danger" /> View Doc
+                              </a>
+                            ) : (
+                              <button
+                                onClick={() => handleSelectOrderForEwb(ord)}
+                                className="px-3 py-1 gradient-primary text-white rounded-lg text-[10px] font-bold shadow-xs hover:brightness-105 active:scale-95 cursor-pointer"
+                              >
+                                Assign & Release EWB
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+
+              {/* Section Header: Internal Inter-Warehouse Stock Transfers */}
+              <div className="mb-3 pt-4 border-t border-border">
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                  <FaWarehouse className="text-primary" />
+                  Inter-Warehouse Branch Transfer Compliance Logs
+                </h3>
+              </div>
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-bg text-text-secondary uppercase text-[10px] font-bold border-b border-border">
@@ -182,7 +372,7 @@ export default function EWayBillManagement() {
                         ) : (
                           <button 
                             onClick={() => {
-                              setForm({ ...form, invoiceRef: trn.transferId, itemDetails: trn.items });
+                              setForm({ ...form, invoiceRef: trn.transferId, itemDetails: trn.items, deliveryOrderId: null });
                               setActiveTab('generate');
                             }}
                             className="px-3 py-1 gradient-primary text-white rounded-lg text-[10px] font-bold shadow-xs active:scale-95"

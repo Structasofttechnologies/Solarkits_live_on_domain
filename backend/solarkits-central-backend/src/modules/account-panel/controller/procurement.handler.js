@@ -1585,6 +1585,32 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
 
   const performerName = reqUser?.name || reqUser?.email || 'Accounts Manager';
 
+  // Compute true kit count & model details from group / source order / items
+  const itemInverterOrAcdbQty = Math.max(...newItemsForDO.filter(it =>
+    it.category === 'inverter' ||
+    (it.sku && it.sku.includes('ACDB')) ||
+    (it.product_name && it.product_name.toLowerCase().includes('inverter')) ||
+    (it.product_name && it.product_name.toLowerCase().includes('acdb'))
+  ).map(it => it.ordered_qty || 0), 0);
+
+  const inferredKitsCount = Number(matchedSourceOrder?.kits) ||
+                            Number(matchedSourceOrder?.quantity) ||
+                            Number(group?.total_kits) ||
+                            Number(epcOrderDoc?.total_kits) ||
+                            Number(epcOrderDoc?.quantity) ||
+                            (itemInverterOrAcdbQty > 0 ? itemInverterOrAcdbQty : 1);
+
+  const detectedCapacity = matchedSourceOrder?.raw_items?.[0]?.capacity ||
+                           matchedSourceOrder?.capacity ||
+                           epcOrderDoc?.system_capacity ||
+                           (matchedSourceOrder?.kit_type?.match(/(\d+)\s*k[wv]/i)?.[0]) ||
+                           '3 kW';
+
+  const detectedModel = matchedSourceOrder?.kit_type ||
+                        matchedSourceOrder?.raw_items?.[0]?.item_name ||
+                        epcOrderDoc?.kit_name ||
+                        `${detectedCapacity} Solarkits DCR Combokit`;
+
   if (!deliveryOrder) {
     // Generate unique DO-YYYY-XXXX
     const year = new Date().getFullYear();
@@ -1606,6 +1632,9 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
       customer_name: customerName,
       customer_phone: customerPhone,
       customer_email: customerEmail,
+      num_kits: inferredKitsCount,
+      system_capacity: detectedCapacity,
+      solarkit_model: detectedModel,
       destination: {
         address: destinationAddress,
         state: destinationState,
@@ -1613,7 +1642,14 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
         pincode: destinationPincode,
         landmark: destinationLandmark
       },
-      required_vehicle: group?.vehicle_details?.vehicle_name || '14ft Eicher (4.0 Ton)',
+      required_vehicle: group?.vehicle_details?.vehicle_name || pi.fulfilment?.vehicle_details?.vehicle_type || '14ft Eicher (4.0 Ton)',
+      transport_details: {
+        vehicle_type: group?.vehicle_details?.vehicle_name || pi.fulfilment?.vehicle_details?.vehicle_type || '14ft Eicher (4.0 Ton)',
+        vehicle_number: group?.vehicle_details?.vehicle_number || pi.fulfilment?.vehicle_details?.vehicle_number || '',
+        transporter_name: pi.fulfilment?.carrier_name || group?.transporter_name || '',
+        driver_name: pi.fulfilment?.driver_name || '',
+        driver_mobile: pi.fulfilment?.driver_phone || ''
+      },
       order_date: orderDate,
       delivery_status: 'new_order',
       delivery_method: 'manual',
@@ -1625,6 +1661,13 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
         contact_person: customerName,
         phone: customerPhone,
         email: customerEmail,
+        solarkit_model: detectedModel,
+        system_capacity: detectedCapacity,
+        boskit_qty: `${inferredKitsCount} Kits`,
+        inverter_qty: `${inferredKitsCount} Inverters`,
+        panels_qty: `${inferredKitsCount * 9} Panels`,
+        structure_qty: `${inferredKitsCount} Sets`,
+        share_percentage: 100,
         destination: {
           address: destinationAddress,
           district: destinationDistrict,
@@ -1661,7 +1704,7 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
         action: `Order Confirmed for Procurement (Advance Paid to ${pi.is_oem_partner ? 'OEM Partner' : 'Supplier'})`,
         performed_by_name: performerName,
         timestamp: new Date(),
-        notes: `Transferred to Warehouse New Orders upon advance payment for PI #${pi.pi_number} (${pi.supplier_name})`
+        notes: `Transferred to Warehouse New Orders upon advance payment for PI #${pi.pi_number} (${pi.supplier_name}) for ${inferredKitsCount} kits`
       }]
     });
 
@@ -1679,6 +1722,24 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
         deliveryOrder.items[existingItemIndex].pi_reference = newItem.pi_reference;
       } else {
         deliveryOrder.items.push(newItem);
+      }
+    }
+
+    if (!deliveryOrder.num_kits || deliveryOrder.num_kits < inferredKitsCount) {
+      deliveryOrder.num_kits = inferredKitsCount;
+    }
+    if (!deliveryOrder.system_capacity) {
+      deliveryOrder.system_capacity = detectedCapacity;
+    }
+    if (!deliveryOrder.solarkit_model) {
+      deliveryOrder.solarkit_model = detectedModel;
+    }
+    if (deliveryOrder.epcs && deliveryOrder.epcs.length > 0) {
+      if (!deliveryOrder.epcs[0].boskit_qty || deliveryOrder.epcs[0].boskit_qty === '1 Kits' || deliveryOrder.epcs[0].boskit_qty === '') {
+        deliveryOrder.epcs[0].boskit_qty = `${deliveryOrder.num_kits} Kits`;
+        deliveryOrder.epcs[0].inverter_qty = `${deliveryOrder.num_kits} Inverters`;
+        deliveryOrder.epcs[0].system_capacity = deliveryOrder.system_capacity;
+        deliveryOrder.epcs[0].solarkit_model = deliveryOrder.solarkit_model;
       }
     }
 
