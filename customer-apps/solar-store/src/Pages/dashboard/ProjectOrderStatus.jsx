@@ -1631,14 +1631,18 @@ export default function ProjectOrderStatus() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
-                    Amount Paid (₹) <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-text-primary dark:text-white">
+                      Amount Paid (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
+                      🔒 Fixed Amount
+                    </span>
+                  </div>
                   <CustomInput
                     type="number"
                     value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    required
+                    readOnly
                     className="font-bold font-mono"
                   />
                 </div>
@@ -2073,14 +2077,18 @@ export default function ProjectOrderStatus() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
-                    Amount Paid (₹) <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-text-primary dark:text-white">
+                      Amount Paid (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
+                      🔒 Fixed Balance Due
+                    </span>
+                  </div>
                   <CustomInput
                     type="number"
                     value={milestoneAmount}
-                    onChange={(e) => setMilestoneAmount(e.target.value)}
-                    required
+                    readOnly
                     className="font-bold font-mono"
                   />
                 </div>

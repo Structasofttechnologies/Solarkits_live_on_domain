@@ -1605,17 +1605,24 @@ export default function CheckOut() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
-                    Amount Paid (₹) <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-text-primary dark:text-white">
+                      Amount Paid (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
+                      🔒 Fixed / System Calculated
+                    </span>
+                  </div>
                   <CustomInput
                     type="number"
                     placeholder="Order Total Amount"
                     value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    required
+                    readOnly
                     className="font-bold font-mono"
                   />
+                  <p className="text-[10px] text-text-secondary mt-1">
+                    Amount is locked based on your selected preference ({!payFullAmount ? `${milestoneBreakdown.m1Pct}% Advance` : "100% Full Payment"}).
+                  </p>
                 </div>
 
                 <div>
