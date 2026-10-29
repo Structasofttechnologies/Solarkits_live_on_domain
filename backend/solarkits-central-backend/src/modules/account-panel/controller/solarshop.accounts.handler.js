@@ -2186,6 +2186,69 @@ const deliver_epc_order = async (req, res) => {
   }
 };
 
+/**
+ * 10.1 Update Estimated Delivery ETA for an EPC Order
+ */
+const update_epc_order_eta = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estimated_delivery } = req.body;
+    const { EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const order = await EpcOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found.' });
+    }
+    if (!order.dispatch_tracking) {
+      order.dispatch_tracking = {};
+    }
+    order.dispatch_tracking.estimated_delivery = estimated_delivery ? new Date(estimated_delivery) : null;
+    order.markModified('dispatch_tracking');
+    await order.save();
+    return res.status(200).json({
+      status: 'success',
+      message: 'Estimated delivery ETA updated successfully.',
+      data: {
+        id: order._id,
+        dispatch_tracking: order.dispatch_tracking,
+      },
+    });
+  } catch (error) {
+    console.error('Error in update_epc_order_eta:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * 10.2 Generic Update Estimated Delivery ETA for any order type
+ */
+const update_order_eta = async (req, res) => {
+  try {
+    const { orderType, id } = req.params;
+    const { estimated_delivery } = req.body;
+    const normType = String(orderType || '').toLowerCase();
+    if (normType === 'po' || normType === 'fpo' || normType === 'franchisee_po') {
+      const { FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+      const po = await FpoOrder.findById(id);
+      if (!po) return res.status(404).json({ status: 'error', message: 'PO Order not found.' });
+      if (!po.dispatch_tracking) po.dispatch_tracking = {};
+      po.dispatch_tracking.estimated_delivery = estimated_delivery ? new Date(estimated_delivery) : null;
+      po.expected_delivery_date = estimated_delivery ? new Date(estimated_delivery) : null;
+      po.markModified('dispatch_tracking');
+      await po.save();
+      return res.status(200).json({
+        status: 'success',
+        message: 'Estimated delivery ETA updated successfully.',
+        data: { id: po._id, dispatch_tracking: po.dispatch_tracking },
+      });
+    }
+
+    return update_epc_order_eta(req, res);
+  } catch (error) {
+    console.error('Error in update_order_eta:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
 const get_epc_po_payments = async (req, res) => {
   try {
     const { FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
@@ -4243,6 +4306,8 @@ module.exports = {
   verify_fpo_order_payment,
   dispatch_epc_order,
   deliver_epc_order,
+  update_epc_order_eta,
+  update_order_eta,
   get_epc_po_payments,
   verify_epc_po_payment,
   // Customer Payment & Follow-up Handlers

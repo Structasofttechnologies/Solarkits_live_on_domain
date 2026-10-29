@@ -30,6 +30,7 @@ router.get('/dashboard', verify_bde_auth, handler.get_bde_dashboard);
 
 // Notifications
 router.get('/notifications', verify_bde_auth, handler.get_notifications);
+router.put('/notifications/read-all', verify_bde_auth, handler.mark_all_notifications_read);
 router.put('/notifications/:id/read', verify_bde_auth, handler.mark_notification_read);
 
 // Scoped assignments & Territory Information

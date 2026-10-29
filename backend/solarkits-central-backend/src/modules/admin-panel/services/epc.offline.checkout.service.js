@@ -505,57 +505,57 @@ async function createEpcOfflineOrder({
 
   const initialMilestones = isTrialOrder
     ? [
-        {
-          milestone_number: 1,
-          title: 'Full Payment (Trial Kit Order)',
-          percentage: 100,
-          amount: grandTotalRupees,
-          stage: 'order_placement',
-          tat_days: 1,
-          payment_status: 'pending_verification',
-          utr_number: cleanUtr,
-          amount_paid: Number(amount_paid) || grandTotalRupees,
-          payment_date: payment_date ? new Date(payment_date) : new Date(),
-          receipt_url: receipt_url || null,
-          receipt_filename: receipt_filename || null,
-          sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
-          account_holder_name: account_holder_name ? account_holder_name.trim() : null,
-        }
-      ]
+      {
+        milestone_number: 1,
+        title: 'Full Payment (Trial Kit Order)',
+        percentage: 100,
+        amount: grandTotalRupees,
+        stage: 'order_placement',
+        tat_days: 1,
+        payment_status: 'pending_verification',
+        utr_number: cleanUtr,
+        amount_paid: Number(amount_paid) || grandTotalRupees,
+        payment_date: payment_date ? new Date(payment_date) : new Date(),
+        receipt_url: receipt_url || null,
+        receipt_filename: receipt_filename || null,
+        sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+        account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+      }
+    ]
     : [
-        {
-          milestone_number: 1,
-          title: milestoneRule?.milestones?.[0]?.milestone_name || 'Advance Payment at Order Placement',
-          percentage: m1Pct,
-          amount: advanceAmountRupees,
-          stage: 'order_placement',
-          tat_days: milestoneRule?.milestones?.[0]?.tat_days || 1,
-          payment_status: 'pending_verification',
-          utr_number: cleanUtr,
-          amount_paid: Number(amount_paid) || advanceAmountRupees,
-          payment_date: payment_date ? new Date(payment_date) : new Date(),
-          receipt_url: receipt_url || null,
-          receipt_filename: receipt_filename || null,
-          sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
-          account_holder_name: account_holder_name ? account_holder_name.trim() : null,
-        },
-        {
-          milestone_number: 2,
-          title: milestoneRule?.milestones?.[1]?.milestone_name || 'Remaining Payment Before Dispatch',
-          percentage: m2Pct,
-          amount: remainingAmountRupees,
-          stage: 'before_dispatch',
-          tat_days: milestoneRule?.milestones?.[1]?.tat_days || 2,
-          payment_status: 'unpaid',
-          utr_number: null,
-          amount_paid: 0,
-          payment_date: null,
-          receipt_url: null,
-          receipt_filename: null,
-          sender_bank_name: null,
-          account_holder_name: null,
-        },
-      ];
+      {
+        milestone_number: 1,
+        title: milestoneRule?.milestones?.[0]?.milestone_name || 'Advance Payment at Order Placement',
+        percentage: m1Pct,
+        amount: advanceAmountRupees,
+        stage: 'order_placement',
+        tat_days: milestoneRule?.milestones?.[0]?.tat_days || 1,
+        payment_status: 'pending_verification',
+        utr_number: cleanUtr,
+        amount_paid: Number(amount_paid) || advanceAmountRupees,
+        payment_date: payment_date ? new Date(payment_date) : new Date(),
+        receipt_url: receipt_url || null,
+        receipt_filename: receipt_filename || null,
+        sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+        account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+      },
+      {
+        milestone_number: 2,
+        title: milestoneRule?.milestones?.[1]?.milestone_name || 'Remaining Payment Before Dispatch',
+        percentage: m2Pct,
+        amount: remainingAmountRupees,
+        stage: 'before_dispatch',
+        tat_days: milestoneRule?.milestones?.[1]?.tat_days || 2,
+        payment_status: 'unpaid',
+        utr_number: null,
+        amount_paid: 0,
+        payment_date: null,
+        receipt_url: null,
+        receipt_filename: null,
+        sender_bank_name: null,
+        account_holder_name: null,
+      },
+    ];
 
   const resolvedPaymentMethod = offline_payment_data.payment_method || (offline_payment_data.payment_gateway_used === 'icici_ecollection' ? 'icici_ecollection' : 'offline_bank_transfer');
   const resolvedGatewayUsed = offline_payment_data.payment_gateway_used || (offline_payment_data.payment_method === 'icici_ecollection' ? 'icici_ecollection' : 'bank_transfer');
@@ -573,175 +573,175 @@ async function createEpcOfflineOrder({
   let epcOrder = null;
   try {
     epcOrder = await EpcOrder.create({
-    order_number: orderNumber,
-    order_request_id: isOnlineECollection ? null : `REQ-EPC-${orderNumber.replace(/^ORD-EPC-/, '')}`,
-    is_official_order_generated: isOnlineECollection ? true : false,
-    order_type: detectedOrderType,
-    is_trial_order: detectedOrderType === 'trial_order' || Boolean(processedItems.some(it => it.is_trial_kit)),
-    epc_id,
-    warehouse_id: assignedWarehouseId,
-    fulfillment_bifurcation: {
-      assigned_warehouse_id: bifurcation.assigned_warehouse_id,
-      assigned_warehouse_code: bifurcation.assigned_warehouse_code,
-      order_type_matched: bifurcation.order_type_matched,
-      matched_level: bifurcation.matched_level,
-      matched_reason: bifurcation.matched_reason
-    },
-    reseller_id: targetResellerId || null,
-    routing_source: route.routing_source,
-    fulfillment_source: fulfillmentSource,
-    fulfillment_mode: fulfillment_mode || 'direct_site',
-    order_load_metrics: (() => {
-      // Always compute server-side from processedItems — never blindly trust frontend values.
-      // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
-      const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-      const serverKw = processedItems.reduce((acc, it) => {
-        let kw = parseFloat(it.capacity || '0') || 0;
-        if (kw === 0) {
-          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
-          if (match) kw = parseFloat(match[1]) || 0;
-        }
-        return acc + (it.quantity || 0) * kw;
-      }, 0);
-      const serverWeight = processedItems.reduce((acc, it) => {
-        let kw = parseFloat(it.capacity || '0') || 0;
-        if (kw === 0) {
-          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
-          if (match) kw = parseFloat(match[1]) || 0;
-        }
-        const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
-        return acc + (it.quantity || 0) * unitW;
-      }, 0);
+      order_number: orderNumber,
+      order_request_id: isOnlineECollection ? null : `REQ-EPC-${orderNumber.replace(/^ORD-EPC-/, '')}`,
+      is_official_order_generated: isOnlineECollection ? true : false,
+      order_type: detectedOrderType,
+      is_trial_order: detectedOrderType === 'trial_order' || Boolean(processedItems.some(it => it.is_trial_kit)),
+      epc_id,
+      warehouse_id: assignedWarehouseId,
+      fulfillment_bifurcation: {
+        assigned_warehouse_id: bifurcation.assigned_warehouse_id,
+        assigned_warehouse_code: bifurcation.assigned_warehouse_code,
+        order_type_matched: bifurcation.order_type_matched,
+        matched_level: bifurcation.matched_level,
+        matched_reason: bifurcation.matched_reason
+      },
+      reseller_id: targetResellerId || null,
+      routing_source: route.routing_source,
+      fulfillment_source: fulfillmentSource,
+      fulfillment_mode: fulfillment_mode || 'direct_site',
+      order_load_metrics: (() => {
+        // Always compute server-side from processedItems — never blindly trust frontend values.
+        // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
+        const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+        const serverKw = processedItems.reduce((acc, it) => {
+          let kw = parseFloat(it.capacity || '0') || 0;
+          if (kw === 0) {
+            const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+            if (match) kw = parseFloat(match[1]) || 0;
+          }
+          return acc + (it.quantity || 0) * kw;
+        }, 0);
+        const serverWeight = processedItems.reduce((acc, it) => {
+          let kw = parseFloat(it.capacity || '0') || 0;
+          if (kw === 0) {
+            const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+            if (match) kw = parseFloat(match[1]) || 0;
+          }
+          const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
+          return acc + (it.quantity || 0) * unitW;
+        }, 0);
 
-      // Supplement with frontend metrics only when they have richer data (higher kit count)
-      const frontendKits = (order_load_metrics?.total_kits || 0);
-      return {
-        total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
-        total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
-        total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
-      };
-    })(),
-    items: processedItems,
-    subtotal_paise: totals.subtotal_paise,
-    tax_total_paise: totals.tax_total_paise,
-    shipping_fee_paise: totals.shipping_fee_paise || 0,
-    grand_total_paise: totals.grand_total_paise,
-    reseller_total_margin_paise: totalResellerMarginPaise,
-    platform_total_commission_paise: totalPlatformCommissionPaise,
-    order_status: isOnlineECollection ? 'confirmed' : 'pending',
-    payment_method: resolvedPaymentMethod,
-    payment_gateway_used: resolvedGatewayUsed,
-    payment_status: isOnlineECollection ? 'captured' : 'pending_verification',
-    payment_reference: cleanUtr,
-    payment_milestones: {
-      configured_milestone_id: isTrialOrder ? null : (milestoneRule?._id || null),
-      total_order_amount: grandTotalRupees,
-      advance_percentage: m1Pct,
-      advance_amount: advanceAmountRupees,
-      remaining_percentage: m2Pct,
-      remaining_amount: remainingAmountRupees,
-      current_milestone_due: 1,
-      milestone_verification_status: isOnlineECollection ? 'fully_paid' : 'awaiting_advance',
-      milestones: initialMilestones,
-    },
-    payment_tracking: {
-      customer_payment_status: isOnlineECollection ? 'Paid' : 'Verification Pending',
-      current_stage: isOnlineECollection ? (isTrialOrder ? 'final_settlement' : (remainingAmountRupees > 0 ? 'production_milestone' : 'final_settlement')) : 'accounts_verification',
-      delay_signal: 'green',
-      days_elapsed: 0,
-      total_verified_amount: isOnlineECollection ? (Number(amount_paid) || grandTotalRupees) : 0,
-      outstanding_amount: isTrialOrder ? 0 : (isOnlineECollection ? remainingAmountRupees : grandTotalRupees),
-    },
-    offline_payment: {
-      utr_number: cleanUtr,
-      amount_paid: Number(amount_paid) || (isTrialOrder ? grandTotalRupees : advanceAmountRupees),
-      payment_date: payment_date ? new Date(payment_date) : new Date(),
-      receipt_url: receipt_url || null,
-      receipt_filename: receipt_filename || null,
-      sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
-      account_holder_name: account_holder_name ? account_holder_name.trim() : null,
-      verification_status: isOnlineECollection ? 'approved' : 'pending',
-      admin_approval_status: isOnlineECollection ? 'approved' : 'pending',
-      admin_remarks: isOnlineECollection ? 'Online ICICI eCollection checkout — Admin Approval not required.' : null,
-      resubmitted_count: 0,
-    },
-    is_end_customer_sale: true,
-    delivery_address: {
-      line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
-      state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
-      state_name: delivery_address.state_name || epc?.state_name || null,
-      district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
-      district_name: delivery_address.district_name || epc?.district_name || null,
-      pincode: delivery_address.pincode || epc?.pincode || null,
-      contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
-      contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
-    },
-    reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
-  });
+        // Supplement with frontend metrics only when they have richer data (higher kit count)
+        const frontendKits = (order_load_metrics?.total_kits || 0);
+        return {
+          total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
+          total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
+          total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
+        };
+      })(),
+      items: processedItems,
+      subtotal_paise: totals.subtotal_paise,
+      tax_total_paise: totals.tax_total_paise,
+      shipping_fee_paise: totals.shipping_fee_paise || 0,
+      grand_total_paise: totals.grand_total_paise,
+      reseller_total_margin_paise: totalResellerMarginPaise,
+      platform_total_commission_paise: totalPlatformCommissionPaise,
+      order_status: isOnlineECollection ? 'confirmed' : 'pending',
+      payment_method: resolvedPaymentMethod,
+      payment_gateway_used: resolvedGatewayUsed,
+      payment_status: isOnlineECollection ? 'captured' : 'pending_verification',
+      payment_reference: cleanUtr,
+      payment_milestones: {
+        configured_milestone_id: isTrialOrder ? null : (milestoneRule?._id || null),
+        total_order_amount: grandTotalRupees,
+        advance_percentage: m1Pct,
+        advance_amount: advanceAmountRupees,
+        remaining_percentage: m2Pct,
+        remaining_amount: remainingAmountRupees,
+        current_milestone_due: 1,
+        milestone_verification_status: isOnlineECollection ? 'fully_paid' : 'awaiting_advance',
+        milestones: initialMilestones,
+      },
+      payment_tracking: {
+        customer_payment_status: isOnlineECollection ? 'Paid' : 'Verification Pending',
+        current_stage: isOnlineECollection ? (isTrialOrder ? 'final_settlement' : (remainingAmountRupees > 0 ? 'production_milestone' : 'final_settlement')) : 'accounts_verification',
+        delay_signal: 'green',
+        days_elapsed: 0,
+        total_verified_amount: isOnlineECollection ? (Number(amount_paid) || grandTotalRupees) : 0,
+        outstanding_amount: isTrialOrder ? 0 : (isOnlineECollection ? remainingAmountRupees : grandTotalRupees),
+      },
+      offline_payment: {
+        utr_number: cleanUtr,
+        amount_paid: Number(amount_paid) || (isTrialOrder ? grandTotalRupees : advanceAmountRupees),
+        payment_date: payment_date ? new Date(payment_date) : new Date(),
+        receipt_url: receipt_url || null,
+        receipt_filename: receipt_filename || null,
+        sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+        account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+        verification_status: isOnlineECollection ? 'approved' : 'pending',
+        admin_approval_status: isOnlineECollection ? 'approved' : 'pending',
+        admin_remarks: isOnlineECollection ? 'Online ICICI eCollection checkout — Admin Approval not required.' : null,
+        resubmitted_count: 0,
+      },
+      is_end_customer_sale: true,
+      delivery_address: {
+        line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
+        state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
+        state_name: delivery_address.state_name || epc?.state_name || null,
+        district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
+        district_name: delivery_address.district_name || epc?.district_name || null,
+        pincode: delivery_address.pincode || epc?.pincode || null,
+        contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
+        contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
+      },
+      reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
+    });
 
-  // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
-  if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
-    const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-    try {
-      await Reseller.findByIdAndUpdate(targetResellerId, {
-        $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
-      });
-    } catch (capacityErr) {
-      console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
-    }
-  }
-
-  // 5. Hold stock in inventory ledger ONLY IF fulfilling directly from franchise warehouse stock
-  if (targetResellerId && fulfillmentSource === 'franchise_warehouse') {
-    for (const item of processedItems) {
-      const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
-      if (currentBalance >= item.quantity) {
-        await ResellerInventoryLedger.create({
-          reseller_id: targetResellerId,
-          item_type: item.scope_type,
-          product_id: item.product_id || null,
-          kit_id: item.kit_id || null,
-          movement_type: 'reservation_hold',
-          quantity: -item.quantity,
-          balance_after: Math.max(0, currentBalance - item.quantity),
-          unit_cost_paise: item.unit_price_paise,
-          total_valuation_paise: item.total_price_paise,
-          reference_type: 'epc_order',
-          reference_id: epcOrder._id,
-          reason: `Pending offline UTR verification for order ${orderNumber}`,
-          actor_id: actor_id || epc_id,
+    // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
+    if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
+      const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+      try {
+        await Reseller.findByIdAndUpdate(targetResellerId, {
+          $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
         });
+      } catch (capacityErr) {
+        console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
       }
     }
+
+    // 5. Hold stock in inventory ledger ONLY IF fulfilling directly from franchise warehouse stock
+    if (targetResellerId && fulfillmentSource === 'franchise_warehouse') {
+      for (const item of processedItems) {
+        const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
+        if (currentBalance >= item.quantity) {
+          await ResellerInventoryLedger.create({
+            reseller_id: targetResellerId,
+            item_type: item.scope_type,
+            product_id: item.product_id || null,
+            kit_id: item.kit_id || null,
+            movement_type: 'reservation_hold',
+            quantity: -item.quantity,
+            balance_after: Math.max(0, currentBalance - item.quantity),
+            unit_cost_paise: item.unit_price_paise,
+            total_valuation_paise: item.total_price_paise,
+            reference_type: 'epc_order',
+            reference_id: epcOrder._id,
+            reason: `Pending offline UTR verification for order ${orderNumber}`,
+            actor_id: actor_id || epc_id,
+          });
+        }
+      }
+    }
+
+    await logAudit({
+      actor_type: 'epc_buyer',
+      actor_id: epc_id,
+      action: 'EPC_OFFLINE_PAYMENT_SUBMITTED',
+      entity_type: 'epc_orders',
+      entity_id: epcOrder._id,
+      after_snapshot: {
+        order_number: orderNumber,
+        grand_total_paise: totals.grand_total_paise,
+        utr_number: cleanUtr,
+        reseller_id: targetResellerId,
+      },
+      req,
+    });
+  } catch (creationErr) {
+    if (epcOrder?._id) {
+      await EpcOrder.findByIdAndDelete(epcOrder._id).catch(() => { });
+    }
+    throw creationErr;
   }
 
-  await logAudit({
-    actor_type: 'epc_buyer',
-    actor_id: epc_id,
-    action: 'EPC_OFFLINE_PAYMENT_SUBMITTED',
-    entity_type: 'epc_orders',
-    entity_id: epcOrder._id,
-    after_snapshot: {
-      order_number: orderNumber,
-      grand_total_paise: totals.grand_total_paise,
-      utr_number: cleanUtr,
-      reseller_id: targetResellerId,
-    },
-    req,
-  });
-} catch (creationErr) {
-  if (epcOrder?._id) {
-    await EpcOrder.findByIdAndDelete(epcOrder._id).catch(() => { });
-  }
-  throw creationErr;
-}
-
-return {
-  order: epcOrder,
-  reseller_id: targetResellerId,
-  routing_source: route.routing_source,
-  fulfillment_source: fulfillmentSource,
-};
+  return {
+    order: epcOrder,
+    reseller_id: targetResellerId,
+    routing_source: route.routing_source,
+    fulfillment_source: fulfillmentSource,
+  };
 }
 
 /**
@@ -1518,6 +1518,12 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
   const resolvedAdminId = (admin_user_id && mongoose.Types.ObjectId.isValid(admin_user_id)) ? admin_user_id : null;
 
   // ── Status-specific logic ─────────────────────────────────────────────────
+  // Allow updating estimated delivery at any stage if passed
+  if (dispatch_data && dispatch_data.estimated_delivery) {
+    if (!order.dispatch_tracking) order.dispatch_tracking = {};
+    order.dispatch_tracking.estimated_delivery = new Date(dispatch_data.estimated_delivery);
+  }
+
   if (new_status === 'dispatched' && dispatch_data) {
     order.dispatch_tracking = {
       ...order.dispatch_tracking?.toObject?.() || {},
@@ -1525,7 +1531,9 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
       tracking_number: dispatch_data.tracking_number || `TRK-${order.order_number}`,
       tracking_url: dispatch_data.tracking_url || null,
       dispatched_at: new Date(),
-      estimated_delivery: dispatch_data.estimated_delivery || null,
+      estimated_delivery: dispatch_data.estimated_delivery
+        ? new Date(dispatch_data.estimated_delivery)
+        : (order.dispatch_tracking?.estimated_delivery || null),
       dispatched_by: resolvedAdminId,
       dispatch_notes: dispatch_data.dispatch_notes || null,
     };

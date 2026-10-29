@@ -8,7 +8,8 @@ export default function Step5Quantity({
   onBack,
   onProceed,
 }) {
-  const capacityPerKit = Number(selectedSolution?.capacity_kw || 0);
+  const rawCap = selectedSolution?.capacity_kw || selectedSolution?.capacity || 0;
+  const capacityPerKit = typeof rawCap === "number" && !isNaN(rawCap) ? rawCap : (parseFloat(String(rawCap).replace(/kw/ig, '').trim()) || 0);
   const totalKw = Math.round(capacityPerKit * quantity * 100) / 100;
   const unitPrice = Number(selectedSolution?.selling_price || 0);
   const totalKitCost = Math.round(unitPrice * quantity);
@@ -101,11 +102,10 @@ export default function Step5Quantity({
               key={q}
               type="button"
               onClick={() => onChangeQuantity(q)}
-              className={`px-3 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
-                quantity === q
+              className={`px-3 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${quantity === q
                   ? "bg-primary text-white border-primary shadow-sm"
                   : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-primary"
-              }`}
+                }`}
             >
               {q} {q === 1 ? "Kit" : "Kits"}
             </button>

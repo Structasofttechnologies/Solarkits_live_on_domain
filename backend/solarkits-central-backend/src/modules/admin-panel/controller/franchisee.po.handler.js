@@ -42,7 +42,7 @@ const list_po_orders = async (req, res) => {
     if (from_date || to_date) {
       query.created_at = {};
       if (from_date) query.created_at.$gte = new Date(from_date);
-      if (to_date)   query.created_at.$lte = new Date(to_date);
+      if (to_date) query.created_at.$lte = new Date(to_date);
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -90,13 +90,39 @@ const list_po_orders = async (req, res) => {
 
     return res.json({
       status: 'success',
-      data:   orders,
-      meta:   { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
+      data: orders,
+      meta: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
     });
   } catch (error) {
     console.error('[po.handler] list error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
+};
+
+// Helper: Robust numeric kW parser for capacity
+const parseKw = (val, name = '') => {
+  if (typeof val === 'number' && !isNaN(val) && val > 0) return val;
+  if (val != null) {
+    const s = String(val).replace(/kw/ig, '').trim();
+    const match = s.match(/(\d+(?:\.\d+)?)/);
+    if (match) {
+      const p = parseFloat(match[1]);
+      if (!isNaN(p) && p > 0) return p;
+    }
+  }
+  if (name) {
+    const kwMatch = String(name).match(/(\d+(?:\.\d+)?)\s*(?:k\.?\s*w\.?|kw|kilowatt)/i);
+    if (kwMatch) {
+      const p = parseFloat(kwMatch[1]);
+      if (!isNaN(p) && p > 0) return p;
+    }
+    const anyMatch = String(name).match(/(\d+(?:\.\d+)?)/);
+    if (anyMatch) {
+      const p = parseFloat(anyMatch[1]);
+      if (!isNaN(p) && p > 0) return p;
+    }
+  }
+  return 3;
 };
 
 // Helper: Enrich FPO Order items with ComboKit specifications, hardware & images
@@ -161,13 +187,16 @@ const enrichOrdersWithKits = async (orders) => {
           const k = kitMap.get(item.kit_id.toString());
           const brand = k.brand_id ? brandMap.get(k.brand_id.toString()) : null;
 
+          const parsedCapacity = parseKw(k.capacity || k.capacity_kw || item.capacity, k.name || item.item_name);
+
           item.kit_image = k.kit_image || (k.images && k.images[0]) || null;
-          item.capacity = k.capacity || k.capacity_kw || 3;
+          item.capacity = parsedCapacity;
+          item.capacity_kw = parsedCapacity;
           item.description = k.description || 'High-Efficiency Solar System with Single-Phase String Inverter and BOS Kit';
           item.brand_name = brand?.brand_name || 'Tata Power Solar';
           item.brand_logo = brand?.logo || null;
           item.inverter_mode = k.inverter_mode || 'single';
-          item.total_system_capacity_kw = (k.capacity || 3) * (item.quantity || 1);
+          item.total_system_capacity_kw = parsedCapacity * (Number(item.quantity) || 1);
 
           // Resolve hardware components with human-readable template names
           item.resolved_components = (k.base_components || []).map(b => ({
@@ -185,6 +214,13 @@ const enrichOrdersWithKits = async (orders) => {
             total_quantity: (b.quantity || 1) * (item.quantity || 1),
             image: b.image || null
           }));
+        } else {
+          // Fallback enrichment for kits not matching kitMap
+          const parsedCapacity = parseKw(item.capacity || item.capacity_kw, item.item_name);
+          item.capacity = parsedCapacity;
+          item.capacity_kw = parsedCapacity;
+          if (!item.brand_name) item.brand_name = 'Tata Power Solar';
+          item.total_system_capacity_kw = parsedCapacity * (Number(item.quantity) || 1);
         }
       });
     });

@@ -669,6 +669,29 @@ export default function ProjectOrderStatus() {
                             minute: "2-digit",
                           })}
                         </p>
+
+                        {/* Prominent Estimated Delivery Badge from Admin */}
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 mt-1.5 shadow-2xs">
+                          <FaTruck className="text-emerald-600 animate-pulse" size={13} />
+                          <span>
+                            Est. Delivery:{" "}
+                            {estimatedDate ? (
+                              <span className="font-extrabold text-emerald-800 dark:text-emerald-200">
+                                {new Date(estimatedDate).toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-emerald-800 dark:text-emerald-200">
+                                Within 3 - 5 business days
+                              </span>
+                            )}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-3 flex-wrap">
@@ -986,6 +1009,8 @@ export default function ProjectOrderStatus() {
                                   day: "numeric",
                                   month: "short",
                                   year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
                                 })
                                 : "Within 3 - 5 business days"}
                             </p>
@@ -1285,11 +1310,28 @@ export default function ProjectOrderStatus() {
                               <span className="font-extrabold text-xs text-text-primary dark:text-white">
                                 Delivery Destination
                               </span>
-                              {order.delivery_address.pincode && (
-                                <span className="text-[11px] font-mono font-bold text-text-muted bg-surface px-2 py-0.5 rounded border border-border">
-                                  PIN: {order.delivery_address.pincode}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                                  <FaRegClock size={10} />
+                                  Estimated Delivery:{" "}
+                                  <strong className="font-black">
+                                    {estimatedDate
+                                      ? new Date(estimatedDate).toLocaleDateString("en-IN", {
+                                          day: "numeric",
+                                          month: "short",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "3 - 5 Business Days"}
+                                  </strong>
                                 </span>
-                              )}
+                                {order.delivery_address.pincode && (
+                                  <span className="text-[11px] font-mono font-bold text-text-muted bg-surface px-2 py-0.5 rounded border border-border">
+                                    PIN: {order.delivery_address.pincode}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <p className="text-xs text-text-secondary">
                               {order.delivery_address.line}

@@ -31,6 +31,7 @@ const {
   BDEReassignmentHistory,
   TerritoryExceptionRequest,
   Reseller,
+  FranchiseLead,
   ResellerPlan,
   ResellerPlanSubscription,
   FranchiseePlanPoSetting,
@@ -511,9 +512,19 @@ exports.get_my_goals = async (req, res) => {
 
 exports.get_notifications = async (req, res) => {
   try {
-    const notifications = await BDENotification.find({ bde_id: req.user.id }).sort({ createdAt: -1 }).limit(30).lean();
+    const notifications = await BDENotification.find({ bde_id: req.user.id })
+      .sort({ created_at: -1, createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const formatted = notifications.map((n) => ({
+      ...n,
+      createdAt: n.created_at || n.createdAt,
+      created_at: n.created_at || n.createdAt,
+    }));
+
     const unreadCount = await BDENotification.countDocuments({ bde_id: req.user.id, is_read: false });
-    return res.status(200).json({ status: 'success', data: notifications, unread_count: unreadCount });
+    return res.status(200).json({ status: 'success', data: formatted, unread_count: unreadCount });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch notifications', error: error.message });
   }
@@ -526,6 +537,18 @@ exports.mark_notification_read = async (req, res) => {
     return res.status(200).json({ status: 'success', message: 'Notification marked as read' });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: 'Failed to update notification', error: error.message });
+  }
+};
+
+exports.mark_all_notifications_read = async (req, res) => {
+  try {
+    await BDENotification.updateMany(
+      { bde_id: req.user.id, is_read: false },
+      { $set: { is_read: true, read_at: new Date() } }
+    );
+    return res.status(200).json({ status: 'success', message: 'All notifications marked as read' });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: 'Failed to mark notifications as read', error: error.message });
   }
 };
 
@@ -824,6 +847,17 @@ exports.create_epc_lead = async (req, res) => {
       notes: `Generated EPC Lead: ${leadId} (${company_name}) in ${district_name}, ${state_name}`,
     });
 
+    await BDENotification.create({
+      bde_id: bdeId,
+      title: `EPC Lead Created: ${company_name} ⚡`,
+      message: `EPC Lead ${leadId} (${contact_person}) registered in ${district_name}, ${state_name}. Next action: Follow-up / GST verification.`,
+      type: 'epc_lead',
+      link: '/epc-leads',
+      action_label: 'View EPC Lead',
+      entity_type: 'epc_lead',
+      entity_id: newLead._id,
+    }).catch(() => { });
+
     return res.status(201).json({
       status: 'success',
       message: `EPC Lead ${leadId} successfully created.`,
@@ -1009,6 +1043,17 @@ exports.schedule_epc_follow_up = async (req, res) => {
 
     await lead.save();
 
+    await BDENotification.create({
+      bde_id: req.user.id,
+      title: `Follow-up Scheduled: ${lead.company_name} 📅`,
+      message: `Follow-up confirmed for ${new Date(follow_up_date).toLocaleDateString('en-IN')}${notes ? `: ${notes}` : ''}. Click to open lead.`,
+      type: 'follow_up',
+      link: '/epc-leads',
+      action_label: 'View EPC Follow-up',
+      entity_type: 'epc_lead',
+      entity_id: lead._id,
+    }).catch(() => { });
+
     return res.status(200).json({
       status: 'success',
       message: 'Follow-up scheduled successfully',
@@ -1057,6 +1102,17 @@ exports.update_epc_lead_status = async (req, res) => {
     });
 
     await lead.save();
+
+    await BDENotification.create({
+      bde_id: req.user.id,
+      title: `EPC Lead Status: ${lead.company_name} ⚡`,
+      message: `Status transitioned to "${status}"${notes ? ` (${notes})` : ''}. Click to open pipeline.`,
+      type: 'epc_lead',
+      link: '/epc-leads',
+      action_label: 'View Pipeline',
+      entity_type: 'epc_lead',
+      entity_id: lead._id,
+    }).catch(() => { });
 
     return res.status(200).json({
       status: 'success',
@@ -1711,7 +1767,7 @@ exports.assign_epc_to_franchisee = async (req, res) => {
       status: 'SENT',
       notified_via: ['inapp'],
       idempotency_key: idempotencyKey,
-    }).catch(() => {}); // non-blocking
+    }).catch(() => { }); // non-blocking
 
     // Log BDE activity
     await BDEActivityLog.create({
@@ -1722,6 +1778,17 @@ exports.assign_epc_to_franchisee = async (req, res) => {
       action: 'EPC_PARTNER_ASSIGNED',
       notes: `Assigned EPC "${epcAccount.name}" (GST: ${epcAccount.gstin || 'N/A'}) to Franchisee "${reseller.business_name}" (${reseller.reseller_code})`,
     });
+
+    await BDENotification.create({
+      bde_id: bdeId,
+      title: `EPC Contractor Assigned to Franchisee 🤝`,
+      message: `Contractor "${epcAccount.name || epcAccount.company_name}" assigned to partner "${reseller.business_name}".`,
+      type: 'epc_lead',
+      link: '/epc-leads',
+      action_label: 'View EPC Pipeline',
+      entity_type: 'epc_account',
+      entity_id: epcAccount._id,
+    }).catch(() => { });
 
     return res.status(200).json({
       status: 'success',
@@ -1855,8 +1922,8 @@ exports.get_franchisee_performance = async (req, res) => {
           prevKitsOrdered > 0
             ? Math.round(((actualKitsOrdered - prevKitsOrdered) / prevKitsOrdered) * 100)
             : actualKitsOrdered > 0
-            ? 100
-            : 0;
+              ? 100
+              : 0;
 
         // 5. Performance Status Tiering
         let performanceStatus = 'No Activity';
@@ -2260,18 +2327,114 @@ exports.create_bde_lead = async (req, res) => {
 
 exports.list_bde_leads = async (req, res) => {
   try {
-    const leads = await BDELead.find({ current_bde_id: req.user.id, deleted_at: null }).sort({ created_at: -1 }).lean();
+    const bdeId = req.user.id;
+    const { search, stage } = req.query;
+
+    // Auto-sync any FranchiseLead records assigned to this BDE
+    const assignedFranchiseLeads = await FranchiseLead.find({
+      bde_id: bdeId,
+      deleted_at: null,
+    }).lean();
+
+    const { generateNextLeadId } = require('../../admin-panel/services/bde.lead.service');
+
+    for (const fl of assignedFranchiseLeads) {
+      let existingBdeLead = null;
+      if (fl.bde_lead_id) {
+        existingBdeLead = await BDELead.findById(fl.bde_lead_id);
+      }
+      if (!existingBdeLead) {
+        existingBdeLead = await BDELead.findOne({
+          deleted_at: null,
+          $or: [
+            { mobile_number: fl.mobile_number },
+            { email: fl.email },
+          ],
+        });
+      }
+
+      if (!existingBdeLead) {
+        const newLeadId = await generateNextLeadId();
+        const createdLead = await BDELead.create({
+          lead_id: newLeadId,
+          prospect_name: fl.full_name,
+          company_name: fl.business_name,
+          mobile_number: fl.mobile_number,
+          email: fl.email,
+          gst_number: fl.gstin || null,
+          gst_verified: fl.gst_verified || false,
+          gst_legal_name: fl.gst_legal_name || null,
+          gst_trade_name: fl.gst_trade_name || null,
+          state_name: fl.state,
+          district_name: fl.district,
+          pincode: fl.pincode || null,
+          address_line: `${fl.district}, ${fl.state}`,
+          lead_source: 'head_office_assigned',
+          lead_status: fl.status === 'APPROVED_CONVERTED' ? 'fee_paid' : 'new_lead',
+          created_by_bde_id: bdeId,
+          original_bde_id: bdeId,
+          current_bde_id: bdeId,
+          notes: fl.admin_remarks || 'Assigned by Head Office Admin',
+        });
+        await FranchiseLead.findByIdAndUpdate(fl._id, { bde_lead_id: createdLead._id });
+      } else if (String(existingBdeLead.current_bde_id) !== String(bdeId)) {
+        existingBdeLead.current_bde_id = bdeId;
+        await existingBdeLead.save();
+      }
+    }
+
+    const query = {
+      $or: [
+        { current_bde_id: bdeId },
+        { created_by_bde_id: bdeId },
+      ],
+      deleted_at: null,
+    };
+
+    if (stage && stage.trim()) {
+      query.lead_status = stage.trim();
+    }
+
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      query.$and = [
+        {
+          $or: [
+            { prospect_name: sRegex },
+            { company_name: sRegex },
+            { mobile_number: sRegex },
+            { lead_id: sRegex },
+            { gst_number: sRegex },
+            { district_name: sRegex },
+            { state_name: sRegex },
+          ],
+        },
+      ];
+    }
+
+    const leads = await BDELead.find(query).sort({ created_at: -1, createdAt: -1 }).lean();
     return res.status(200).json({ status: 'success', data: leads });
   } catch (err) {
+    console.error('[list_bde_leads error]:', err);
     return res.status(500).json({ status: 'error', message: 'Failed to list leads', error: err.message });
   }
 };
 
 exports.get_bde_lead_detail = async (req, res) => {
   try {
-    const lead = await BDELead.findOne({ _id: req.params.id, current_bde_id: req.user.id, deleted_at: null }).lean();
+    const lead = await BDELead.findOne({
+      _id: req.params.id,
+      deleted_at: null,
+      $or: [
+        { current_bde_id: req.user.id },
+        { created_by_bde_id: req.user.id },
+      ],
+    }).lean();
+
     if (!lead) return res.status(404).json({ status: 'error', message: 'Lead not found' });
-    return res.status(200).json({ status: 'success', data: lead });
+
+    const activities = await BDELeadActivity.find({ lead_id: lead._id }).sort({ created_at: -1 }).lean();
+    return res.status(200).json({ status: 'success', data: { lead, activities } });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch lead', error: err.message });
   }
@@ -2279,7 +2442,17 @@ exports.get_bde_lead_detail = async (req, res) => {
 
 exports.update_bde_lead = async (req, res) => {
   try {
-    const lead = await BDELead.findOneAndUpdate({ _id: req.params.id, current_bde_id: req.user.id }, { $set: req.body }, { new: true });
+    const lead = await BDELead.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        $or: [
+          { current_bde_id: req.user.id },
+          { created_by_bde_id: req.user.id },
+        ],
+      },
+      { $set: req.body },
+      { new: true }
+    );
     return res.status(200).json({ status: 'success', message: 'Lead updated', data: lead });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to update lead', error: err.message });
@@ -2309,8 +2482,26 @@ exports.schedule_follow_up = async (req, res) => {
   try {
     const { id } = req.params;
     const { follow_up_date, notes } = req.body;
-    await BDELead.findByIdAndUpdate(id, { next_follow_up_date: new Date(follow_up_date), bde_remarks: notes });
-    return res.status(200).json({ status: 'success', message: 'Follow-up scheduled' });
+    const lead = await BDELead.findByIdAndUpdate(
+      id,
+      { next_follow_up_date: new Date(follow_up_date), bde_remarks: notes },
+      { new: true }
+    );
+
+    if (lead) {
+      await BDENotification.create({
+        bde_id: req.user.id,
+        title: `Franchisee Follow-up Scheduled: ${lead.company_name || lead.prospect_name} 📅`,
+        message: `Follow-up set for ${new Date(follow_up_date).toLocaleDateString('en-IN')}${notes ? `: ${notes}` : ''}`,
+        type: 'follow_up',
+        link: '/leads',
+        action_label: 'View Franchisee Lead',
+        entity_type: 'bde_lead',
+        entity_id: lead._id,
+      }).catch(() => { });
+    }
+
+    return res.status(200).json({ status: 'success', message: 'Follow-up scheduled', data: lead });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to schedule follow-up', error: err.message });
   }
@@ -2321,6 +2512,20 @@ exports.update_lead_stage = async (req, res) => {
     const { id } = req.params;
     const { stage, notes } = req.body;
     const lead = await BDELead.findByIdAndUpdate(id, { lead_status: stage, bde_remarks: notes }, { new: true });
+
+    if (lead) {
+      await BDENotification.create({
+        bde_id: req.user.id,
+        title: `Franchisee Lead Stage: ${lead.company_name || lead.prospect_name} 🎯`,
+        message: `Lead transitioned to stage "${stage}"${notes ? ` (${notes})` : ''}`,
+        type: 'lead',
+        link: '/leads',
+        action_label: 'View Lead Pipeline',
+        entity_type: 'bde_lead',
+        entity_id: lead._id,
+      }).catch(() => { });
+    }
+
     return res.status(200).json({ status: 'success', message: `Lead updated to ${stage}`, data: lead });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to update stage', error: err.message });
@@ -2333,8 +2538,27 @@ exports.start_franchisee_signup = async (req, res) => {
 
 exports.get_bde_pipeline = async (req, res) => {
   try {
-    const leads = await BDELead.find({ current_bde_id: req.user.id, deleted_at: null }).lean();
-    return res.status(200).json({ status: 'success', data: { total_leads: leads.length, all_leads: leads } });
+    const bdeId = req.user.id;
+    const leads = await BDELead.find({
+      $or: [{ current_bde_id: bdeId }, { created_by_bde_id: bdeId }],
+      deleted_at: null,
+    }).lean();
+
+    const grouped = {};
+    leads.forEach((l) => {
+      const st = l.lead_status || 'new_lead';
+      if (!grouped[st]) grouped[st] = [];
+      grouped[st].push(l);
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        total_leads: leads.length,
+        all_leads: leads,
+        grouped,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch pipeline', error: err.message });
   }

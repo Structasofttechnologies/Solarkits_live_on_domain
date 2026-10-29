@@ -272,6 +272,30 @@ export default function BdeEpcLeads() {
 
   return (
     <div className="space-y-6">
+      {/* Lead Category Switcher */}
+      <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit border border-slate-200">
+        <button
+          type="button"
+          onClick={() => navigate('/leads')}
+          className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:text-slate-900"
+        >
+          <Building2 className="w-4 h-4 text-blue-600" />
+          <span>Franchisee Partner Leads (HO Assigned)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/epc-leads')}
+          className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-white text-blue-700 shadow-sm border border-blue-200/80"
+        >
+          <Zap className="w-4 h-4 text-amber-500" />
+          <span>EPC Contractor Leads (Field Pipeline)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-800 font-black">
+            {totalLeadsCount}
+          </span>
+        </button>
+      </div>
+
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

@@ -46,6 +46,8 @@ router.post('/epc-orders/:id/verify-payment', check_auth, solarshop_handler.veri
 router.post('/fpo-orders/:id/verify-payment', check_auth, solarshop_handler.verify_fpo_order_payment);
 router.post('/epc-orders/:id/dispatch', check_auth, solarshop_handler.dispatch_epc_order);
 router.post('/epc-orders/:id/deliver', check_auth, solarshop_handler.deliver_epc_order);
+router.post('/epc-orders/:id/update-eta', check_auth, solarshop_handler.update_epc_order_eta);
+router.post('/orders/:orderType/:id/update-eta', check_auth, solarshop_handler.update_order_eta);
 
 // ── Module 1: 8-Stage Order Lifecycle Transition Routes ──────────────────────
 // Stage 2: Mark order as Processing (warehouse picking & packing started)

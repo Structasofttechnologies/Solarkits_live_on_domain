@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useBdeAuth } from '../context/BdeAuthContext';
+import api from '../services/api';
 import logoImg from '../assets/logo.png';
 import {
   LayoutDashboard,
@@ -30,14 +31,41 @@ export default function BdeLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await api.get('/notifications');
+      setUnreadCount(res.data?.unread_count || 0);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    const handleUpdate = () => {
+      fetchUnreadCount();
+    };
+
+    window.addEventListener('bde_notifications_updated', handleUpdate);
+    const interval = setInterval(fetchUnreadCount, 30000);
+
+    return () => {
+      window.removeEventListener('bde_notifications_updated', handleUpdate);
+      clearInterval(interval);
+    };
+  }, []);
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Purchase Orders (PO)', path: '/purchase-orders', icon: ShoppingCart },
-    { name: 'EPC Leads', path: '/epc-leads', icon: Users },
+    { name: 'Franchisee Leads', path: '/leads', icon: Users },
+    { name: 'EPC Leads', path: '/epc-leads', icon: Zap },
     { name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
     { name: 'EPC Quotes', path: '/epc-quotes', icon: FileText },
     { name: 'Quote Follow-ups', path: '/epc-quote-followups', icon: CalendarCheck },
+    { name: 'Purchase Orders (PO)', path: '/purchase-orders', icon: ShoppingCart },
     { name: 'Franchisee Goals', path: '/franchisees', icon: Store },
     { name: 'Order History & Kits', path: '/order-history', icon: Package },
     { name: 'Leaderboard Ranking', path: '/ranking', icon: Award },
@@ -103,7 +131,11 @@ export default function BdeLayout() {
               title="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full ring-2 ring-white" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[18px] text-[10px] font-black leading-none text-white bg-blue-600 rounded-full ring-2 ring-white flex items-center justify-center shadow-xs">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* User Dropdown */}
@@ -184,7 +216,13 @@ export default function BdeLayout() {
                     <Icon className="w-4 h-4" />
                     <span>{item.name}</span>
                   </div>
-                  <ChevronRight className="w-3.5 h-3.5 opacity-40" />
+                  {item.path === '/notifications' && unreadCount > 0 ? (
+                    <span className="px-2 py-0.5 text-[10px] font-black bg-blue-600 text-white rounded-full leading-none">
+                      {unreadCount}
+                    </span>
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 opacity-40" />
+                  )}
                 </NavLink>
               );
             })}

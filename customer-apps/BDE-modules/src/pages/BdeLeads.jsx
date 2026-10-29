@@ -1,35 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Users, 
-  Plus, 
-  Search, 
-  Filter, 
-  Calendar, 
-  Clock, 
-  RotateCw, 
-  ArrowRight, 
-  CheckCircle2, 
-  AlertTriangle, 
-  UserCheck, 
-  Sparkles, 
-  LayoutGrid, 
-  List, 
-  Eye, 
-  X, 
-  MapPin, 
-  Phone, 
-  Mail, 
+import { useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Plus,
+  Search,
+  Filter,
+  Calendar,
+  Clock,
+  RotateCw,
+  ArrowRight,
+  CheckCircle2,
+  AlertTriangle,
+  UserCheck,
+  Sparkles,
+  LayoutGrid,
+  List,
+  Eye,
+  X,
+  MapPin,
+  Phone,
+  Mail,
   Send,
   MessageSquare,
   FileCheck,
   ChevronRight,
   Building,
+  Zap,
   Image as ImageIcon
 } from 'lucide-react';
 import api from '../services/api';
 import BdeFranchiseOnboardingModal from '../components/BdeFranchiseOnboardingModal';
 
 export default function BdeLeads() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [pipeline, setPipeline] = useState(null);
   const [bdeTerritory, setBdeTerritory] = useState(null);
@@ -251,6 +254,30 @@ export default function BdeLeads() {
 
   return (
     <div className="space-y-6">
+      {/* Lead Category Switcher */}
+      <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit border border-slate-200">
+        <button
+          type="button"
+          onClick={() => navigate('/leads')}
+          className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-white text-blue-700 shadow-sm border border-blue-200/80"
+        >
+          <Building className="w-4 h-4 text-blue-600" />
+          <span>Franchisee Partner Leads (HO Assigned)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-800 font-black">
+            {leads.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/epc-leads')}
+          className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:text-slate-900"
+        >
+          <Zap className="w-4 h-4 text-amber-500" />
+          <span>EPC Contractor Leads (Field Pipeline)</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -265,18 +292,16 @@ export default function BdeLeads() {
           <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
             <button
               onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${viewMode === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
             >
               <List className="w-3.5 h-3.5" />
               Table
             </button>
             <button
               onClick={() => setViewMode('kanban')}
-              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               Pipeline Board
@@ -319,7 +344,7 @@ export default function BdeLeads() {
           </div>
           <div>
             <div className="text-3xl font-black text-cyan-600 tracking-tight">
-              {leads.filter((l) => ['new_lead', 'contacted', 'interested'].includes(l.stage)).length}
+              {leads.filter((l) => ['new_lead', 'contacted', 'interested'].includes(l.lead_status || l.stage)).length}
             </div>
             <span className="text-[11px] font-medium text-cyan-600/80 mt-0.5 block">Pitching & follow-up phase</span>
           </div>
@@ -335,7 +360,7 @@ export default function BdeLeads() {
           </div>
           <div>
             <div className="text-3xl font-black text-indigo-600 tracking-tight">
-              {leads.filter((l) => ['signup_started', 'approved', 'agreement_signed'].includes(l.stage)).length}
+              {leads.filter((l) => ['signup_started', 'approved', 'agreement_signed'].includes(l.lead_status || l.stage)).length}
             </div>
             <span className="text-[11px] font-medium text-indigo-600/80 mt-0.5 block">Documentation & Agreement</span>
           </div>
@@ -351,7 +376,7 @@ export default function BdeLeads() {
           </div>
           <div>
             <div className="text-3xl font-black text-emerald-600 tracking-tight">
-              {leads.filter((l) => l.stage === 'fee_paid').length}
+              {leads.filter((l) => ['fee_paid', 'completed'].includes(l.lead_status || l.stage)).length}
             </div>
             <span className="text-[11px] font-medium text-emerald-600/80 mt-0.5 block">Fee paid & store created</span>
           </div>

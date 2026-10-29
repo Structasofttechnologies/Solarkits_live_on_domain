@@ -322,6 +322,96 @@ export default function ResellerLeads() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // ── Assign BDE Modal State & Handlers ─────────────────────────────────────
+  const [assignModalLead, setAssignModalLead] = useState(null);
+  const [selectedBdeId, setSelectedBdeId] = useState("");
+  const [assignRemarks, setAssignRemarks] = useState("");
+  const [assigning, setAssigning] = useState(false);
+
+  const handleOpenAssignModal = (lead) => {
+    setAssignModalLead(lead);
+    setSelectedBdeId(lead.bde_id || lead.bde?.id || lead.bde?._id || "");
+    setAssignRemarks("");
+  };
+
+  const handleConfirmAssignBde = async (e) => {
+    if (e) e.preventDefault();
+    if (!assignModalLead) return;
+
+    if (!selectedBdeId) {
+      dispatch(setAlert({ type: "error", message: "Please select a BDE Executive to assign this lead" }));
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      const leadId = assignModalLead.id || assignModalLead._id;
+      const res = await axios.put(
+        `${API_BASE}/resellers/leads/${leadId}/assign-bde?req_for=edit&unique_id=${MODULE_UID}`,
+        {
+          bde_id: selectedBdeId,
+          remarks: assignRemarks.trim(),
+        },
+        { headers: authHeaderObj() }
+      );
+
+      if (res.data?.status === "success" || res.data?.success) {
+        const assignedBdeObj = bdes.find((b) => (b._id || b.id) === selectedBdeId) || res.data?.data?.bde;
+        const bdeName = assignedBdeObj?.full_name || assignedBdeObj?.fullName || "BDE";
+
+        const updatedBdeData = {
+          id: selectedBdeId,
+          fullName: assignedBdeObj?.full_name || assignedBdeObj?.fullName || "BDE Executive",
+          bdeId: assignedBdeObj?.bde_id || assignedBdeObj?.bdeId || "",
+          mobile: assignedBdeObj?.mobile_number || assignedBdeObj?.mobile || "",
+          email: assignedBdeObj?.email || "",
+        };
+
+        setLeads((prev) =>
+          prev.map((l) => {
+            if ((l.id || l._id) === leadId) {
+              return {
+                ...l,
+                bde_id: selectedBdeId,
+                bde: updatedBdeData,
+                is_bde_lead: true,
+              };
+            }
+            return l;
+          })
+        );
+
+        if (selectedLead && (selectedLead.id || selectedLead._id) === leadId) {
+          setSelectedLead((prev) => ({
+            ...prev,
+            bde_id: selectedBdeId,
+            bde: updatedBdeData,
+            is_bde_lead: true,
+          }));
+        }
+
+        dispatch(
+          setAlert({
+            type: "success",
+            message: `Lead successfully assigned to ${bdeName}! Notification sent to BDE panel.`,
+          })
+        );
+        setAssignModalLead(null);
+      } else {
+        dispatch(setAlert({ type: "error", message: res.data?.message || "Failed to assign lead" }));
+      }
+    } catch (err) {
+      dispatch(
+        setAlert({
+          type: "error",
+          message: err.response?.data?.message || err.message || "Failed to assign lead to BDE",
+        })
+      );
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   // Status Change Handler
   const handleStatusChange = async (leadId, newStatus) => {
     setLeads((prev) =>
@@ -735,17 +825,15 @@ export default function ResellerLeads() {
               <button
                 key={key}
                 onClick={() => setStatusFilter(key)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  isSel
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isSel
                     ? "bg-primary text-white shadow-sm"
                     : "bg-bg text-text-secondary hover:text-text-primary hover:bg-surface-hover border border-border"
-                }`}
+                  }`}
               >
                 <span>{cfg.label}</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    isSel ? "bg-white/25 text-white" : "bg-surface text-text-muted"
-                  }`}
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${isSel ? "bg-white/25 text-white" : "bg-surface text-text-muted"
+                    }`}
                 >
                   {count}
                 </span>
@@ -777,15 +865,14 @@ export default function ResellerLeads() {
                   setBdeFilter("ALL");
                 }
               }}
-              className={`px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:border-primary transition-all min-w-[180px] ${
-                sourceFilter === "callback"
+              className={`px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:border-primary transition-all min-w-[180px] ${sourceFilter === "callback"
                   ? "bg-amber-50 border-amber-300 text-amber-950"
                   : sourceFilter === "bde"
-                  ? "bg-indigo-50 border-indigo-300 text-indigo-900"
-                  : sourceFilter === "website"
-                  ? "bg-teal-50 border-teal-300 text-teal-900"
-                  : "bg-bg border-border text-text-primary"
-              }`}
+                    ? "bg-indigo-50 border-indigo-300 text-indigo-900"
+                    : sourceFilter === "website"
+                      ? "bg-teal-50 border-teal-300 text-teal-900"
+                      : "bg-bg border-border text-text-primary"
+                }`}
             >
               <option value="ALL">🌐 All Channels ({leads.length})</option>
               <option value="callback">📞 Callback Inquiries ({stats.callbackCount})</option>
@@ -897,10 +984,10 @@ export default function ResellerLeads() {
                     const StatusIcon = statusCfg.icon || FiClock;
                     const formattedDate = lead.submittedAt
                       ? new Date(lead.submittedAt).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
                       : "Recent";
 
                     return (
@@ -917,10 +1004,10 @@ export default function ResellerLeads() {
                             <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 uppercase text-xs">
                               {lead.fullName
                                 ? lead.fullName
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .slice(0, 2)
-                                    .join("")
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .slice(0, 2)
+                                  .join("")
                                 : "FL"}
                             </div>
                             <div className="space-y-1">
@@ -928,11 +1015,10 @@ export default function ResellerLeads() {
                                 <span>{lead.fullName}</span>
                                 {lead.selectedSolution && (
                                   <span
-                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                      lead.is_callback_request || lead.actionType === "callback_request" || lead.action_type === "callback_request"
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${lead.is_callback_request || lead.actionType === "callback_request" || lead.action_type === "callback_request"
                                         ? "bg-amber-100 text-amber-900 border border-amber-300"
                                         : "bg-info-soft text-primary"
-                                    }`}
+                                      }`}
                                   >
                                     {lead.selectedSolution}
                                   </span>
@@ -1137,6 +1223,20 @@ export default function ResellerLeads() {
                               )
                             )}
 
+                            {/* Assign / Reassign BDE Executive */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssignModal(lead)}
+                              title={lead.bde || lead.bde_id ? `Assigned to: ${lead.bde?.fullName || 'BDE'}. Click to Reassign` : "Assign Lead to BDE Executive"}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 ${lead.bde || lead.bde_id
+                                  ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                                  : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                                }`}
+                            >
+                              <FiUserCheck size={13} />
+                              <span>{lead.bde || lead.bde_id ? "Reassign BDE" : "Assign BDE"}</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => setSelectedLead(lead)}
@@ -1329,30 +1429,53 @@ export default function ResellerLeads() {
                   </div>
 
                   {selectedLead.bde ? (
-                    <div className="grid grid-cols-2 gap-3 text-xs p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80">
-                      <div>
-                        <p className="text-[11px] text-indigo-800 font-bold uppercase">Sourcing BDE Executive</p>
-                        <p className="font-bold text-indigo-950 text-sm mt-0.5">{selectedLead.bde.fullName || "Field BDE"}</p>
-                        <span className="inline-block font-mono text-[11px] font-bold text-indigo-700 bg-white/80 px-2 py-0.5 rounded border border-indigo-200 mt-1">
-                          ID: {selectedLead.bde.bdeId}
-                        </span>
+                    <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-[11px] text-indigo-800 font-bold uppercase">Assigned BDE Executive</p>
+                          <p className="font-bold text-indigo-950 text-sm mt-0.5">{selectedLead.bde.fullName || "Field BDE"}</p>
+                          <span className="inline-block font-mono text-[11px] font-bold text-indigo-700 bg-white/80 px-2 py-0.5 rounded border border-indigo-200 mt-1">
+                            ID: {selectedLead.bde.bdeId}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-indigo-800 font-bold uppercase">BDE Contact</p>
+                          <p className="font-mono text-indigo-950 mt-0.5 font-bold">{selectedLead.bde.mobile || "N/A"}</p>
+                          <p className="text-[11px] text-indigo-700 truncate">{selectedLead.bde.email || ""}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[11px] text-indigo-800 font-bold uppercase">BDE Contact</p>
-                        <p className="font-mono text-indigo-950 mt-0.5 font-bold">{selectedLead.bde.mobile || "N/A"}</p>
-                        <p className="text-[11px] text-indigo-700 truncate">{selectedLead.bde.email || ""}</p>
+                      <div className="pt-2 border-t border-indigo-200/60 flex items-center justify-between">
+                        <span className="text-[11px] text-indigo-800 font-medium">Want to transfer this lead to another territory executive?</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignModal(selectedLead)}
+                          className="px-3 py-1 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                        >
+                          <FiUserCheck size={12} />
+                          <span>Reassign BDE</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-text-secondary bg-surface p-3 rounded-xl border border-border flex items-center justify-between">
-                      <span>
-                        {selectedLead.source === "manual_admin"
-                          ? "Lead was created manually through the Admin Portal."
-                          : "Lead submitted directly by prospect through the public Website / Storefront onboarding form."}
-                      </span>
-                      <span className="font-mono text-[10px] text-text-muted">
-                        Source: {selectedLead.source || "storefront_modal"}
-                      </span>
+                    <div className="text-xs text-text-secondary bg-surface p-3.5 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-text-primary">
+                          {selectedLead.source === "manual_admin"
+                            ? "Lead created manually through Admin Portal."
+                            : "Direct Website / Storefront Inbound Lead"}
+                        </p>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          Not yet assigned to any BDE executive in the field.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAssignModal(selectedLead)}
+                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1.5 shadow-sm shrink-0 transition cursor-pointer"
+                      >
+                        <FiUserCheck size={14} />
+                        <span>Assign to BDE Executive</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1803,6 +1926,150 @@ export default function ResellerLeads() {
                     className="px-5 py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover shadow-md shadow-primary/20"
                   >
                     Save Franchise Lead
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ASSIGN / REASSIGN BDE MODAL ──────────────────────────────────── */}
+      <AnimatePresence>
+        {assignModalLead && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-surface rounded-3xl shadow-2xl border border-border w-full max-w-lg overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b border-border bg-bg/50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600">
+                    <FiUserCheck size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-text-primary">
+                      {assignModalLead.bde || assignModalLead.bde_id ? "Reassign Franchisee Lead" : "Assign Lead to BDE"}
+                    </h2>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Delegate this partner prospect to a field Business Development Executive
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssignModalLead(null)}
+                  className="p-2 rounded-xl text-text-muted hover:bg-surface-hover hover:text-text-primary transition"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleConfirmAssignBde} className="p-5 space-y-4">
+                {/* Lead Summary Box */}
+                <div className="p-3.5 rounded-2xl bg-bg border border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Lead Target Details</span>
+                    {assignModalLead.selectedSolution && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-info-soft text-primary">
+                        {assignModalLead.selectedSolution}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-sm text-text-primary">{assignModalLead.businessName || assignModalLead.fullName}</p>
+                      <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1.5">
+                        <FiUser size={12} className="text-text-muted" />
+                        <span>{assignModalLead.fullName}</span>
+                        <span className="text-text-muted">•</span>
+                        <FiPhone size={12} className="text-text-muted" />
+                        <span>+91 {assignModalLead.mobileNumber}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 text-xs text-text-muted border-t border-border/60">
+                    <FiMapPin size={12} className="text-danger shrink-0" />
+                    <span className="font-medium text-text-secondary">
+                      {assignModalLead.district ? `${assignModalLead.district}, ${assignModalLead.state}` : assignModalLead.state}
+                    </span>
+                    {assignModalLead.pincode && (
+                      <span className="font-mono text-[10px] bg-surface px-1.5 py-0.5 rounded border border-border">
+                        PIN {assignModalLead.pincode}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* BDE Executive Selection Dropdown */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-text-primary">
+                    Select Target BDE Executive <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    value={selectedBdeId}
+                    onChange={(e) => setSelectedBdeId(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                  >
+                    <option value="">-- Choose Field BDE Executive --</option>
+                    {bdes.map((bde) => {
+                      const bdeKey = bde._id || bde.id;
+                      return (
+                        <option key={bdeKey} value={bdeKey}>
+                          {bde.full_name || bde.fullName} ({bde.bde_id || "BDE"}) — {bde.mobile_number || bde.mobile || bde.email}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[11px] text-text-muted">
+                    Assigned BDE will instantly receive an interactive push notification with a direct link to open this lead.
+                  </p>
+                </div>
+
+                {/* Admin Assignment Remarks / Instructions */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-text-primary">
+                    Assignment Instructions / Remarks <span className="text-text-muted font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Schedule immediate physical meeting, verify commercial showroom, discuss 10kW On-Grid combo kit..."
+                    value={assignRemarks}
+                    onChange={(e) => setAssignRemarks(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end items-center gap-3 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setAssignModalLead(null)}
+                    className="px-4 py-2.5 rounded-xl border border-border text-xs font-semibold text-text-secondary hover:bg-surface-hover transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={assigning || !selectedBdeId}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition"
+                  >
+                    {assigning ? (
+                      <>
+                        <FiLoader size={14} className="animate-spin" />
+                        <span>Assigning...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiSend size={14} />
+                        <span>Confirm Lead Assignment</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

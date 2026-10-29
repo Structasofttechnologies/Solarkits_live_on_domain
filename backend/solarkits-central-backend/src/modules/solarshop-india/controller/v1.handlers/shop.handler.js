@@ -3119,6 +3119,7 @@ const get_orders = async (req, res) => {
           estimated_delivery: o.dispatch_tracking?.estimated_delivery || null,
           dispatch_notes: o.dispatch_tracking?.dispatch_notes || null,
         },
+        assigned_vehicle: o.assigned_vehicle || null,
         items: enrichedItems,
         total_kits: enrichedItems.reduce((sum, i) => sum + (i.quantity || 1), 0),
         total_amount: totalAmount,
