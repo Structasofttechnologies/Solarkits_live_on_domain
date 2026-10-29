@@ -66,6 +66,18 @@ export default function CheckOut() {
   const [milestoneConfig, setMilestoneConfig] = useState(null);
   const [payFullAmount, setPayFullAmount] = useState(false);
 
+  // Detect whether current cart contains a trial kit order
+  const isTrialOrder = useMemo(() => {
+    return Boolean(cart?.some((item) => item?.is_trial_kit));
+  }, [cart]);
+
+  // If trial kit order, strictly enforce 100% full upfront payment
+  useEffect(() => {
+    if (isTrialOrder) {
+      setPayFullAmount(true);
+    }
+  }, [isTrialOrder]);
+
   // Timer State
   const [timerEnabled, setTimerEnabled] = useState(true);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -149,8 +161,8 @@ export default function CheckOut() {
     contact_phone: "",
   });
 
-  // ── Module 1.1: 3 Fulfillment Modes & Live Warehouse Capacity Check ────────
-  const [fulfillmentMode, setFulfillmentMode] = useState("franchisee_warehouse"); // 'franchisee_warehouse' | 'epc_warehouse' | 'direct_site'
+  // ── Module 1.1: Fulfillment Modes & Live Warehouse Capacity Check ──────────
+  const [fulfillmentMode, setFulfillmentMode] = useState("direct_site"); // 'direct_site' | 'epc_warehouse'
   const [capacityChecking, setCapacityChecking] = useState(false);
   const [capacityResult, setCapacityResult] = useState(null);
 
@@ -655,15 +667,17 @@ export default function CheckOut() {
       description: "Remaining balance payable before warehouse dispatch clearance",
     };
     const total = calculatedDiscounts.finalTotal || 0;
-    const m1Pct = Number(m1.percentage) || 30;
-    const m2Pct = Number(m2.percentage) || (100 - m1Pct);
-    const advanceAmount = Math.round((total * m1Pct) / 100);
-    const remainingAmount = Math.max(0, total - advanceAmount);
+
+    // Trial kits require 100% upfront payment (zero remaining balance)
+    const m1Pct = isTrialOrder ? 100 : (Number(m1.percentage) || 30);
+    const m2Pct = isTrialOrder ? 0 : (Number(m2.percentage) || (100 - m1Pct));
+    const advanceAmount = isTrialOrder ? total : Math.round((total * m1Pct) / 100);
+    const remainingAmount = isTrialOrder ? 0 : Math.max(0, total - advanceAmount);
 
     return {
       m1Pct,
-      m1Title: m1.title || "Milestone 1 — Advance Payment",
-      m1Desc: m1.description || "Advance payment at order placement",
+      m1Title: isTrialOrder ? "100% Full Payment (Trial Kit)" : (m1.title || "Milestone 1 — Advance Payment"),
+      m1Desc: isTrialOrder ? "Full order payment at checkout for trial kit" : (m1.description || "Advance payment at order placement"),
       advanceAmount,
       m2Pct,
       m2Title: m2.title || "Milestone 2 — Final Payment",
@@ -672,18 +686,18 @@ export default function CheckOut() {
       totalAmount: total,
       stages: milestoneConfig?.order_stages_config || [],
     };
-  }, [milestoneConfig, calculatedDiscounts.finalTotal]);
+  }, [milestoneConfig, calculatedDiscounts.finalTotal, isTrialOrder]);
 
   // Set default amount paid based on milestone advance or full amount
   useEffect(() => {
     if (calculatedDiscounts.finalTotal > 0) {
-      if (payFullAmount) {
+      if (isTrialOrder || payFullAmount) {
         setAmountPaid(String(calculatedDiscounts.finalTotal));
       } else if (milestoneBreakdown.advanceAmount > 0) {
         setAmountPaid(String(milestoneBreakdown.advanceAmount));
       }
     }
-  }, [calculatedDiscounts.finalTotal, milestoneBreakdown.advanceAmount, payFullAmount]);
+  }, [calculatedDiscounts.finalTotal, milestoneBreakdown.advanceAmount, payFullAmount, isTrialOrder]);
 
   const handleCopyText = (text, fieldName) => {
     navigator.clipboard.writeText(text);
@@ -823,11 +837,11 @@ export default function CheckOut() {
       };
 
       // Capacity Guard Validation
-      if (fulfillmentMode === "franchisee_warehouse" && capacityResult && capacityResult.allowed === false) {
+      if (fulfillmentMode === "epc_warehouse" && capacityResult && capacityResult.allowed === false) {
         dispatch(
           setAlert({
             type: "error",
-            message: "Franchisee warehouse is at capacity limit. Please select Direct Delivery or EPC Warehouse to proceed.",
+            message: "EPC warehouse is at capacity limit. Please select Direct Site Delivery to proceed.",
           })
         );
         setSubmitting(false);
@@ -866,8 +880,8 @@ export default function CheckOut() {
         setOrderConfirmed(true);
         setErrorMsg("");
         setLoading(false);
-        const isOnlineOrder = selectedPaymentMethod === "online" || 
-          orderData.payment_method === "icici_ecollection" || 
+        const isOnlineOrder = selectedPaymentMethod === "online" ||
+          orderData.payment_method === "icici_ecollection" ||
           orderData.payment_gateway_used === "icici_ecollection";
 
         dispatch(
@@ -937,19 +951,38 @@ export default function CheckOut() {
               {confirmedOrderData.offline_payment?.utr_number || utrNumber}
             </span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-text-secondary">Milestone 1 Advance Paid:</span>
-            <span className="font-black text-emerald-600 dark:text-emerald-400">
-              ₹{(confirmedOrderData.offline_payment?.amount_paid || milestoneBreakdown.advanceAmount).toLocaleString("en-IN")} ({milestoneBreakdown.m1Pct}%)
-            </span>
-          </div>
-          {milestoneBreakdown.remainingAmount > 0 && !payFullAmount && (
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-text-secondary">Milestone 2 Due Before Dispatch:</span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">
-                ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")} ({milestoneBreakdown.m2Pct}%)
-              </span>
-            </div>
+          {isTrialOrder || confirmedOrderData?.is_trial_order ? (
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">Total Amount Paid:</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400">
+                  ₹{(confirmedOrderData.offline_payment?.amount_paid || calculatedDiscounts.finalTotal).toLocaleString("en-IN")} (100% Full Payment)
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-text-secondary">Payment Terms:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  Trial Kit Order (Full Upfront Paid • Zero Balance Due)
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">Milestone 1 Advance Paid:</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400">
+                  ₹{(confirmedOrderData.offline_payment?.amount_paid || milestoneBreakdown.advanceAmount).toLocaleString("en-IN")} ({milestoneBreakdown.m1Pct}%)
+                </span>
+              </div>
+              {milestoneBreakdown.remainingAmount > 0 && !payFullAmount && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-text-secondary">Milestone 2 Due Before Dispatch:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                    ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")} ({milestoneBreakdown.m2Pct}%)
+                  </span>
+                </div>
+              )}
+            </>
           )}
           <div className="flex justify-between items-center">
             <span className="text-text-secondary">Verification Status:</span>
@@ -1108,11 +1141,10 @@ export default function CheckOut() {
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentMethod("online")}
-                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-                    selectedPaymentMethod === "online"
+                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${selectedPaymentMethod === "online"
                       ? "bg-[#264baa] text-white shadow-md shadow-[#264baa]/30"
                       : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-                  }`}
+                    }`}
                 >
                   <FiDollarSign className="text-base" />
                   <span>Instant Online Transfer (ICICI VAN)</span>
@@ -1120,11 +1152,10 @@ export default function CheckOut() {
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentMethod("offline")}
-                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-                    selectedPaymentMethod === "offline"
+                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${selectedPaymentMethod === "offline"
                       ? "bg-primary text-white shadow-md shadow-primary/30"
                       : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-                  }`}
+                    }`}
                 >
                   <FiUploadCloud className="text-base" />
                   <span>Offline Bank Transfer (UTR + Receipt)</span>
@@ -1324,49 +1355,35 @@ export default function CheckOut() {
               </div>
 
               <div className="space-y-4">
-                {/* ── Module 1.1: 3 Fulfillment Modes Selection ── */}
+                {/* ── Module 1.1: Fulfillment Modes Selection ── */}
                 <div className="space-y-3 pb-3 border-b border-border">
                   <label className="block text-xs font-black uppercase tracking-wider text-text-secondary">
                     Select Delivery Fulfillment Mode <span className="text-red-500">*</span>
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* Mode 1: Franchisee Warehouse */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Mode 1: Direct Site Address / Pincode Delivery */}
                     <div
-                      onClick={() => setFulfillmentMode("franchisee_warehouse")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "franchisee_warehouse"
+                      onClick={() => setFulfillmentMode("direct_site")}
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "direct_site"
                         ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
                         : "border-border bg-surface hover:border-primary/50"
                         }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-2xl">🏬</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "franchisee_warehouse" ? "border-primary bg-primary text-white" : "border-border"
+                          <span className="text-2xl">🚚</span>
+                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "direct_site" ? "border-primary bg-primary text-white" : "border-border"
                             }`}>
-                            {fulfillmentMode === "franchisee_warehouse" && <FiCheck size={10} />}
+                            {fulfillmentMode === "direct_site" && <FiCheck size={10} />}
                           </span>
                         </div>
-                        <h4 className="font-extrabold text-sm text-text-primary">Franchisee Warehouse</h4>
+                        <h4 className="font-extrabold text-sm text-text-primary">Direct Site Delivery</h4>
                         <p className="text-[11px] text-text-secondary leading-relaxed">
-                          Delivery to nearest authorized Franchisee Regional Hub Warehouse.
+                          Transport directly unloaded at the installation site address or pincode.
                         </p>
                       </div>
-
-                      {/* Live Capacity Validation Indicator */}
-                      <div className="mt-3 pt-2 border-t border-border/60">
-                        {capacityChecking ? (
-                          <span className="text-[10px] text-primary flex items-center gap-1 font-semibold animate-pulse">
-                            Checking live warehouse capacity...
-                          </span>
-                        ) : capacityResult?.allowed === false ? (
-                          <div className="p-1.5 bg-red-500/10 border border-red-500/30 rounded-lg text-[10px] text-red-600 font-bold flex items-center gap-1">
-                            <FiAlertTriangle className="shrink-0" /> At Capacity Limit ({capacityResult?.available_kits || 0} left)
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                            <FiCheckCircle className="shrink-0" /> Available Capacity Verified
-                          </div>
-                        )}
+                      <div className="mt-3 pt-2 border-t border-border/60 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                        <FiCheckCircle /> Site Pincode Delivery
                       </div>
                     </div>
 
@@ -1395,42 +1412,16 @@ export default function CheckOut() {
                         Central Direct Dispatch
                       </div>
                     </div>
-
-                    {/* Mode 3: Direct Site Address / Pincode Delivery */}
-                    <div
-                      onClick={() => setFulfillmentMode("direct_site")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "direct_site"
-                        ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
-                        : "border-border bg-surface hover:border-primary/50"
-                        }`}
-                    >
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-2xl">🚚</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "direct_site" ? "border-primary bg-primary text-white" : "border-border"
-                            }`}>
-                            {fulfillmentMode === "direct_site" && <FiCheck size={10} />}
-                          </span>
-                        </div>
-                        <h4 className="font-extrabold text-sm text-text-primary">Direct Site Delivery</h4>
-                        <p className="text-[11px] text-text-secondary leading-relaxed">
-                          Transport directly unloaded at the installation site address or pincode.
-                        </p>
-                      </div>
-                      <div className="mt-3 pt-2 border-t border-border/60 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                        <FiCheckCircle /> Site Pincode Delivery
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Capacity Warning Banner if Franchisee Warehouse is full */}
-                  {fulfillmentMode === "franchisee_warehouse" && capacityResult?.allowed === false && (
+                  {/* Capacity Warning Banner if EPC Warehouse is full */}
+                  {fulfillmentMode === "epc_warehouse" && capacityResult?.allowed === false && (
                     <div className="p-3 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2 animate-in fade-in duration-200">
                       <FiAlertTriangle className="text-amber-600 text-base shrink-0 mt-0.5" />
                       <div>
-                        <strong className="block font-bold">Franchisee warehouse at capacity limit.</strong>
+                        <strong className="block font-bold">EPC Warehouse at capacity limit.</strong>
                         <span>
-                          {capacityResult?.reason || "Current stored inventory and incoming reserved commitments have reached storage limits."} Please select <strong>Direct Delivery</strong> or <strong>EPC Warehouse</strong> above.
+                          {capacityResult?.reason || "Current stored inventory and incoming reserved commitments have reached storage limits."} Please select <strong>Direct Site Delivery</strong> above.
                         </span>
                       </div>
                     </div>
@@ -1528,107 +1519,143 @@ export default function CheckOut() {
             <div className="bg-surface p-6 rounded-2xl border border-border shadow-sm space-y-5">
               <div className="border-b border-border pb-3">
                 <h3 className="text-lg font-black text-text-primary dark:text-white flex items-center gap-2">
-                  <FiUploadCloud className="text-primary" /> Step 2: Payment Milestones & Receipt Upload
+                  <FiUploadCloud className="text-primary" /> {isTrialOrder ? "Step 2: Full Payment & Receipt Upload (Trial Order)" : "Step 2: Payment Milestones & Receipt Upload"}
                 </h3>
                 <p className="text-xs text-text-secondary mt-0.5">
-                  Admin-configured payment milestones applied. Pay advance to confirm order; remaining balance due before warehouse dispatch.
+                  {isTrialOrder
+                    ? "Trial kit orders require 100% upfront payment (materials + freight). Payment milestones do not apply."
+                    : "Admin-configured payment milestones applied. Pay advance to confirm order; remaining balance due before warehouse dispatch."}
                 </p>
               </div>
 
-              {/* ── Product Payment Milestone Breakdown Card ── */}
-              <div className="bg-gradient-to-br from-amber-500/10 via-surface to-blue-500/10 p-4 sm:p-5 rounded-2xl border border-amber-500/30 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-md">
-                      Official Payment Milestone Policy
+              {/* ── Payment Policy Card: Trial Kit (100% Full) vs Milestone Breakdown ── */}
+              {isTrialOrder ? (
+                <div className="bg-gradient-to-br from-emerald-500/10 via-surface to-amber-500/10 p-4 sm:p-5 rounded-2xl border border-emerald-500/30 space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Trial Kit Order Policy • 100% Upfront Payment
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-text-secondary bg-surface px-3 py-1 rounded-lg border border-border">
+                      Total Order Value: <strong className="text-text-primary dark:text-white">₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")}</strong>
                     </span>
-                    <h4 className="text-sm font-black text-text-primary dark:text-white mt-1">
-                      {milestoneConfig?.rule_name || "Product Payment Milestone Schedule"}
-                    </h4>
-                  </div>
-                  <span className="text-xs font-bold text-text-secondary bg-surface px-2.5 py-1 rounded-lg border border-border">
-                    Total Order Value: <strong className="text-text-primary dark:text-white">₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")}</strong>
-                  </span>
-                </div>
-
-                {/* Milestone Stepper */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  {/* Milestone 1 (Advance) */}
-                  <div className={`p-3.5 rounded-xl border-2 transition-all ${!payFullAmount ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm" : "bg-surface border-border"}`}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-extrabold uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                        {milestoneBreakdown.m1Title} ({milestoneBreakdown.m1Pct}%)
-                      </span>
-                      <span className="font-black text-amber-800 dark:text-amber-200 text-sm">
-                        ₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-text-secondary leading-relaxed">
-                      {milestoneBreakdown.m1Desc}
-                    </p>
-                    <div className="mt-2 text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                      ● Status: Due Now at Order Placement
-                    </div>
                   </div>
 
-                  {/* Milestone 2 (Before Dispatch) */}
-                  <div className={`p-3.5 rounded-xl border transition-all ${payFullAmount ? "bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/20 shadow-sm" : "bg-surface border-border"}`}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-extrabold uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                        {milestoneBreakdown.m2Title} ({milestoneBreakdown.m2Pct}%)
-                      </span>
-                      <span className="font-black text-blue-800 dark:text-blue-200 text-sm">
-                        ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")}
-                      </span>
+                  <div className="p-4 rounded-xl bg-surface border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-text-primary dark:text-white flex items-center gap-1.5">
+                        <span className="text-emerald-600 dark:text-emerald-400">✓</span> Single Full Payment (No Milestone Split)
+                      </h4>
+                      <p className="text-xs text-text-secondary mt-1 max-w-xl">
+                        Trial kit orders are shipped directly from warehouse buffer stock for field quality testing. As per policy, partial milestone payments are not applicable. 100% payment is collected upfront for immediate dispatch clearance.
+                      </p>
                     </div>
-                    <p className="text-[11px] text-text-secondary leading-relaxed">
-                      {milestoneBreakdown.m2Desc}
-                    </p>
-                    <div className="mt-2 text-[10px] font-bold text-blue-700 dark:text-blue-400">
-                      ○ Status: Due Before Warehouse Dispatch
+                    <div className="text-right shrink-0 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-2 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300 block">Payable Today</span>
+                      <span className="text-base font-black text-emerald-800 dark:text-emerald-200">
+                        ₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")}
+                      </span>
+                      <span className="text-[10px] text-text-muted block">Zero balance due later</span>
                     </div>
                   </div>
                 </div>
-
-                {/* Payment Selection Options */}
-                <div className="pt-2 border-t border-border/60 flex flex-col sm:flex-row gap-3">
-                  <label
-                    onClick={() => setPayFullAmount(false)}
-                    className={`flex-1 flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${!payFullAmount ? "border-amber-500 bg-amber-500/5 font-bold text-amber-900 dark:text-amber-200" : "border-border bg-surface text-text-secondary"}`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment_plan"
-                      checked={!payFullAmount}
-                      onChange={() => setPayFullAmount(false)}
-                      className="text-amber-600 focus:ring-amber-500"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-bold">Pay {milestoneBreakdown.m1Pct}% Advance (₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")})</span>
-                      <span className="text-[10px] font-normal opacity-80">Remaining ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")} payable before dispatch</span>
+              ) : (
+                <div className="bg-gradient-to-br from-amber-500/10 via-surface to-blue-500/10 p-4 sm:p-5 rounded-2xl border border-amber-500/30 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-md">
+                        Official Payment Milestone Policy
+                      </span>
+                      <h4 className="text-sm font-black text-text-primary dark:text-white mt-1">
+                        {milestoneConfig?.rule_name || "Product Payment Milestone Schedule"}
+                      </h4>
                     </div>
-                  </label>
+                    <span className="text-xs font-bold text-text-secondary bg-surface px-2.5 py-1 rounded-lg border border-border">
+                      Total Order Value: <strong className="text-text-primary dark:text-white">₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")}</strong>
+                    </span>
+                  </div>
 
-                  <label
-                    onClick={() => setPayFullAmount(true)}
-                    className={`flex-1 flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${payFullAmount ? "border-blue-500 bg-blue-500/5 font-bold text-blue-900 dark:text-blue-200" : "border-border bg-surface text-text-secondary"}`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment_plan"
-                      checked={payFullAmount}
-                      onChange={() => setPayFullAmount(true)}
-                      className="text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-bold">Pay 100% Full Order (₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")})</span>
-                      <span className="text-[10px] font-normal opacity-80">Clear full payment now for direct express dispatch</span>
+                  {/* Milestone Stepper */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {/* Milestone 1 (Advance) */}
+                    <div className={`p-3.5 rounded-xl border-2 transition-all ${!payFullAmount ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm" : "bg-surface border-border"}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-extrabold uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                          {milestoneBreakdown.m1Title} ({milestoneBreakdown.m1Pct}%)
+                        </span>
+                        <span className="font-black text-amber-800 dark:text-amber-200 text-sm">
+                          ₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-text-secondary leading-relaxed">
+                        {milestoneBreakdown.m1Desc}
+                      </p>
+                      <div className="mt-2 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                        ● Status: Due Now at Order Placement
+                      </div>
                     </div>
-                  </label>
+
+                    {/* Milestone 2 (Before Dispatch) */}
+                    <div className={`p-3.5 rounded-xl border transition-all ${payFullAmount ? "bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/20 shadow-sm" : "bg-surface border-border"}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-extrabold uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          {milestoneBreakdown.m2Title} ({milestoneBreakdown.m2Pct}%)
+                        </span>
+                        <span className="font-black text-blue-800 dark:text-blue-200 text-sm">
+                          ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-text-secondary leading-relaxed">
+                        {milestoneBreakdown.m2Desc}
+                      </p>
+                      <div className="mt-2 text-[10px] font-bold text-blue-700 dark:text-blue-400">
+                        ○ Status: Due Before Warehouse Dispatch
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Selection Options */}
+                  <div className="pt-2 border-t border-border/60 flex flex-col sm:flex-row gap-3">
+                    <label
+                      onClick={() => setPayFullAmount(false)}
+                      className={`flex-1 flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${!payFullAmount ? "border-amber-500 bg-amber-500/5 font-bold text-amber-900 dark:text-amber-200" : "border-border bg-surface text-text-secondary"}`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_plan"
+                        checked={!payFullAmount}
+                        onChange={() => setPayFullAmount(false)}
+                        className="text-amber-600 focus:ring-amber-500"
+                      />
+                      <div className="text-xs">
+                        <span className="block font-bold">Pay {milestoneBreakdown.m1Pct}% Advance (₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")})</span>
+                        <span className="text-[10px] font-normal opacity-80">Remaining ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")} payable before dispatch</span>
+                      </div>
+                    </label>
+
+                    <label
+                      onClick={() => setPayFullAmount(true)}
+                      className={`flex-1 flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${payFullAmount ? "border-blue-500 bg-blue-500/5 font-bold text-blue-900 dark:text-blue-200" : "border-border bg-surface text-text-secondary"}`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_plan"
+                        checked={payFullAmount}
+                        onChange={() => setPayFullAmount(true)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="text-xs">
+                        <span className="block font-bold">Pay 100% Full Order (₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")})</span>
+                        <span className="text-[10px] font-normal opacity-80">Clear full payment now for direct express dispatch</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -1645,17 +1672,26 @@ export default function CheckOut() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
-                    Amount Paid (₹) <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-text-primary dark:text-white">
+                      Amount Paid (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
+                      🔒 Fixed / System Calculated
+                    </span>
+                  </div>
                   <CustomInput
                     type="number"
                     placeholder="Order Total Amount"
                     value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    required
+                    readOnly
                     className="font-bold font-mono"
                   />
+                  <p className="text-[10px] text-text-secondary mt-1">
+                    {isTrialOrder
+                      ? "✓ Locked at 100% Full Payment for Trial Kit (No balance due)."
+                      : `Amount is locked based on your selected preference (${!payFullAmount ? `${milestoneBreakdown.m1Pct}% Advance` : "100% Full Payment"}).`}
+                  </p>
                 </div>
 
                 <div>
@@ -1809,28 +1845,45 @@ export default function CheckOut() {
                   ₹{calculatedDiscounts.finalTotal.toLocaleString("en-IN")}
                 </span>
               </div>
-              <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 space-y-1">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-amber-800 dark:text-amber-200">
-                    Milestone 1 Advance Due Now ({milestoneBreakdown.m1Pct}%):
-                  </span>
-                  <span className="font-black text-amber-800 dark:text-amber-200 text-sm">
-                    ₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")}
-                  </span>
-                </div>
-                {!payFullAmount && (
-                  <div className="flex justify-between items-center text-[11px] text-text-secondary pt-1 border-t border-amber-500/10">
-                    <span>Milestone 2 Before Dispatch ({milestoneBreakdown.m2Pct}%):</span>
-                    <span className="font-bold text-text-primary dark:text-white">
-                      ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")}
+              {isTrialOrder ? (
+                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                      Trial Order Payment Plan:
+                    </span>
+                    <span className="font-black text-emerald-800 dark:text-emerald-300 text-xs uppercase">
+                      100% Upfront (No Milestones)
                     </span>
                   </div>
-                )}
-              </div>
+                  <div className="flex justify-between items-center text-[11px] text-text-secondary pt-1 border-t border-emerald-500/10">
+                    <span>Balance Due Before Dispatch:</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">₹0 (Zero)</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-amber-800 dark:text-amber-200">
+                      Milestone 1 Advance Due Now ({milestoneBreakdown.m1Pct}%):
+                    </span>
+                    <span className="font-black text-amber-800 dark:text-amber-200 text-sm">
+                      ₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  {!payFullAmount && (
+                    <div className="flex justify-between items-center text-[11px] text-text-secondary pt-1 border-t border-amber-500/10">
+                      <span>Milestone 2 Before Dispatch ({milestoneBreakdown.m2Pct}%):</span>
+                      <span className="font-bold text-text-primary dark:text-white">
+                        ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between items-baseline pt-1">
                 <span className="font-black text-text-primary dark:text-white">Amount Due Today:</span>
                 <span className="text-2xl font-black text-primary">
-                  ₹{(payFullAmount ? calculatedDiscounts.finalTotal : milestoneBreakdown.advanceAmount).toLocaleString("en-IN")}
+                  ₹{(isTrialOrder || payFullAmount ? calculatedDiscounts.finalTotal : milestoneBreakdown.advanceAmount).toLocaleString("en-IN")}
                 </span>
               </div>
             </div>

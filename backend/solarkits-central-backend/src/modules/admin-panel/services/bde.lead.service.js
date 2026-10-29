@@ -568,17 +568,25 @@ async function reassignLead(leadId, newBdeId, adminUser, reason) {
   if (prevBde) {
     await BDENotification.create({
       bde_id: prevBde._id,
-      type: 'goal',
+      type: 'lead',
       title: 'Lead Reassigned',
       message: `Lead ${lead.lead_id} (${lead.company_name}) has been reassigned to ${newBde.full_name}.`,
+      link: '/leads',
+      action_label: 'View Leads',
+      entity_type: 'bde_lead',
+      entity_id: lead._id,
     });
   }
 
   await BDENotification.create({
     bde_id: newBde._id,
-    type: 'goal',
-    title: 'New Lead Reassigned to You',
+    type: 'lead',
+    title: 'New Lead Reassigned to You 🎯',
     message: `Lead ${lead.lead_id} (${lead.company_name}) has been assigned to your pipeline.`,
+    link: '/leads',
+    action_label: 'Open Lead Pipeline',
+    entity_type: 'bde_lead',
+    entity_id: lead._id,
   });
 
   return lead;
@@ -749,6 +757,34 @@ async function getBdeDashboardMetrics(bdeId) {
   };
 }
 
+async function sendBdeNotification({
+  bde_id,
+  title,
+  message,
+  type = 'general',
+  link = null,
+  action_label = null,
+  entity_type = null,
+  entity_id = null,
+}) {
+  try {
+    if (!bde_id || !title || !message) return null;
+    return await BDENotification.create({
+      bde_id,
+      title: title.trim(),
+      message: message.trim(),
+      type,
+      link: link || null,
+      action_label: action_label || null,
+      entity_type: entity_type || null,
+      entity_id: entity_id ? String(entity_id) : null,
+    });
+  } catch (err) {
+    console.warn('[sendBdeNotification warning]:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   validateLeadDuplicates,
   validateBdeTerritory,
@@ -759,4 +795,5 @@ module.exports = {
   reassignLead,
   reassignFranchisee,
   getBdeDashboardMetrics,
+  sendBdeNotification,
 };

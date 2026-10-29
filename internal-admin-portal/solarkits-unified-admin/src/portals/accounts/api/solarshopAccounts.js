@@ -158,6 +158,13 @@ export const assignFpoVehicle = async (id, data) => {
   return res.data;
 };
 
+export const updateOrderDeliveryEta = async (orderType, id, data) => {
+  const res = await axios.post(`${BASE_URL}/orders/${orderType || 'epc'}/${id}/update-eta`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 export const advanceOrderStage = async (orderType, id, stage, data = {}) => {
   const res = await axios.post(`${BASE_URL}/orders/${orderType || 'po'}/${id}/stage/${stage}`, data, { headers: authHeaderObj() });
   return res.data;

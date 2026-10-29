@@ -77,6 +77,26 @@ router.put(
   handler.update_lead_status
 );
 
+router.put(
+  '/:id/assign-bde',
+  check_auth,
+  check_permissions([
+    { unique_code: 'RSL_MGMT', permissions: ['edit'] },
+    { unique_code: 'RSL_PLAN', permissions: ['edit'] },
+  ]),
+  handler.assign_lead_to_bde
+);
+
+router.put(
+  '/assign-bde',
+  check_auth,
+  check_permissions([
+    { unique_code: 'RSL_MGMT', permissions: ['edit'] },
+    { unique_code: 'RSL_PLAN', permissions: ['edit'] },
+  ]),
+  handler.assign_lead_to_bde
+);
+
 router.delete(
   '/delete',
   check_auth,

@@ -20,6 +20,8 @@ const {
   ResellerKyc,
   SolarShopSettings,
   BDEProfile,
+  BDELead,
+  BDENotification,
 } = require('../models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { logAudit } = require('../utils/audit.service');
@@ -988,6 +990,147 @@ const delete_lead = async (req, res) => {
   }
 };
 
+// ─── 7. ASSIGN / REASSIGN LEAD TO BDE ───────────────────────────────────────
+/**
+ * PUT /admin-api/resellers/leads/:id/assign-bde
+ * PUT /admin-api/resellers/leads/assign-bde
+ * Body: { bde_id, remarks }
+ */
+const assign_lead_to_bde = async (req, res) => {
+  try {
+    const leadId = req.params.id || req.body?.lead_id || req.body?.id;
+    const { bde_id, remarks } = req.body;
+
+    if (!leadId || !mongoose.Types.ObjectId.isValid(leadId)) {
+      return res.status(400).json({ status: 'error', message: 'Valid Lead ID is required' });
+    }
+
+    if (!bde_id || !mongoose.Types.ObjectId.isValid(bde_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid BDE ID is required' });
+    }
+
+    const lead = await FranchiseLead.findById(leadId);
+    if (!lead || lead.deleted_at) {
+      return res.status(404).json({ status: 'error', message: 'Lead not found or has been deleted' });
+    }
+
+    const bde = await BDEProfile.findById(bde_id);
+    if (!bde || bde.deleted_at) {
+      return res.status(404).json({ status: 'error', message: 'Selected BDE Profile not found' });
+    }
+
+    const previousBdeId = lead.bde_id;
+    lead.bde_id = bde._id;
+    if (!lead.original_bde_id) {
+      lead.original_bde_id = bde._id;
+    }
+
+    const timestampStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const assignmentNote = `[${timestampStr}] Assigned to BDE ${bde.full_name} (${bde.bde_id})${remarks ? `: ${remarks.trim()}` : ''}`;
+    lead.admin_remarks = lead.admin_remarks ? `${lead.admin_remarks}\n${assignmentNote}` : assignmentNote;
+
+    // Synchronize or create BDELead record so the lead shows in the BDE Portal
+    let bdeLead = null;
+    if (lead.bde_lead_id) {
+      bdeLead = await BDELead.findById(lead.bde_lead_id);
+    }
+
+    if (!bdeLead) {
+      bdeLead = await BDELead.findOne({
+        deleted_at: null,
+        $or: [
+          { mobile_number: lead.mobile_number },
+          { email: lead.email },
+        ],
+      });
+    }
+
+    const { generateNextLeadId, sendBdeNotification } = require('../services/bde.lead.service');
+
+    if (bdeLead) {
+      bdeLead.current_bde_id = bde._id;
+      if (!bdeLead.original_bde_id) {
+        bdeLead.original_bde_id = bde._id;
+      }
+      bdeLead.lead_source = 'head_office_assigned';
+      bdeLead.notes = bdeLead.notes ? `${bdeLead.notes}\n${assignmentNote}` : assignmentNote;
+      await bdeLead.save();
+    } else {
+      const newLeadId = await generateNextLeadId();
+      bdeLead = await BDELead.create({
+        lead_id: newLeadId,
+        prospect_name: lead.full_name,
+        company_name: lead.business_name,
+        mobile_number: lead.mobile_number,
+        email: lead.email,
+        gst_number: lead.gstin || null,
+        gst_verified: lead.gst_verified || false,
+        gst_legal_name: lead.gst_legal_name || null,
+        gst_trade_name: lead.gst_trade_name || null,
+        state_name: lead.state,
+        district_name: lead.district,
+        pincode: lead.pincode || null,
+        address_line: `${lead.district}, ${lead.state}`,
+        lead_source: 'head_office_assigned',
+        lead_status: lead.status === 'APPROVED_CONVERTED' ? 'completed' : 'new_lead',
+        created_by_bde_id: bde._id,
+        original_bde_id: bde._id,
+        current_bde_id: bde._id,
+        notes: remarks || 'Lead received via Head Office and assigned to territory BDE.',
+      });
+    }
+
+    lead.bde_lead_id = bdeLead._id;
+    await lead.save();
+
+    // Trigger Notification for BDE
+    await sendBdeNotification({
+      bde_id: bde._id,
+      title: 'New Franchisee Lead Assigned! 🎯',
+      message: `Admin assigned lead "${lead.business_name || lead.full_name}" (${lead.district}, ${lead.state}) to you. Please initiate follow-up.`,
+      type: 'lead',
+      link: '/leads',
+      action_label: 'View Franchisee Lead',
+      entity_type: 'franchise_lead',
+      entity_id: lead._id,
+    });
+
+    logAudit({
+      user_id: req.user?._id || req.user?.id,
+      action: 'ASSIGN_LEAD_TO_BDE',
+      module: 'RESELLER_LEADS',
+      details: {
+        lead_id: lead._id,
+        previous_bde_id: previousBdeId,
+        assigned_bde_id: bde._id,
+        bde_name: bde.full_name,
+        bde_code: bde.bde_id,
+        remarks,
+      },
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Lead successfully assigned to BDE ${bde.full_name} (${bde.bde_id})`,
+      data: {
+        lead_id: lead._id,
+        bde_id: bde._id,
+        bde_lead_id: bdeLead._id,
+        bde: {
+          id: bde._id,
+          fullName: bde.full_name,
+          bdeId: bde.bde_id,
+          mobile: bde.mobile_number,
+          email: bde.email,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.leads] assign_lead_to_bde error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to assign lead to BDE' });
+  }
+};
+
 module.exports = {
   generate_lead_gst_otp,
   verify_lead_gst_otp,
@@ -997,5 +1140,6 @@ module.exports = {
   approve_lead_as_franchisee,
   add_manual_lead,
   delete_lead,
+  assign_lead_to_bde,
 };
 

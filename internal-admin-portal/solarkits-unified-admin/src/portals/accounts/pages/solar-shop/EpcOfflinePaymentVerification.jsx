@@ -395,12 +395,15 @@ export default function EpcOfflinePaymentVerification() {
                       )}
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
-                      <div>₹{Number(o.amount_paid).toLocaleString("en-IN")}</div>
                       {o.payment_milestones && (
-                        <div className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                          {o.payment_milestones.milestone_verification_status === "final_payment_pending_verification"
-                            ? "Milestone 2 (70% Final)"
-                            : `Milestone 1 (${o.payment_milestones.advance_percentage || 30}% Adv)`}
+                        <div className="text-[10px] font-semibold mt-0.5">
+                          {o.is_trial_order || o.order_type === "trial_order" || o.payment_milestones.remaining_percentage === 0 ? (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">100% Full Payment (Trial)</span>
+                          ) : o.payment_milestones.milestone_verification_status === "final_payment_pending_verification" ? (
+                            <span className="text-purple-600 dark:text-purple-400">Milestone 2 ({o.payment_milestones.remaining_percentage || 70}% Final)</span>
+                          ) : (
+                            <span className="text-amber-600 dark:text-amber-400">Milestone 1 ({o.payment_milestones.advance_percentage || 30}% Adv)</span>
+                          )}
                         </div>
                       )}
                     </td>

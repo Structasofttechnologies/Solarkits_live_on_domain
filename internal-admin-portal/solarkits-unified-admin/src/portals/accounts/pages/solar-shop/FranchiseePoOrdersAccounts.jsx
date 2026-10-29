@@ -34,29 +34,54 @@ import Product8StageJourneyModal from "../../components/Product8StageJourneyModa
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+const parseKitCapacity = (val, name = "") => {
+  if (typeof val === "number" && !isNaN(val) && val > 0) return val;
+  if (val != null) {
+    const s = String(val).replace(/kw/ig, "").trim();
+    const match = s.match(/(\d+(?:\.\d+)?)/);
+    if (match) {
+      const num = parseFloat(match[1]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+  if (name) {
+    const kwMatch = String(name).match(/(\d+(?:\.\d+)?)\s*(?:k\.?\s*w\.?|kw|kilowatt)/i);
+    if (kwMatch) {
+      const num = parseFloat(kwMatch[1]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    const anyMatch = String(name).match(/(\d+(?:\.\d+)?)/);
+    if (anyMatch) {
+      const num = parseFloat(anyMatch[1]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+  return 3;
+};
+
 const STATUS_BADGES = {
-  DRAFT:               { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300" },
-  SUBMITTED:           { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
-  PENDING_APPROVAL:    { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
-  CHANGES_REQUESTED:   { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
-  APPROVED:            { label: "Approved (Awaiting Payment)", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
-  REJECTED:            { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400" },
-  AWAITING_PAYMENT:    { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
-  PARTIALLY_PAID:      { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400" },
-  VALIDATED:           { label: "Validated (Active PO Quota)", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300" },
-  PAID:                { label: "1. Confirmed (Paid)", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  CONFIRMED:           { label: "1. Confirmed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  STOCK_ALLOCATED:     { label: "2. Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
-  PROCESSING:          { label: "2. Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
-  VEHICLE_ASSIGNED:    { label: "3. Vehicle Assigned", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-300" },
-  READY_FOR_DISPATCH:  { label: "4. Ready for Dispatch", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300" },
-  PARTIALLY_DISPATCHED:{ label: "5. Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
-  DISPATCHED:          { label: "5. Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
-  IN_TRANSIT:          { label: "6. In Transit", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+  DRAFT: { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300" },
+  SUBMITTED: { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
+  PENDING_APPROVAL: { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
+  CHANGES_REQUESTED: { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
+  APPROVED: { label: "Approved (Awaiting Payment)", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
+  REJECTED: { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400" },
+  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
+  PARTIALLY_PAID: { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400" },
+  VALIDATED: { label: "Validated (Active PO Quota)", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300" },
+  PAID: { label: "1. Confirmed (Paid)", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  CONFIRMED: { label: "1. Confirmed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  STOCK_ALLOCATED: { label: "2. Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
+  PROCESSING: { label: "2. Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
+  VEHICLE_ASSIGNED: { label: "3. Vehicle Assigned", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-300" },
+  READY_FOR_DISPATCH: { label: "4. Ready for Dispatch", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300" },
+  PARTIALLY_DISPATCHED: { label: "5. Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
+  DISPATCHED: { label: "5. Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
+  IN_TRANSIT: { label: "6. In Transit", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
   REACHED_DESTINATION: { label: "7. Reached Dest.", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-700 dark:text-teal-300" },
-  DELIVERED:           { label: "8. Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  COMPLETED:           { label: "8. Settled & Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  CANCELLED:           { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400" },
+  DELIVERED: { label: "8. Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  COMPLETED: { label: "8. Settled & Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  CANCELLED: { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400" },
 };
 
 function getStageBadgeText(status) {
@@ -286,9 +311,8 @@ export default function FranchiseePoOrdersAccounts() {
       {/* Alert Banner */}
       {alertMsg && (
         <div
-          className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${
-            alertMsg.type === "success" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600" : "bg-red-500/10 border-red-500/30 text-red-600"
-          }`}
+          className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${alertMsg.type === "success" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600" : "bg-red-500/10 border-red-500/30 text-red-600"
+            }`}
         >
           <span>{alertMsg.text}</span>
           <button onClick={() => setAlertMsg(null)} className="cursor-pointer font-black text-sm">✕</button>
@@ -455,13 +479,12 @@ export default function FranchiseePoOrdersAccounts() {
                             year: "numeric",
                           })}
                         </div>
-                        <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
-                          isCombinePo
+                        <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${isCombinePo
                             ? "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                             : allocationsList.length > 0
                               ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                               : "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300"
-                        }`}>
+                          }`}>
                           {isCombinePo
                             ? `Combine PO (${allocationsList.length} EPCs)`
                             : allocationsList.length > 0
@@ -500,7 +523,7 @@ export default function FranchiseePoOrdersAccounts() {
                               {item.item_name || "Solar Kit"}
                             </div>
                             <div className="text-[10px] text-text-muted">
-                              {item.capacity || 3} kW • {item.brand_name || "Tier-1"}
+                              {parseKitCapacity(item.capacity, item.item_name)} kW • {item.brand_name || "Tier-1"}
                             </div>
                           </div>
                         </div>
@@ -530,11 +553,10 @@ export default function FranchiseePoOrdersAccounts() {
                         <div className="font-mono font-black text-text-primary text-xs">
                           ₹{tokenAmt.toLocaleString("en-IN")}
                         </div>
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black mt-1 ${
-                          tokenStatus === "PAID"
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black mt-1 ${tokenStatus === "PAID"
                             ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                             : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                        }`}>
+                          }`}>
                           {tokenStatus === "PAID" ? "✓ Verified Token" : "⏳ Token Pending"}
                         </span>
                       </td>
@@ -592,7 +614,7 @@ export default function FranchiseePoOrdersAccounts() {
       {/* ── UNIFIED 4-TAB MASTER PO HUB MODAL ──────────────────────────────── */}
       {selectedOrder && (() => {
         const orderItem = selectedOrder.items?.[0] || {};
-        const kitCapacity = orderItem.capacity || 3;
+        const kitCapacity = parseKitCapacity(orderItem.capacity, orderItem.item_name);
         const bookedQuota = selectedOrder.total_booked_quantity || selectedOrder.total_quantity || orderItem.quantity || 1;
         const fulfilledQuota = selectedOrder.fulfilled_quantity || 0;
         const remainingQuota = selectedOrder.remaining_quantity != null ? selectedOrder.remaining_quantity : Math.max(0, bookedQuota - fulfilledQuota);
@@ -616,7 +638,7 @@ export default function FranchiseePoOrdersAccounts() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
             <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-surface border-2 border-border shadow-2xl overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-200">
-              
+
               {/* Header */}
               <div className="p-5 sm:p-6 border-b border-border flex items-center justify-between bg-surface-hover/40">
                 <div>
@@ -649,11 +671,10 @@ export default function FranchiseePoOrdersAccounts() {
               <div className="flex items-center px-6 border-b border-border bg-surface text-xs font-bold overflow-x-auto gap-2">
                 <button
                   onClick={() => setModalTab("overview")}
-                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-                    modalTab === "overview"
+                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${modalTab === "overview"
                       ? "border-primary text-primary font-black"
                       : "border-transparent text-text-muted hover:text-text-primary"
-                  }`}
+                    }`}
                 >
                   <FaLayerGroup size={13} />
                   <span>1. Live Quota & Overview</span>
@@ -661,11 +682,10 @@ export default function FranchiseePoOrdersAccounts() {
 
                 <button
                   onClick={() => setModalTab("token")}
-                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-                    modalTab === "token"
+                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${modalTab === "token"
                       ? "border-primary text-primary font-black"
                       : "border-transparent text-text-muted hover:text-text-primary"
-                  }`}
+                    }`}
                 >
                   <FaMoneyBillWave size={13} />
                   <span>2. Token Escrow & Verification</span>
@@ -676,11 +696,10 @@ export default function FranchiseePoOrdersAccounts() {
 
                 <button
                   onClick={() => setModalTab("epc_pool")}
-                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-                    modalTab === "epc_pool"
+                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${modalTab === "epc_pool"
                       ? "border-primary text-primary font-black"
                       : "border-transparent text-text-muted hover:text-text-primary"
-                  }`}
+                    }`}
                 >
                   <FaUsers size={13} />
                   <span>3. Onboarded EPC Pool</span>
@@ -691,11 +710,10 @@ export default function FranchiseePoOrdersAccounts() {
 
                 <button
                   onClick={() => setModalTab("repeat_orders")}
-                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-                    modalTab === "repeat_orders"
+                  className={`py-3 px-4 border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${modalTab === "repeat_orders"
                       ? "border-primary text-primary font-black"
                       : "border-transparent text-text-muted hover:text-text-primary"
-                  }`}
+                    }`}
                 >
                   <FaShoppingCart size={13} />
                   <span>4. Linked Repeat Orders / Drawdowns</span>
@@ -914,9 +932,8 @@ export default function FranchiseePoOrdersAccounts() {
                         <span className="font-black text-text-primary text-sm flex items-center gap-2">
                           <FaLock className="text-primary" /> Token Deposit & Escrow Accounting
                         </span>
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-black ${
-                          isTokenPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                        }`}>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-black ${isTokenPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                          }`}>
                           {isTokenPaid ? "✓ Token Verified & Active" : "⏳ Token Pending Verification"}
                         </span>
                       </div>
@@ -1221,9 +1238,8 @@ export default function FranchiseePoOrdersAccounts() {
                                   </td>
 
                                   <td className="py-2.5 px-3 text-center">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                      isPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                                    }`}>
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black ${isPaid ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                      }`}>
                                       {isPaid ? "✓ Paid" : "⏳ Pending"}
                                     </span>
                                   </td>

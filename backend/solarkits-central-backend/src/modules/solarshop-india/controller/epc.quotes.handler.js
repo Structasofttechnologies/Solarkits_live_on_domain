@@ -904,7 +904,7 @@ exports.get_eligible_warehouses = async (req, res) => {
  *             delivery_charges_paise, discount_paise, taxable_amount_paise,
  *             gst_rate, gst_amount_paise, total_amount_paise }
  */
-async function _calculatePrice({ kit_id, warehouse_id, quantity, warranty_id, delivery_pincode, delivery_district_id, delivery_type, quote_settings }) {
+async function _calculatePrice({ kit_id, warehouse_id, quantity, warranty_id, delivery_pincode, delivery_district_id, delivery_type, quote_settings, passed_delivery_charges_paise, passed_price_per_kit_paise }) {
   // 1. Kit price from warehouse combo kit & company_margins
   let price_per_kit_paise = 0;
   const kit = await WarehouseComboKit.findById(kit_id).select('selling_price_cached base_price_cached capacity name gst_rate tax_pct gst_pct').lean();
@@ -930,6 +930,11 @@ async function _calculatePrice({ kit_id, warehouse_id, quantity, warranty_id, de
     price_per_kit_paise = basePrice;
   }
 
+  // Fallback to passed price if kit price not resolved
+  if ((!price_per_kit_paise || price_per_kit_paise <= 0) && passed_price_per_kit_paise) {
+    price_per_kit_paise = Number(passed_price_per_kit_paise);
+  }
+
   const product_subtotal_paise = price_per_kit_paise * quantity;
 
   // 2. Warranty charges
@@ -945,15 +950,27 @@ async function _calculatePrice({ kit_id, warehouse_id, quantity, warranty_id, de
     }
   }
 
-  // 3. Delivery charges
+  // 3. Delivery charges (Logistics / Freight)
   let delivery_charges_paise = 0;
-  if (delivery_type === 'pincode' && delivery_pincode) {
-    const deliveryCost = await PincodeDeliveryCost.findOne({
-      pincode: delivery_pincode,
-      is_active: true,
-      $or: [{ combo_kit_id: kit_id }, { combo_kit_id: null }],
-    }).sort({ combo_kit_id: -1 }).lean();
-    if (deliveryCost) delivery_charges_paise = deliveryCost.delivery_cost * 100;
+  if (delivery_type !== 'franchisee_warehouse') {
+    if (delivery_pincode) {
+      const deliveryCost = await PincodeDeliveryCost.findOne({
+        pincode: delivery_pincode,
+        is_active: true,
+        $or: [{ combo_kit_id: kit_id }, { combo_kit_id: null }],
+      }).sort({ combo_kit_id: -1 }).lean();
+      if (deliveryCost && deliveryCost.delivery_cost > 0) {
+        delivery_charges_paise = Math.round(deliveryCost.delivery_cost * 100);
+      }
+    }
+    // Standard freight fallback (2500 per kit = 250,000 paise) or preserve passed delivery charges
+    if (delivery_charges_paise === 0) {
+      if (passed_delivery_charges_paise != null && passed_delivery_charges_paise > 0) {
+        delivery_charges_paise = Number(passed_delivery_charges_paise);
+      } else {
+        delivery_charges_paise = 250000 * quantity;
+      }
+    }
   }
 
   // 4. GST rate — directly from the selected kit (or kit warehouse margin/activation)
@@ -1055,10 +1072,10 @@ exports.create_draft = async (req, res) => {
     const actor = _actorFromReq(req);
     const body = req.body;
 
-    // Resolve franchisee_id
-    let franchisee_id = actor.role === 'reseller' ? actor.id : body.franchisee_id;
-    if (!franchisee_id) {
-      return res.status(400).json({ status: 'error', message: 'franchisee_id is required for BDE quotes' });
+    // Resolve franchisee_id (optional for BDE direct deals)
+    let franchisee_id = actor.role === 'reseller' ? actor.id : (body.franchisee_id || null);
+    if (actor.role === 'reseller' && !franchisee_id) {
+      return res.status(400).json({ status: 'error', message: 'Franchisee account authentication required' });
     }
 
     // Get EPC snapshot with fully resolved location
@@ -1080,8 +1097,8 @@ exports.create_draft = async (req, res) => {
       pincode: epcLoc.pincode,
     };
 
-    // Get Franchisee snapshot
-    const franchisee = await Reseller.findOne({ _id: franchisee_id, deleted_at: null }).lean();
+    // Get Franchisee snapshot (only if franchisee_id is present)
+    const franchisee = franchisee_id ? await Reseller.findOne({ _id: franchisee_id, deleted_at: null }).lean() : null;
     const franchisee_snapshot = franchisee ? {
       business_name: franchisee.business_name,
       gst_number: franchisee.gst_number,
@@ -1105,8 +1122,8 @@ exports.create_draft = async (req, res) => {
 
     // Determine quote_source
     let quote_source = 'franchisee_generated';
-    if (actor.role === 'bde' && !body.franchisee_id) quote_source = 'bde_direct';
-    if (actor.role === 'bde' && body.franchisee_id)  quote_source = 'bde_for_franchisee';
+    if (actor.role === 'bde' && !franchisee_id) quote_source = 'bde_direct';
+    if (actor.role === 'bde' && franchisee_id)  quote_source = 'bde_for_franchisee';
 
     let industry_type_id = body.industry_type_id || null;
     let industry_type_snapshot = body.industry_type_snapshot || null;
@@ -1154,6 +1171,14 @@ exports.create_draft = async (req, res) => {
       };
     }
 
+    // Resolve territory defaults from EPC if not provided
+    const resolvedTerritory = {
+      state_id: body.territory?.state_id || epc.states?.[0] || null,
+      state_name: body.territory?.state_name || epcLoc.state_name || null,
+      district_id: body.territory?.district_id || epc.districts?.[0] || null,
+      district_name: body.territory?.district_name || epcLoc.district_name || null,
+    };
+
     let initialPrices = {};
     try {
       if (body.combo_kit_id) {
@@ -1163,8 +1188,10 @@ exports.create_draft = async (req, res) => {
           quantity: body.quantity || 1,
           warranty_id: body.warranty_id,
           delivery_pincode: delivery_address_snapshot?.pincode,
-          delivery_district_id: body.territory?.district_id,
+          delivery_district_id: resolvedTerritory.district_id,
           delivery_type: body.delivery_type,
+          passed_delivery_charges_paise: body.delivery_charges_paise,
+          passed_price_per_kit_paise: body.price_per_kit_paise,
         });
       }
     } catch (e) {
@@ -1183,7 +1210,7 @@ exports.create_draft = async (req, res) => {
       franchisee_snapshot,
       epc_id: body.epc_id,
       epc_snapshot,
-      territory: body.territory || {},
+      territory: resolvedTerritory,
       delivery_type: body.delivery_type || 'epc_location',
       delivery_address_snapshot,
       warehouse_id: body.warehouse_id || null,
@@ -1230,7 +1257,7 @@ exports.update_draft = async (req, res) => {
     if (quote.status !== 'draft') return res.status(400).json({ status: 'error', message: 'Only draft quotes can be edited' });
 
     // Ownership check
-    const isOwner = (actor.role === 'reseller' && quote.franchisee_id.toString() === actor.id.toString()) ||
+    const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
                     (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
@@ -1281,7 +1308,7 @@ exports.generate_quote = async (req, res) => {
     }
 
     // Ownership check
-    const isOwner = (actor.role === 'reseller' && quote.franchisee_id.toString() === actor.id.toString()) ||
+    const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
                     (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
@@ -1301,6 +1328,8 @@ exports.generate_quote = async (req, res) => {
       delivery_district_id: quote.territory?.district_id,
       delivery_type: quote.delivery_type,
       quote_settings: settings,
+      passed_delivery_charges_paise: quote.delivery_charges_paise,
+      passed_price_per_kit_paise: quote.price_per_kit_paise,
     });
 
     // Get terms
@@ -1361,7 +1390,7 @@ exports.get_quote = async (req, res) => {
 
     // Ownership check — Franchisee sees own, BDE sees own + territory
     const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && (quote.bde_id?.toString() === actor.id.toString() || quote.franchisee_id));
+                    (actor.role === 'bde' && (quote.bde_id?.toString() === actor.id.toString() || (quote.franchisee_id && (await _getBdeFranchisees(actor.id)).some(fid => fid.toString() === quote.franchisee_id?.toString()))));
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     // Update viewed status if generated+
@@ -1849,20 +1878,37 @@ exports.get_pdf = async (req, res) => {
     doc.fontSize(7).fillColor(GREY).text(`GSTIN: ${epc.gstin || 'Unregistered / N/A'}`, 44, y + 65);
     doc.fontSize(7).fillColor(GREY).text(`Contact: ${epc.mobile || ''} | ${epc.email || ''}`, 44, y + 76);
 
-    // Franchisee Card
+    // Franchisee / BDE Issuer Card
+    const isBdeDirect = quote.quote_source === 'bde_direct' || !quote.franchisee_id;
     const frX = 36 + colW + 12;
     doc.roundedRect(frX, y, colW, 90, 4).fill(LIGHT_BG);
     doc.rect(frX, y, colW, 90).stroke(BORDER_COLOR);
     doc.rect(frX, y, colW, 20).fill('#f1f5f9');
-    doc.fontSize(7.5).fillColor(ORANGE).font('Helvetica-Bold').text('PREPARED & ISSUED BY (FRANCHISEE)', frX + 8, y + 6);
+    
+    const issuerHeader = isBdeDirect ? 'PREPARED & ISSUED BY (BDE DIRECT)' : 'PREPARED & ISSUED BY (FRANCHISEE)';
+    doc.fontSize(7.5).fillColor(ORANGE).font('Helvetica-Bold').text(issuerHeader, frX + 8, y + 6);
 
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text(fr.business_name || 'Authorized SolarKits Franchisee', frX + 8, y + 25, { width: colW - 16, height: 12 });
-    const frAddrStr = typeof fr.address === 'object' && fr.address
-      ? [fr.address.line, fr.address.city, fr.address.pincode].filter(Boolean).join(', ')
-      : (fr.address || 'Franchisee Distribution Center');
-    doc.fontSize(7).fillColor(SLATE).font('Helvetica').text(frAddrStr, frX + 8, y + 39, { width: colW - 16, height: 24 });
-    doc.fontSize(7).fillColor(GREY).text(`GSTIN: ${fr.gst_number || 'Franchise Partner Hub'}`, frX + 8, y + 65);
-    doc.fontSize(7).fillColor(GREY).text(`Contact: ${fr.mobile || ''} | ${fr.email || ''}`, frX + 8, y + 76);
+    const issuerName = isBdeDirect
+      ? (quote.bde_snapshot?.full_name || 'SolarKits Central BDE')
+      : (fr.business_name || 'Authorized SolarKits Franchisee');
+    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text(issuerName, frX + 8, y + 25, { width: colW - 16, height: 12 });
+    
+    const issuerAddrStr = isBdeDirect
+      ? 'SolarKits Central Fulfillment Network, India'
+      : (typeof fr.address === 'object' && fr.address
+          ? [fr.address.line, fr.address.city, fr.address.pincode].filter(Boolean).join(', ')
+          : (fr.address || 'Franchisee Distribution Center'));
+    doc.fontSize(7).fillColor(SLATE).font('Helvetica').text(issuerAddrStr, frX + 8, y + 39, { width: colW - 16, height: 24 });
+    
+    const issuerId = isBdeDirect
+      ? `BDE ID: ${quote.bde_snapshot?.bde_id_code || 'BDE-DIRECT'}`
+      : `GSTIN: ${fr.gst_number || 'Franchise Partner Hub'}`;
+    doc.fontSize(7).fillColor(GREY).text(issuerId, frX + 8, y + 65);
+    
+    const issuerContact = isBdeDirect
+      ? `Contact: ${quote.bde_snapshot?.mobile || ''} | ${quote.bde_snapshot?.email || 'support@solarkits.in'}`
+      : `Contact: ${fr.mobile || ''} | ${fr.email || ''}`;
+    doc.fontSize(7).fillColor(GREY).text(issuerContact, frX + 8, y + 76);
 
     y += 98;
 
@@ -2524,8 +2570,8 @@ exports.convert_to_order = async (req, res) => {
       const orderDoc = {
         order_number: orderNumber,
         epc_id: quote.epc_id,
-        reseller_id: quote.franchisee_id,
-        routing_source: 'primary_reseller',
+        reseller_id: quote.franchisee_id || null,
+        routing_source: quote.franchisee_id ? 'primary_reseller' : 'bde_direct',
         items: [{
           scope_type: 'kit',
           kit_id: quote.combo_kit_id,
@@ -2564,6 +2610,9 @@ exports.convert_to_order = async (req, res) => {
 
     } else {
       // fpo_order
+      if (!quote.franchisee_id) {
+        return res.status(400).json({ status: 'error', message: 'FPO orders require a franchisee attribution. BDE direct deals must be converted as EPC orders.' });
+      }
       const poNumber = `FPO-${Date.now()}`;
       const orderDoc = {
         po_number: poNumber,

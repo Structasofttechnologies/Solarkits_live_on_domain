@@ -16,8 +16,7 @@ import {
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
   getStates, getDistricts, getAllComboKits, getSuppliers,
-  getProcurementGroups, getPurchaseIndents, requestSupplierPayment,
-  syncWarehouseDeliveryOrders
+  getProcurementGroups, getPurchaseIndents, requestSupplierPayment
 } from "../../api/accounts";
 import SupplierPaymentModal from "../../components/procurement/SupplierPaymentModal";
 import PageHeader from "../../components/PageHeader";
@@ -1510,24 +1509,6 @@ export default function Payments() {
     }
   };
 
-  const [syncingWarehouseDO, setSyncingWarehouseDO] = useState(false);
-  const handleSyncWarehouseDO = async () => {
-    setSyncingWarehouseDO(true);
-    try {
-      const res = await syncWarehouseDeliveryOrders();
-      if (res?.status === "success") {
-        alert(`✅ ${res.message || "Warehouse Delivery Orders synced successfully!"}`);
-        fetchProcurementPIs();
-      } else {
-        alert(res?.message || "Failed to sync delivery orders.");
-      }
-    } catch (err) {
-      console.error("Sync error:", err);
-      alert(err.response?.data?.message || "Failed to sync with warehouse.");
-    } finally {
-      setSyncingWarehouseDO(false);
-    }
-  };
 
   const groupedProcurementOrders = useMemo(() => {
     const map = new Map();
@@ -5046,17 +5027,6 @@ export default function Payments() {
                   {collapsedOrderKeys.size === 0 ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
                   <span>{collapsedOrderKeys.size === 0 ? "Close All Cards" : "Open All Cards"}</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleSyncWarehouseDO}
-                  disabled={syncingWarehouseDO}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="Sync all advance-paid orders to Warehouse New Orders Delivery Manager"
-                >
-                  <FaSyncAlt className={syncingWarehouseDO ? "animate-spin" : ""} size={11} />
-                  <span>{syncingWarehouseDO ? "Syncing..." : "Sync Warehouse Orders"}</span>
-                </button>
               </div>
             </div>
           )}
@@ -5574,18 +5544,6 @@ export default function Payments() {
                             <span>
                               Once 30% advance is paid, this order automatically appears in Warehouse <strong>New Orders</strong> with all 3 components (Panels, Inverter, BOS) ready for inward inspection.
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleSyncWarehouseDO}
-                              disabled={syncingWarehouseDO}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white border border-gray-300 hover:border-gray-400 text-gray-700 text-[11px] font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-50"
-                              title="Sync advance-paid PIs with Warehouse Delivery Orders"
-                            >
-                              <FaSyncAlt className={syncingWarehouseDO ? "animate-spin" : ""} size={10} />
-                              <span>{syncingWarehouseDO ? "Syncing..." : "Sync Warehouse Orders"}</span>
-                            </button>
                           </div>
                         </div>
                       </>

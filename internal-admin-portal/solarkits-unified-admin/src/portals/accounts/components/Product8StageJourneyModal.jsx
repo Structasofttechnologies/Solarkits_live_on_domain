@@ -29,6 +29,7 @@ import {
 } from "react-icons/md";
 import {
   advanceOrderStage,
+  updateOrderDeliveryEta,
   assignOrderVehicle,
   getWarehouseVehicles,
   stageFpoOrder,
@@ -103,6 +104,37 @@ export const STAGES_LIST = [
   },
 ];
 
+// Safely extract numeric capacity in kW from any representation (numbers, "2 kW", "2 K.W.", or item name)
+const extractCapacityKw = (rawVal, fallbackText = "") => {
+  if (typeof rawVal === "number" && !isNaN(rawVal) && rawVal > 0) {
+    return rawVal;
+  }
+  if (rawVal != null) {
+    const s = String(rawVal).trim();
+    if (s && !["nan", "null", "undefined"].includes(s.toLowerCase())) {
+      const match = s.match(/(\d+(?:\.\d+)?)/);
+      if (match) {
+        const num = parseFloat(match[1]);
+        if (!isNaN(num) && num > 0) return num;
+      }
+    }
+  }
+  if (fallbackText) {
+    const nameStr = String(fallbackText);
+    const kwMatch = nameStr.match(/(\d+(?:\.\d+)?)\s*(?:k\.?\s*w\.?|kw|kilowatt)/i);
+    if (kwMatch) {
+      const num = parseFloat(kwMatch[1]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    const anyMatch = nameStr.match(/(\d+(?:\.\d+)?)/);
+    if (anyMatch) {
+      const num = parseFloat(anyMatch[1]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+  return 3;
+};
+
 export default function Product8StageJourneyModal({
   isOpen,
   onClose,
@@ -153,6 +185,7 @@ export default function Product8StageJourneyModal({
   const [courierName, setCourierName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
+  const [estimatedDelivery, setEstimatedDelivery] = useState("");
 
   // Milestone fields
   const [milestoneStatus, setMilestoneStatus] = useState("Crossed Transit Hub");
@@ -172,6 +205,19 @@ export default function Product8StageJourneyModal({
     }
     if (order?.dispatch_tracking?.tracking_url) {
       setTrackingUrl(order.dispatch_tracking.tracking_url);
+    }
+    // Auto-sync estimatedDelivery
+    if (order?.dispatch_tracking?.estimated_delivery) {
+      try {
+        const d = new Date(order.dispatch_tracking.estimated_delivery);
+        if (!isNaN(d.getTime())) {
+          const pad = (n) => String(n).padStart(2, '0');
+          const localStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          setEstimatedDelivery(localStr);
+        }
+      } catch (e) {
+        console.warn('Could not parse estimated_delivery:', e);
+      }
     }
   }, [order?.assigned_vehicle, order?.dispatch_tracking]);
 
@@ -220,9 +266,12 @@ export default function Product8StageJourneyModal({
     order?.product_name ||
     "High-Efficiency Solar Kit System";
   const itemBrand = item.brand_name || order?.brand_name || "Tata Power Solar";
-  const itemCapacity = Number(item.capacity || item.capacity_kw || order?.primary_capacity || 3);
-  const itemQty = Number(order?.total_quantity || item.quantity || order?.quantity || 1);
-  const totalKw = (itemCapacity * itemQty).toFixed(1);
+  const rawCapacity = item.capacity ?? item.capacity_kw ?? order?.primary_capacity ?? order?.capacity ?? order?.system_capacity ?? order?.capacity_kw;
+  const itemCapacity = extractCapacityKw(rawCapacity, itemName);
+  const rawQty = order?.total_quantity ?? order?.total_booked_quantity ?? item.quantity ?? order?.quantity ?? 1;
+  const itemQty = Math.max(1, parseInt(rawQty, 10) || 1);
+  const calcTotal = Math.round(itemCapacity * itemQty * 10) / 10;
+  const totalKw = isNaN(calcTotal) ? "0" : Number.isInteger(calcTotal) ? calcTotal.toString() : calcTotal.toFixed(1);
   const orderNumber = order?.po_number || order?.order_number || order?.transaction_id || "PO-REF";
   const partnerName =
     order?.franchisee_id?.business_name ||
@@ -232,10 +281,11 @@ export default function Product8StageJourneyModal({
     order?.epc_name ||
     "Authorized Franchise Partner";
 
-  const grandTotal =
+  const rawGrandTotal =
     order?.grand_total_paise != null
       ? order.grand_total_paise / 100
       : order?.grand_total_inr || order?.total_transaction_amount || order?.grand_total || order?.total_amount || 0;
+  const grandTotal = isNaN(Number(rawGrandTotal)) ? 0 : Number(rawGrandTotal);
 
   // Load vehicles when entering stage 2 (ready for vehicle assignment)
   useEffect(() => {
@@ -369,8 +419,40 @@ export default function Product8StageJourneyModal({
         courier_name: courierName || "Company Fleet Logistics",
         tracking_number: trackingNumber.trim(),
         tracking_url: trackingUrl.trim() || null,
+        estimated_delivery: estimatedDelivery ? new Date(estimatedDelivery).toISOString() : null,
       },
     });
+  };
+
+  const handleQuickUpdateEta = async (e) => {
+    if (e) e.preventDefault();
+    if (!estimatedDelivery) {
+      setAlert({ type: "error", text: "Please select an estimated delivery date & time." });
+      return;
+    }
+    setLoading(true);
+    setAlert(null);
+    try {
+      const orderId = order._id || order.id;
+      const res = await updateOrderDeliveryEta(orderType, orderId, {
+        estimated_delivery: new Date(estimatedDelivery).toISOString(),
+      });
+      if (res?.status === "success") {
+        setAlert({ type: "success", text: "Estimated delivery ETA saved and updated live!" });
+        setOrder((prev) => ({
+          ...prev,
+          dispatch_tracking: {
+            ...prev?.dispatch_tracking,
+            estimated_delivery: new Date(estimatedDelivery).toISOString(),
+          },
+        }));
+        if (onStageUpdated) onStageUpdated();
+      }
+    } catch (err) {
+      setAlert({ type: "error", text: err.response?.data?.message || "Failed to update estimated delivery date." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleMilestone = async (e) => {
@@ -393,7 +475,7 @@ export default function Product8StageJourneyModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl max-h-[94vh] flex flex-col rounded-3xl bg-surface border border-border shadow-2xl overflow-hidden">
-        
+
         {/* ── Modal Header Banner ───────────────────────────────────────────── */}
         <div className="px-6 py-4 bg-gradient-to-r from-blue-700 via-indigo-700 to-primary text-white flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
@@ -427,11 +509,10 @@ export default function Product8StageJourneyModal({
           {/* Feedback Alert */}
           {alert && (
             <div
-              className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between ${
-                alert.type === "success"
+              className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between ${alert.type === "success"
                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                   : "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
-              }`}
+                }`}
             >
               <span>{alert.text}</span>
               <button onClick={() => setAlert(null)} className="cursor-pointer font-black text-sm">✕</button>
@@ -486,6 +567,55 @@ export default function Product8StageJourneyModal({
             </div>
           </div>
 
+          {/* ── Estimated Delivery ETA Bar (Live Sync with Customer Store) ── */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
+                <FaClock size={16} />
+              </span>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-text-muted block">
+                  Customer Estimated Delivery (Live ETA)
+                </span>
+                <p className="text-xs font-bold text-text-primary">
+                  {order?.dispatch_tracking?.estimated_delivery ? (
+                    <span className="text-emerald-700 dark:text-emerald-300 font-black">
+                      📅 {new Date(order.dispatch_tracking.estimated_delivery).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-400">
+                      Standard SLA (3-5 Business Days) — Not yet explicitly scheduled
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="datetime-local"
+                value={estimatedDelivery}
+                onChange={(e) => setEstimatedDelivery(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer"
+                title="Select Estimated Delivery Date & Time"
+              />
+              <button
+                type="button"
+                onClick={handleQuickUpdateEta}
+                disabled={loading || !estimatedDelivery}
+                className="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
+              >
+                Set / Update ETA
+              </button>
+            </div>
+          </div>
+
           {/* ── 2. Interactive 8-Stage Stepper Bar ─────────────────────────────── */}
           <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border">
@@ -526,13 +656,12 @@ export default function Product8StageJourneyModal({
                   return (
                     <div key={stage.key} className="flex flex-col items-center text-center relative z-10 w-20">
                       <div
-                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-md transition-all ${
-                          isCompleted
+                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-md transition-all ${isCompleted
                             ? "bg-emerald-600 text-white"
                             : isCurrent
-                            ? "bg-primary text-white ring-4 ring-primary/20 scale-110 animate-pulse"
-                            : "bg-surface border-2 border-border text-text-muted"
-                        }`}
+                              ? "bg-primary text-white ring-4 ring-primary/20 scale-110 animate-pulse"
+                              : "bg-surface border-2 border-border text-text-muted"
+                          }`}
                       >
                         {isCompleted ? <FaCheck size={12} /> : idx + 1}
                       </div>
@@ -550,11 +679,10 @@ export default function Product8StageJourneyModal({
           {/* ── 3. Stage Details & Completed Milestones ───────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Vehicle & Fleet Info */}
-            <div className={`p-4 rounded-2xl border transition-all ${
-              order.assigned_vehicle?.registration_number || order.assigned_vehicle?.vehicle_name
+            <div className={`p-4 rounded-2xl border transition-all ${order.assigned_vehicle?.registration_number || order.assigned_vehicle?.vehicle_name
                 ? "bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800"
                 : "bg-surface-hover/30 border-border"
-            } space-y-2`}>
+              } space-y-2`}>
               <div className="flex items-center justify-between text-xs font-black uppercase text-text-muted">
                 <span className="flex items-center gap-1.5"><FaTruck className="text-primary" /> Delivery Vehicle</span>
                 <div className="flex items-center gap-1.5">
@@ -788,7 +916,7 @@ export default function Product8StageJourneyModal({
             {/* Stage 4 -> 5: Dispatch Order Form */}
             {activeIdx === 3 && (
               <form onSubmit={handleDispatch} className="space-y-3 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className="block font-bold text-text-muted text-[11px] uppercase mb-1">
                       Courier / Transport Name
@@ -818,6 +946,17 @@ export default function Product8StageJourneyModal({
                       onChange={(e) => setTrackingNumber(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-xl text-xs font-mono font-bold border border-border bg-surface text-text-primary"
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-text-muted text-[11px] uppercase mb-1">
+                      Estimated Delivery Date & Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={estimatedDelivery}
+                      onChange={(e) => setEstimatedDelivery(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer"
                     />
                   </div>
                   <div>

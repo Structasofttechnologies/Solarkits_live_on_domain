@@ -522,6 +522,7 @@ export default function PurchaseIndentModal({
                   </label>
                   <input
                     type="number"
+                    step="any"
                     value={procureQuantity}
                     readOnly
                     disabled
@@ -570,6 +571,7 @@ export default function PurchaseIndentModal({
                           <td className="py-2.5 px-2 text-center">
                             <input
                               type="number"
+                              step="any"
                               value={it.quantity}
                               readOnly
                               disabled
@@ -584,6 +586,7 @@ export default function PurchaseIndentModal({
                             <input
                               type="number"
                               min="0"
+                              step="any"
                               value={it.unit_rate}
                               onChange={(e) => {
                                 const val = Math.max(0, parseFloat(e.target.value) || 0);
@@ -653,6 +656,7 @@ export default function PurchaseIndentModal({
                   label="Unit Rate (₹) *"
                   type="number"
                   min="0"
+                  step="any"
                   required
                   value={unitRate}
                   onChange={(e) => setUnitRate(Math.max(0, parseFloat(e.target.value) || 0))}

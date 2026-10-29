@@ -9,11 +9,13 @@ export default function CustomInput({
   options = [],
   className = "",
   disabled = false,
+  readOnly = false,
   min,
   max,
   minLength,
   maxLength,
-  customCheckbox = false // New prop for custom checkbox design
+  customCheckbox = false, // New prop for custom checkbox design
+  ...rest
 }) {
 
   // --- TEXTAREA SUPPORT ---
@@ -32,8 +34,12 @@ export default function CustomInput({
           value={value}
           onChange={onChange}
           disabled={disabled}
+          readOnly={readOnly}
           rows={4}
-          className="border border-border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-ring bg-surface text-text-primary disabled:bg-surface-hover disabled:cursor-not-allowed resize-none"
+          className={`border border-border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-ring bg-surface text-text-primary disabled:bg-surface-hover disabled:cursor-not-allowed resize-none ${
+            readOnly ? "bg-surface-hover/70 cursor-not-allowed select-none opacity-90 focus:ring-0" : ""
+          }`}
+          {...rest}
         />
       </div>
     );
@@ -60,7 +66,11 @@ export default function CustomInput({
           minLength={minLength}
           maxLength={maxLength}
           disabled={disabled}
-          className="border border-border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-ring bg-surface text-text-primary disabled:bg-surface-hover disabled:cursor-not-allowed"
+          readOnly={readOnly}
+          className={`border border-border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-ring bg-surface text-text-primary disabled:bg-surface-hover disabled:cursor-not-allowed ${
+            readOnly ? "bg-surface-hover/70 cursor-not-allowed select-none opacity-90 focus:ring-0" : ""
+          }`}
+          {...rest}
         />
       </div>
     );

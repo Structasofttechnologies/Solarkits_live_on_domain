@@ -89,11 +89,10 @@ export default function MyOrders() {
           <button
             key={tab.id}
             onClick={() => setFilterTab(tab.id)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-              filterTab === tab.id
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${filterTab === tab.id
                 ? "bg-blue-600 text-white shadow-md"
                 : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -128,7 +127,7 @@ export default function MyOrders() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filteredOrders.map((o) => {
-                  const isIcici = o.payment_method === "icici_ecollection" || 
+                  const isIcici = o.payment_method === "icici_ecollection" ||
                     o.payment_gateway_used === "icici_ecollection" ||
                     o.payment_info?.payment_method === "icici_ecollection" ||
                     o.payment_info?.payment_gateway_used === "icici_ecollection" ||
@@ -174,11 +173,10 @@ export default function MyOrders() {
 
                       {/* Fulfillment Source */}
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
-                          o.fulfillment_source === "franchise_warehouse"
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${o.fulfillment_source === "franchise_warehouse"
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-blue-100 text-blue-800"
-                        }`}>
+                          }`}>
                           {o.fulfillment_source === "franchise_warehouse" ? (
                             <>
                               <FaWarehouse size={11} /> Franchise Hub
@@ -286,14 +284,14 @@ export default function MyOrders() {
             {/* 8-Stage Order Journey Stepper (Module 1.3) */}
             {(() => {
               const STAGE_ORDER = [
-                { key: "confirmed",           label: "1. Confirmed",      sub: "Payment verified" },
-                { key: "processing",          label: "2. Processing",     sub: "Warehouse picking" },
-                { key: "vehicle_assigned",    label: "3. Fleet Assigned", sub: "Vehicle & Driver" },
-                { key: "ready_for_dispatch",  label: "4. Ready",          sub: "Staged at gate" },
-                { key: "dispatched",          label: "5. Dispatched",     sub: "Out for delivery" },
-                { key: "in_transit",          label: "6. In Transit",     sub: "En route" },
-                { key: "reached_destination", label: "7. Arrived",        sub: "At site / hub" },
-                { key: "delivered",           label: "8. Delivered",      sub: "Delivery complete" },
+                { key: "confirmed", label: "1. Confirmed", sub: "Payment verified" },
+                { key: "processing", label: "2. Processing", sub: "Warehouse picking" },
+                { key: "vehicle_assigned", label: "3. Fleet Assigned", sub: "Vehicle & Driver" },
+                { key: "ready_for_dispatch", label: "4. Ready", sub: "Staged at gate" },
+                { key: "dispatched", label: "5. Dispatched", sub: "Out for delivery" },
+                { key: "in_transit", label: "6. In Transit", sub: "En route" },
+                { key: "reached_destination", label: "7. Arrived", sub: "At site / hub" },
+                { key: "delivered", label: "8. Delivered", sub: "Delivery complete" },
               ];
 
               const rawStatus = String(selectedOrder.order_status || selectedOrder.status || "").toLowerCase();
@@ -327,13 +325,12 @@ export default function MyOrders() {
                           return (
                             <div key={st.key} className="flex flex-col items-center text-center space-y-1">
                               <div
-                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                                  isCompleted
+                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${isCompleted
                                     ? "bg-emerald-600 text-white shadow-xs"
                                     : isCurrent
-                                    ? "bg-blue-600 text-white shadow-md ring-4 ring-blue-200 scale-105 animate-pulse"
-                                    : "bg-white border border-slate-200 text-slate-400"
-                                }`}
+                                      ? "bg-blue-600 text-white shadow-md ring-4 ring-blue-200 scale-105 animate-pulse"
+                                      : "bg-white border border-slate-200 text-slate-400"
+                                  }`}
                               >
                                 {isCompleted ? "✓" : sIdx + 1}
                               </div>
@@ -464,9 +461,20 @@ export default function MyOrders() {
                 <span className="font-extrabold block text-[11px] uppercase tracking-wider text-purple-800">
                   Logistics & Consignment Tracking
                 </span>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-wrap gap-2">
                   <span>Courier: <strong>{selectedOrder.dispatch_tracking.courier_name || "Express Logistics"}</strong></span>
                   <span className="font-mono font-bold">LR / Waybill: {selectedOrder.dispatch_tracking.tracking_number}</span>
+                  {selectedOrder.dispatch_tracking.estimated_delivery && (
+                    <span className="text-emerald-700 font-bold">
+                      Est. Delivery: {new Date(selectedOrder.dispatch_tracking.estimated_delivery).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  )}
                 </div>
                 {selectedOrder.dispatch_tracking.tracking_url && (
                   <a

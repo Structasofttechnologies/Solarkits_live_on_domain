@@ -276,12 +276,13 @@ async function handleMisPosting(req, res) {
       eventType = resolution.franchisePartner ? 'ONBOARDED_EPC_PAYMENT' : 'DIRECT_EPC_PAYMENT';
 
       const pendingOrder = resolution.pendingOrder;
-      const hasMilestones = Boolean(pendingOrder.payment_milestones?.milestones?.length > 0);
+      const isTrialOrFullOrder = Boolean(pendingOrder.is_trial_order || pendingOrder.payment_milestones?.remaining_percentage === 0 || pendingOrder.payment_milestones?.remaining_amount === 0);
+      const hasMilestones = !isTrialOrFullOrder && Boolean(pendingOrder.payment_milestones?.milestones?.length > 1);
       const m2 = hasMilestones ? pendingOrder.payment_milestones.milestones.find(m => m.milestone_number === 2) : null;
       const isM2Pending = m2 && (m2.payment_status === 'pending_verification' || pendingOrder.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification');
 
       if (hasMilestones && !isM2Pending) {
-        // Milestone 1 (30% Advance) Auto-Approval
+        // Milestone 1 (Advance) Auto-Approval
         await EpcOrder.findByIdAndUpdate(pendingOrder._id, {
           payment_method: 'icici_ecollection',
           payment_gateway_used: 'icici_ecollection',
@@ -295,7 +296,7 @@ async function handleMisPosting(req, res) {
           'offline_payment.account_holder_name': PayerName || buyerDisplayName,
           'offline_payment.verification_status': 'approved',
           'offline_payment.admin_approval_status': 'approved',
-          'offline_payment.admin_remarks': 'Advance (30%) Auto-approved via ICICI E-Collection. No Admin Approval Needed.',
+          'offline_payment.admin_remarks': 'Advance Auto-approved via ICICI E-Collection. No Admin Approval Needed.',
           'offline_payment.verified_at': new Date(),
           'payment_milestones.milestone_verification_status': 'advance_verified',
           'payment_milestones.current_milestone_due': 2,
@@ -308,10 +309,10 @@ async function handleMisPosting(req, res) {
           'payment_tracking.delay_signal': 'green',
           'payment_tracking.days_elapsed': 0,
           'payment_tracking.total_verified_amount': amountNum,
-          'payment_tracking.outstanding_amount': pendingOrder.payment_milestones.remaining_amount
+          'payment_tracking.outstanding_amount': pendingOrder.payment_milestones?.remaining_amount || 0
         });
       } else {
-        // Milestone 2 or Full Order Payment
+        // Milestone 2 or Full Order Payment (Trial Kit Orders)
         await EpcOrder.findByIdAndUpdate(pendingOrder._id, {
           payment_method: 'icici_ecollection',
           payment_gateway_used: 'icici_ecollection',
@@ -333,7 +334,13 @@ async function handleMisPosting(req, res) {
             'payment_milestones.milestones.1.utr_number': UTR,
             'payment_milestones.milestones.1.amount_paid': amountNum,
             'payment_milestones.milestones.1.verified_at': new Date(),
-          } : {}),
+          } : {
+            'payment_milestones.milestone_verification_status': 'fully_paid',
+            'payment_milestones.milestones.0.payment_status': 'verified',
+            'payment_milestones.milestones.0.utr_number': UTR,
+            'payment_milestones.milestones.0.amount_paid': amountNum,
+            'payment_milestones.milestones.0.verified_at': new Date(),
+          }),
           'payment_tracking.customer_payment_status': 'Paid',
           'payment_tracking.current_stage': 'delivery_milestone',
           'payment_tracking.delay_signal': 'green',

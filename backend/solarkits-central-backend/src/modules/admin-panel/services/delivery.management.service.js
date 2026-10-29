@@ -122,7 +122,7 @@ const calculateOrderCargo = async (orderOrId, orderModel = 'epc_orders') => {
     // 3. Fallback: Parse capacity kW from item_name or description (e.g. "50 kW Commercial LT On-Grid...")
     if (capacityVal === 0) {
       const textToSearch = `${item.item_name || ''} ${item.description || ''}`;
-      const match = textToSearch.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+      const match = textToSearch.match(/(\d+(?:\.\d+)?)\s*(?:k\.?\s*w\.?|kw|kilowatt)\b/i) || textToSearch.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
       if (match) {
         capacityVal = parseFloat(match[1]) || 0;
       }

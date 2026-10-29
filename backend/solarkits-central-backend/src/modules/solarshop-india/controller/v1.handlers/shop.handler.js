@@ -3119,6 +3119,7 @@ const get_orders = async (req, res) => {
           estimated_delivery: o.dispatch_tracking?.estimated_delivery || null,
           dispatch_notes: o.dispatch_tracking?.dispatch_notes || null,
         },
+        assigned_vehicle: o.assigned_vehicle || null,
         items: enrichedItems,
         total_kits: enrichedItems.reduce((sum, i) => sum + (i.quantity || 1), 0),
         total_amount: totalAmount,
@@ -3519,7 +3520,7 @@ const create_epc_offline_checkout = async (req, res) => {
       offline_payment_data.sender_bank_name = body.sender_bank_name;
     }
 
-    let fulfillment_mode = body.fulfillment_mode || 'franchisee_warehouse';
+    let fulfillment_mode = body.fulfillment_mode || 'direct_site';
     let order_load_metrics = body.order_load_metrics;
     if (typeof order_load_metrics === 'string') {
       try { order_load_metrics = JSON.parse(order_load_metrics); } catch (e) {}

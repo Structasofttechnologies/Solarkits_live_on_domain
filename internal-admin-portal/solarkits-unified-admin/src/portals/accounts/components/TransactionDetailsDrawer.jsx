@@ -38,6 +38,7 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
   const [courierName, setCourierName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
+  const [estimatedDelivery, setEstimatedDelivery] = useState("");
 
   useEffect(() => {
     if (isOpen && transaction) {
@@ -125,6 +126,7 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
         courier_name: courierName,
         tracking_number: trackingNumber,
         tracking_url: trackingUrl,
+        estimated_delivery: estimatedDelivery ? new Date(estimatedDelivery).toISOString() : null,
       });
       if (res.status === "success") {
         setActionSuccessMsg("Dispatch and tracking information updated successfully.");
@@ -1172,30 +1174,50 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                       {showDispatchSection && (
                         <form onSubmit={handleSaveDispatch} className="space-y-2 pt-1">
                           <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              placeholder="Courier Name (e.g. VRL Logistics)"
-                              value={courierName}
-                              onChange={(e) => setCourierName(e.target.value)}
-                              className="p-2 text-xs border border-border rounded-lg bg-surface"
-                              required
-                            />
-                            <input
-                              type="text"
-                              placeholder="LR / Tracking Number"
-                              value={trackingNumber}
-                              onChange={(e) => setTrackingNumber(e.target.value)}
-                              className="p-2 text-xs border border-border rounded-lg bg-surface font-mono"
-                              required
-                            />
+                            <div>
+                              <label className="block text-[10px] font-bold text-text-muted uppercase mb-0.5">Courier Name</label>
+                              <input
+                                type="text"
+                                placeholder="Courier Name (e.g. VRL Logistics)"
+                                value={courierName}
+                                onChange={(e) => setCourierName(e.target.value)}
+                                className="w-full p-2 text-xs border border-border rounded-lg bg-surface"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-text-muted uppercase mb-0.5">LR / Tracking Number</label>
+                              <input
+                                type="text"
+                                placeholder="LR / Tracking Number"
+                                value={trackingNumber}
+                                onChange={(e) => setTrackingNumber(e.target.value)}
+                                className="w-full p-2 text-xs border border-border rounded-lg bg-surface font-mono"
+                                required
+                              />
+                            </div>
                           </div>
-                          <input
-                            type="url"
-                            placeholder="Tracking URL (optional)"
-                            value={trackingUrl}
-                            onChange={(e) => setTrackingUrl(e.target.value)}
-                            className="w-full p-2 text-xs border border-border rounded-lg bg-surface"
-                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold text-text-muted uppercase mb-0.5">Estimated Delivery Date & Time</label>
+                              <input
+                                type="datetime-local"
+                                value={estimatedDelivery}
+                                onChange={(e) => setEstimatedDelivery(e.target.value)}
+                                className="w-full p-2 text-xs border border-border rounded-lg bg-surface font-bold"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-text-muted uppercase mb-0.5">Tracking URL (Optional)</label>
+                              <input
+                                type="url"
+                                placeholder="Tracking URL (optional)"
+                                value={trackingUrl}
+                                onChange={(e) => setTrackingUrl(e.target.value)}
+                                className="w-full p-2 text-xs border border-border rounded-lg bg-surface"
+                              />
+                            </div>
+                          </div>
                           <Button type="submit" variant="primary" size="sm" loading={actionLoading} className="text-xs w-full justify-center">
                             Save Dispatch Tracking
                           </Button>

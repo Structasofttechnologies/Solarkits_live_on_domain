@@ -5,6 +5,7 @@ import BdeProtectedRoute from './components/BdeProtectedRoute';
 import BdeLayout from './components/BdeLayout';
 import BdeLogin from './pages/BdeLogin';
 import BdeDashboard from './pages/BdeDashboard';
+import BdeLeads from './pages/BdeLeads';
 import BdeEpcLeads from './pages/BdeEpcLeads';
 import BdeEpcOnboardingWizard from './pages/BdeEpcOnboardingWizard';
 import BdeFranchisees from './pages/BdeFranchisees';
@@ -30,8 +31,9 @@ export default function App() {
           <Route element={<BdeProtectedRoute />}>
             <Route element={<BdeLayout />}>
               <Route path="/" element={<BdeDashboard />} />
+              <Route path="/leads" element={<BdeLeads />} />
+              <Route path="/franchisee-leads" element={<BdeLeads />} />
               <Route path="/epc-leads" element={<BdeEpcLeads />} />
-              <Route path="/leads" element={<BdeEpcLeads />} />
               <Route path="/epc-onboarding" element={<BdeEpcOnboardingWizard />} />
               <Route path="/epc-management" element={<BdeEpcOnboardingWizard />} />
               <Route path="/purchase-orders" element={<BdePoOrders />} />

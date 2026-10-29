@@ -13,11 +13,13 @@ export default function CustomInput({
   max,
   minLength,
   maxLength,
+  step = type === "number" ? "any" : undefined,
   customCheckbox = false,
   icon = null,
   prefix = null,
   labelClassName = "",
-  inputClassName = ""
+  inputClassName = "",
+  ...rest
 }) {
 
   const baseLabelClasses = "text-text-secondary mb-2 font-bold uppercase tracking-widest text-[10px]";
@@ -41,6 +43,7 @@ export default function CustomInput({
           disabled={disabled}
           rows={4}
           className={`${baseInputClasses} resize-none ${inputClassName}`}
+          {...rest}
         />
       </div>
     );
@@ -75,6 +78,7 @@ export default function CustomInput({
             onChange={onChange}
             min={min}
             max={max}
+            step={step}
             minLength={minLength}
             maxLength={maxLength}
             disabled={disabled}
@@ -83,6 +87,7 @@ export default function CustomInput({
               icon ? "pl-12 pr-4" : 
               prefix ? "pl-14 pr-4" : "px-4"
             } ${inputClassName}`}
+            {...rest}
           />
         </div>
       </div>

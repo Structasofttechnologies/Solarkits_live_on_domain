@@ -49,14 +49,14 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
                   onClick={() => toggleMenu(item.name, depth)}
-                  className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group
+                  className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group text-left
                     ${isActive
                       ? "gradient-primary text-white shadow-md shadow-primary/20"
                       : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                     }`}
                 >
                   <div
-                    className="flex gap-3 items-center max-w-[calc(100%-20px)]"
+                    className="flex gap-3 items-center max-w-[calc(100%-20px)] text-left"
                   >
                     <span
                       className={`text-xl min-w-6 flex justify-center transition-colors ${isActive ? "text-white" : "text-primary group-hover:scale-110"
@@ -64,7 +64,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
                     >
                       {item.icon}
                     </span>
-                    <span className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${isActive ? "text-white" : "text-text-primary"}`}>
+                    <span className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap text-left ${isActive ? "text-white" : "text-text-primary"}`}>
                       {item.name}
                     </span>
                   </div>

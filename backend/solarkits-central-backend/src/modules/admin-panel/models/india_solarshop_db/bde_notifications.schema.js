@@ -27,8 +27,40 @@ const schema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['assignment', 'kyc', 'goal', 'store_setup', 'system', 'general'],
+    enum: [
+      'assignment',
+      'kyc',
+      'goal',
+      'store_setup',
+      'system',
+      'general',
+      'lead',
+      'epc_lead',
+      'epc_quote',
+      'order',
+      'follow_up',
+    ],
     default: 'general',
+  },
+  link: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  action_label: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  entity_type: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  entity_id: {
+    type: String,
+    default: null,
+    trim: true,
   },
   is_read: {
     type: Boolean,
@@ -48,6 +80,14 @@ const schema = new mongoose.Schema({
 
 schema.virtual('id').get(function () {
   return this._id;
+});
+
+schema.virtual('createdAt').get(function () {
+  return this.created_at;
+});
+
+schema.virtual('updatedAt').get(function () {
+  return this.updated_at;
 });
 
 module.exports = india_solarshop_db.model('bde_notifications', schema);

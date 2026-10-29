@@ -739,12 +739,18 @@ export default function BdeEpcQuoteDetail() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setOrderType('fpo_order')}
+                    disabled={!quote.franchisee_id}
+                    onClick={() => quote.franchisee_id && setOrderType('fpo_order')}
                     className={`p-3 rounded-xl border text-xs font-bold text-left ${
-                      orderType === 'fpo_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
+                      !quote.franchisee_id
+                        ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
+                        : orderType === 'fpo_order'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 text-slate-600'
                     }`}
+                    title={!quote.franchisee_id ? 'Franchisee PO requires franchisee attribution' : ''}
                   >
-                    Franchisee PO
+                    Franchisee PO {!quote.franchisee_id && '(Partner only)'}
                   </button>
                 </div>
               </div>
