@@ -371,7 +371,7 @@ export default function TrialKitOrderModal({
         )}
 
         {/* Benefits Note */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-center text-[11px] text-text-muted font-semibold">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 text-center text-[11px] text-text-muted font-semibold">
           <div className="bg-surface-hover/40 p-2.5 rounded-xl border border-border flex items-center justify-center gap-1.5">
             <FaShieldAlt className="text-primary" /> Genuine Tier-1 Hardware
           </div>
@@ -379,7 +379,10 @@ export default function TrialKitOrderModal({
             <FaTruck className="text-emerald-500" /> Direct Warehouse Dispatch
           </div>
           <div className="bg-surface-hover/40 p-2.5 rounded-xl border border-border flex items-center justify-center gap-1.5">
-            <FaTag className="text-amber-500" /> B2B EPC Preferential Pricing
+            <FaTag className="text-amber-500" /> B2B EPC Pricing
+          </div>
+          <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1.5 font-bold">
+            <FaCheckCircle className="text-emerald-500" /> 100% Full Payment
           </div>
         </div>
 

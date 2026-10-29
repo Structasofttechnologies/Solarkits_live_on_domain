@@ -45,7 +45,7 @@ export default function NewOrdersProcurement() {
   // ───────────────────────────────────────────────────────────────────────────
   // State: Active Filters
   // ───────────────────────────────────────────────────────────────────────────
-  const [selectedWarehouse, setSelectedWarehouse] = useState("all");
+  const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [orderMode, setOrderMode] = useState("all"); // 'all' | 'offline' | 'online'
   const [orderOrigin, setOrderOrigin] = useState("all"); // 'all' | 'epc' | 'franchisee' | 'company'
   const [orderCategory, setOrderCategory] = useState("all"); // 'all' | 'govt_tender' | 'industry_kit'
@@ -126,6 +126,10 @@ export default function NewOrdersProcurement() {
 
         if (optRes?.data) {
           setFilterOptions(optRes.data);
+          const whs = optRes.data.warehouses || [];
+          if (whs.length > 0) {
+            setSelectedWarehouse((prev) => (prev && prev !== "all" && whs.some((w) => w._id === prev) ? prev : whs[0]._id));
+          }
         }
         if (vehRes?.data && vehRes.data.length > 0) {
           setVehicles(vehRes.data);
@@ -144,6 +148,10 @@ export default function NewOrdersProcurement() {
   // 2. Fetch Matching Orders based on Combined Filters
   // ───────────────────────────────────────────────────────────────────────────
   const fetchOrders = useCallback(async () => {
+    // Wait until a specific warehouse is loaded/selected
+    if (!selectedWarehouse && (filterOptions.warehouses?.length || 0) > 0) {
+      return;
+    }
     setLoadingOrders(true);
     try {
       const params = {
@@ -259,7 +267,7 @@ export default function NewOrdersProcurement() {
   };
 
   const handleResetFilters = () => {
-    setSelectedWarehouse("all");
+    setSelectedWarehouse(filterOptions.warehouses?.[0]?._id || "");
     setOrderMode("all");
     setOrderOrigin("all");
     setOrderCategory("all");
@@ -848,7 +856,9 @@ export default function NewOrdersProcurement() {
                 Warehouse Filter (Admin Configured)
               </label>
               <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                {selectedWarehouse === "all" ? "Viewing All Facilities" : "Filtered by Warehouse"}
+                {filterOptions.warehouses?.find((w) => w._id === selectedWarehouse)?.warehouse_code
+                  ? `Active Warehouse: ${filterOptions.warehouses.find((w) => w._id === selectedWarehouse).warehouse_code}`
+                  : "Filtered by Warehouse"}
               </span>
             </div>
             <select
@@ -856,9 +866,9 @@ export default function NewOrdersProcurement() {
               onChange={(e) => setSelectedWarehouse(e.target.value)}
               className="w-full text-xs font-semibold py-2 px-3 bg-surface border border-emerald-300 dark:border-emerald-800 rounded-xl text-text-primary shadow-2xs focus:ring-2 focus:ring-emerald-500 cursor-pointer"
             >
-              <option value="all">
-                🏢 All Warehouses ({(filterOptions.warehouses || []).length} Facilities — {filterCounts.total || totalMatching} Orders)
-              </option>
+              {(!filterOptions.warehouses || filterOptions.warehouses.length === 0) && (
+                <option value="">Loading / No Warehouses Configured</option>
+              )}
               {(filterOptions.warehouses || []).map((wh) => {
                 const whOrderCount = filterCounts.by_warehouse?.[wh._id] || filterCounts.by_warehouse?.[wh.warehouse_code] || 0;
                 return (

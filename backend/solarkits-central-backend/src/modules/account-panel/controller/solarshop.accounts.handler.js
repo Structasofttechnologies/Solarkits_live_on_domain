@@ -3305,12 +3305,13 @@ const accounts_verify_epc_payment = async (req, res) => {
         order.offline_payment.admin_remarks = accounts_remarks || 'Auto-approved online ICICI payment. No admin approval required.';
         order.is_official_order_generated = true;
 
-        const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0);
+        const isTrialOrFullOrder = Boolean(order.is_trial_order || order.payment_milestones?.remaining_percentage === 0 || (order.payment_milestones?.remaining_amount === 0));
+        const hasMilestones = !isTrialOrFullOrder && Boolean(order.payment_milestones?.milestones?.length > 1);
         const m2 = hasMilestones ? order.payment_milestones.milestones.find(m => m.milestone_number === 2) : null;
         const isM2Pending = m2 && (m2.payment_status === 'pending_verification' || order.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification');
 
         if (hasMilestones && !isM2Pending) {
-          // Auto-approve Milestone 1 (30% advance)
+          // Auto-approve Milestone 1 (advance payment)
           order.order_status = 'confirmed';
           order.payment_status = 'pending_verification';
 
@@ -3343,7 +3344,7 @@ const accounts_verify_epc_payment = async (req, res) => {
           order.payment_tracking.total_verified_amount = order.payment_milestones.advance_amount || order.offline_payment.amount_paid;
           order.payment_tracking.outstanding_amount = order.payment_milestones.remaining_amount;
         } else {
-          // Milestone 2 or Full Payment without milestones
+          // Milestone 2 or Full Payment without milestones / Trial Order
           order.payment_status = 'captured';
           if (['pending', 'confirmed', 'processing'].includes(order.order_status)) {
             order.order_status = 'ready_for_dispatch';
@@ -3353,6 +3354,16 @@ const accounts_verify_epc_payment = async (req, res) => {
             m2.verified_by = userId;
             m2.verified_at = new Date();
             m2.notes = accounts_remarks || 'Milestone 2 Remaining payment verified';
+            order.payment_milestones.milestone_verification_status = 'fully_paid';
+            order.markModified('payment_milestones');
+          } else if (order.payment_milestones) {
+            const m1 = order.payment_milestones.milestones?.find(m => m.milestone_number === 1);
+            if (m1) {
+              m1.payment_status = 'verified';
+              m1.verified_by = userId;
+              m1.verified_at = new Date();
+              m1.notes = accounts_remarks || 'Full payment verified';
+            }
             order.payment_milestones.milestone_verification_status = 'fully_paid';
             order.markModified('payment_milestones');
           }
@@ -3501,7 +3512,8 @@ const admin_approve_epc_payment = async (req, res) => {
       }
 
       // Check milestones
-      const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0);
+      const isTrialOrFullOrder = Boolean(order.is_trial_order || order.payment_milestones?.remaining_percentage === 0 || (order.payment_milestones?.remaining_amount === 0));
+      const hasMilestones = !isTrialOrFullOrder && Boolean(order.payment_milestones?.milestones?.length > 1);
       let targetMilestoneNum = Number(milestone_number);
       if (!targetMilestoneNum && hasMilestones) {
         const m2 = order.payment_milestones.milestones.find(m => m.milestone_number === 2);
@@ -3545,18 +3557,25 @@ const admin_approve_epc_payment = async (req, res) => {
         order.payment_tracking.total_verified_amount = order.payment_milestones.advance_amount;
         order.payment_tracking.outstanding_amount = order.payment_milestones.remaining_amount;
       } else {
-        // Milestone 2 or full payment
+        // Milestone 2 or full payment (Trial orders)
         order.payment_status = 'captured';
         if (['pending', 'confirmed', 'processing'].includes(order.order_status)) {
           order.order_status = 'ready_for_dispatch';
         }
-        if (hasMilestones) {
-          const m2 = order.payment_milestones.milestones.find(m => m.milestone_number === 2);
+        if (order.payment_milestones) {
+          const m2 = order.payment_milestones.milestones?.find(m => m.milestone_number === 2);
           if (m2) {
             m2.payment_status = 'verified';
             m2.verified_by = userId;
             m2.verified_at = new Date();
             m2.notes = admin_remarks || 'Milestone 2 Remaining payment verified';
+          }
+          const m1 = order.payment_milestones.milestones?.find(m => m.milestone_number === 1);
+          if (m1) {
+            m1.payment_status = 'verified';
+            m1.verified_by = userId;
+            m1.verified_at = new Date();
+            m1.notes = admin_remarks || 'Full payment verified';
           }
           order.payment_milestones.milestone_verification_status = 'fully_paid';
           order.markModified('payment_milestones');

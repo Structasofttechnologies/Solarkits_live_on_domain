@@ -1103,126 +1103,175 @@ export default function ProjectOrderStatus() {
                         </div>
 
                         {/* ── Product Payment Milestones Progress ── */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-xs text-text-primary dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                              Payment Milestones Schedule
-                            </span>
-                            <span className="text-[11px] font-bold text-text-muted">
-                              Total: ₹{(order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
+                        {(() => {
+                          const isTrialOrder = Boolean(
+                            order.is_trial_order ||
+                            order.order_type === "trial_order" ||
+                            order.fulfillment_bifurcation?.order_type === "trial_order" ||
+                            order.items?.some(it => it.is_trial_kit || /trial/i.test(it.item_name || "")) ||
+                            order.payment_milestones?.remaining_percentage === 0 ||
+                            (order.payment_milestones?.remaining_amount === 0 && order.payment_milestones?.milestones?.length === 1)
+                          );
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {/* Milestone 1: Advance */}
-                            {(() => {
-                              const m1 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
-                              const isM1Verified = isIciciPayment ||
-                                m1?.payment_status === "verified" ||
-                                order.payment_milestones?.milestone_verification_status === "advance_verified" ||
-                                order.payment_milestones?.milestone_verification_status === "fully_paid" ||
-                                ["confirmed", "processing", "vehicle_assigned", "ready_for_dispatch", "dispatched", "in_transit", "reached_destination", "delivered"].includes(order.order_status || order.status);
-                              const isM1Rejected = order.payment_status === "rejected" || m1?.payment_status === "rejected";
-                              const advPct = order.payment_milestones?.advance_percentage ?? (m1?.percentage || 30);
-                              const m1Amount = order.payment_milestones?.advance_amount || order.offline_payment?.amount_paid || Math.round((order.total_amount || 0) * (advPct / 100));
-                              const m1Utr = m1?.utr_number || order.offline_payment?.utr_number || utrStr;
+                          return (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="font-extrabold text-xs text-text-primary dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                                  <span className={`w-2 h-2 rounded-full ${isTrialOrder ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                                  {isTrialOrder ? "Trial Kit Order Payment (100% Upfront)" : "Payment Milestones Schedule"}
+                                </span>
+                                <span className="text-[11px] font-bold text-text-muted">
+                                  Total: ₹{(order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
 
-                              return (
-                                <div className={`p-3.5 rounded-2xl border transition-all ${isM1Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM1Rejected ? "bg-red-500/5 border-red-500/30" : "bg-amber-500/5 border-amber-500/30"}`}>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                                      Milestone 1 — Advance ({advPct}%)
+                              {isTrialOrder ? (
+                                <div className="p-4 rounded-2xl border transition-all bg-emerald-500/5 border-emerald-500/30 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                      Trial Kit Order • Single 100% Full Payment
                                     </span>
                                     <span className="font-black text-sm text-text-primary dark:text-white">
-                                      ₹{Number(m1Amount).toLocaleString("en-IN")}
+                                      ₹{Number(order.total_amount || (order.grand_total_paise || 0) / 100 || 0).toLocaleString("en-IN")}
                                     </span>
                                   </div>
-                                  <div className="flex items-center justify-between mt-1.5 text-xs">
-                                    <span className="text-[11px] text-text-secondary font-mono">UTR: {m1Utr}</span>
-                                    {isM1Verified ? (
+                                  <p className="text-xs text-text-secondary leading-relaxed">
+                                    Trial kits are promotional verification orders with 100% upfront payment (zero remaining balance).
+                                  </p>
+                                  <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20 text-xs">
+                                    <span className="font-mono text-text-secondary text-[11px]">UTR: {utrStr}</span>
+                                    {isIciciPayment ||
+                                    order.payment_status === "captured" ||
+                                    order.payment_status === "paid" ||
+                                    order.payment_milestones?.milestone_verification_status === "fully_paid" ||
+                                    ["confirmed", "processing", "vehicle_assigned", "ready_for_dispatch", "dispatched", "in_transit", "reached_destination", "delivered"].includes(order.order_status || order.status) ? (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                        <FaCheckCircle size={10} /> Advance Verified
+                                        <FaCheckCircle size={10} /> 100% Full Payment Verified
                                       </span>
-                                    ) : isM1Rejected ? (
+                                    ) : order.payment_status === "rejected" ? (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">
-                                        <FaTimesCircle size={10} /> Rejected
+                                        <FaTimesCircle size={10} /> Payment Rejected
                                       </span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700">
-                                        <FaRegClock size={10} /> Accounts Reviewing
+                                        <FaRegClock size={10} /> Accounts Reviewing Full Payment
                                       </span>
                                     )}
                                   </div>
                                 </div>
-                              );
-                            })()}
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {/* Milestone 1: Advance */}
+                                  {(() => {
+                                    const m1 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
+                                    const isM1Verified = isIciciPayment ||
+                                      m1?.payment_status === "verified" ||
+                                      order.payment_milestones?.milestone_verification_status === "advance_verified" ||
+                                      order.payment_milestones?.milestone_verification_status === "fully_paid" ||
+                                      ["confirmed", "processing", "vehicle_assigned", "ready_for_dispatch", "dispatched", "in_transit", "reached_destination", "delivered"].includes(order.order_status || order.status);
+                                    const isM1Rejected = order.payment_status === "rejected" || m1?.payment_status === "rejected";
+                                    const advPct = order.payment_milestones?.advance_percentage ?? (m1?.percentage || 30);
+                                    const m1Amount = order.payment_milestones?.advance_amount || order.offline_payment?.amount_paid || Math.round((order.total_amount || 0) * (advPct / 100));
+                                    const m1Utr = m1?.utr_number || order.offline_payment?.utr_number || utrStr;
 
-                            {/* Milestone 2: Remaining Balance */}
-                            {(() => {
-                              const m2 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
-                              const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0 || order.payment_milestones?.advance_amount);
-                              const isM2Verified = hasMilestones
-                                ? (m2?.payment_status === "verified" || order.payment_milestones?.milestone_verification_status === "fully_paid")
-                                : (order.payment_status === "captured" || order.payment_status === "paid");
-                              const isM2Pending = m2?.payment_status === "pending_verification" ||
-                                order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification" ||
-                                Boolean(m2?.utr_number && !isM2Verified);
-                              const remPct = order.payment_milestones?.remaining_percentage ?? (m2?.percentage || (100 - (order.payment_milestones?.advance_percentage || 30)));
-                              const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * (remPct / 100)));
-                              const m2Utr = m2?.utr_number;
-
-                              return (
-                                <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between ${isM2Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM2Pending ? "bg-blue-500/5 border-blue-500/30" : "bg-purple-500/5 border-purple-500/30"}`}>
-                                  <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
-                                        Milestone 2 — Before Dispatch ({remPct}%)
-                                      </span>
-                                      <span className="font-black text-sm text-text-primary dark:text-white">
-                                        ₹{Number(m2Amount).toLocaleString("en-IN")}
-                                      </span>
-                                    </div>
-                                    <p className="text-[10px] text-text-secondary leading-tight mt-0.5">
-                                      Required before materials are released from warehouse for courier transit.
-                                    </p>
-                                  </div>
-
-                                  <div className="flex items-center justify-between mt-1.5 text-xs">
-                                    {isM2Verified ? (
-                                      <>
-                                        <span className="text-[11px] text-text-secondary font-mono">{m2Utr ? `UTR: ${m2Utr}` : "Fully Cleared"}</span>
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                          <FaCheckCircle size={10} /> Fully Paid & Cleared
-                                        </span>
-                                      </>
-                                    ) : isM2Pending ? (
-                                      <>
-                                        <span className="text-[11px] text-text-secondary font-mono">{m2Utr ? `UTR: ${m2Utr}` : "Payment Submitted"}</span>
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                                          <FaRegClock size={10} /> Accounts Reviewing
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <div className="flex items-center justify-between w-full">
-                                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                                          ● Balance Due
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenMilestonePay(order)}
-                                          className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
-                                        >
-                                          <span>Pay {remPct}% Balance (₹{Number(m2Amount).toLocaleString("en-IN")})</span>
-                                        </button>
+                                    return (
+                                      <div className={`p-3.5 rounded-2xl border transition-all ${isM1Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM1Rejected ? "bg-red-500/5 border-red-500/30" : "bg-amber-500/5 border-amber-500/30"}`}>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                                            Milestone 1 — Advance ({advPct}%)
+                                          </span>
+                                          <span className="font-black text-sm text-text-primary dark:text-white">
+                                            ₹{Number(m1Amount).toLocaleString("en-IN")}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between mt-1.5 text-xs">
+                                          <span className="text-[11px] text-text-secondary font-mono">UTR: {m1Utr}</span>
+                                          {isM1Verified ? (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                              <FaCheckCircle size={10} /> Advance Verified
+                                            </span>
+                                          ) : isM1Rejected ? (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">
+                                              <FaTimesCircle size={10} /> Rejected
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700">
+                                              <FaRegClock size={10} /> Accounts Reviewing
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                    )}
-                                  </div>
+                                    );
+                                  })()}
+
+                                  {/* Milestone 2: Remaining Balance */}
+                                  {(() => {
+                                    const m2 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
+                                    const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0 || order.payment_milestones?.advance_amount);
+                                    const isM2Verified = hasMilestones
+                                      ? (m2?.payment_status === "verified" || order.payment_milestones?.milestone_verification_status === "fully_paid")
+                                      : (order.payment_status === "captured" || order.payment_status === "paid");
+                                    const isM2Pending = m2?.payment_status === "pending_verification" ||
+                                      order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification" ||
+                                      Boolean(m2?.utr_number && !isM2Verified);
+                                    const remPct = order.payment_milestones?.remaining_percentage ?? (m2?.percentage || (100 - (order.payment_milestones?.advance_percentage || 30)));
+                                    const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * (remPct / 100)));
+                                    const m2Utr = m2?.utr_number;
+
+                                    return (
+                                      <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between ${isM2Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM2Pending ? "bg-blue-500/5 border-blue-500/30" : "bg-purple-500/5 border-purple-500/30"}`}>
+                                        <div>
+                                          <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                              Milestone 2 — Before Dispatch ({remPct}%)
+                                            </span>
+                                            <span className="font-black text-sm text-text-primary dark:text-white">
+                                              ₹{Number(m2Amount).toLocaleString("en-IN")}
+                                            </span>
+                                          </div>
+                                          <p className="text-[10px] text-text-secondary leading-tight mt-0.5">
+                                            Required before materials are released from warehouse for courier transit.
+                                          </p>
+                                        </div>
+
+                                        <div className="flex items-center justify-between mt-1.5 text-xs">
+                                          {isM2Verified ? (
+                                            <>
+                                              <span className="text-[11px] text-text-secondary font-mono">{m2Utr ? `UTR: ${m2Utr}` : "Fully Cleared"}</span>
+                                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                                <FaCheckCircle size={10} /> Fully Paid & Cleared
+                                              </span>
+                                            </>
+                                          ) : isM2Pending ? (
+                                            <>
+                                              <span className="text-[11px] text-text-secondary font-mono">{m2Utr ? `UTR: ${m2Utr}` : "Payment Submitted"}</span>
+                                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                                <FaRegClock size={10} /> Accounts Reviewing
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <div className="flex items-center justify-between w-full">
+                                              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                                ● Balance Due
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenMilestonePay(order)}
+                                                className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                                              >
+                                                <span>Pay {remPct}% Balance (₹{Number(m2Amount).toLocaleString("en-IN")})</span>
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Delivery / Installation Site Address */}

@@ -975,7 +975,11 @@ export default function EpcOrdersManagement() {
                         </div>
                         {o.payment_milestones && (
                           <div className="text-[9px] text-text-muted space-y-0.5 mt-0.5">
-                            {o.amount_received >= o.grand_total ? (
+                            {o.is_trial_order || o.order_type === "trial_order" || o.payment_milestones.remaining_percentage === 0 ? (
+                              <div className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                100% Full Payment (Trial)
+                              </div>
+                            ) : o.amount_received >= o.grand_total ? (
                               <div className="text-emerald-600 dark:text-emerald-400 font-bold">
                                 100% Cleared (M1 + M2)
                               </div>

@@ -479,6 +479,7 @@ async function createEpcOfflineOrder({
   const assignedWarehouseId = bifurcation.assigned_warehouse_id;
 
   // 3.5 Resolve product payment milestone configuration
+  const isTrialOrder = detectedOrderType === 'trial_order' || Boolean(processedItems.some(it => it.is_trial_kit));
   const ProductPaymentMilestone = require('../models/india_solarshop_db/product_payment_milestones.schema');
   let firstKitId = null;
   for (const it of processedItems) {
@@ -489,53 +490,72 @@ async function createEpcOfflineOrder({
   }
 
   let milestoneRule = null;
-  if (firstKitId) {
+  if (!isTrialOrder && firstKitId) {
     milestoneRule = await ProductPaymentMilestone.findOne({ kit_id: firstKitId, is_active: true }).lean().catch(() => null);
   }
-  if (!milestoneRule) {
+  if (!isTrialOrder && !milestoneRule) {
     milestoneRule = await ProductPaymentMilestone.findOne({ is_default: true, is_active: true }).lean().catch(() => null);
   }
 
   const grandTotalRupees = Math.round(totals.grand_total_paise / 100);
-  const m1Pct = milestoneRule?.milestones?.[0]?.percentage || 30;
-  const m2Pct = milestoneRule?.milestones?.[1]?.percentage || (100 - m1Pct);
-  const advanceAmountRupees = Math.round((grandTotalRupees * m1Pct) / 100);
-  const remainingAmountRupees = Math.max(0, grandTotalRupees - advanceAmountRupees);
+  const m1Pct = isTrialOrder ? 100 : (milestoneRule?.milestones?.[0]?.percentage || 30);
+  const m2Pct = isTrialOrder ? 0 : (milestoneRule?.milestones?.[1]?.percentage || (100 - m1Pct));
+  const advanceAmountRupees = isTrialOrder ? grandTotalRupees : Math.round((grandTotalRupees * m1Pct) / 100);
+  const remainingAmountRupees = isTrialOrder ? 0 : Math.max(0, grandTotalRupees - advanceAmountRupees);
 
-  const initialMilestones = [
-    {
-      milestone_number: 1,
-      title: milestoneRule?.milestones?.[0]?.milestone_name || 'Advance Payment at Order Placement',
-      percentage: m1Pct,
-      amount: advanceAmountRupees,
-      stage: 'order_placement',
-      tat_days: milestoneRule?.milestones?.[0]?.tat_days || 1,
-      payment_status: 'pending_verification',
-      utr_number: cleanUtr,
-      amount_paid: Number(amount_paid) || advanceAmountRupees,
-      payment_date: payment_date ? new Date(payment_date) : new Date(),
-      receipt_url: receipt_url || null,
-      receipt_filename: receipt_filename || null,
-      sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
-      account_holder_name: account_holder_name ? account_holder_name.trim() : null,
-    },
-    {
-      milestone_number: 2,
-      title: milestoneRule?.milestones?.[1]?.milestone_name || 'Remaining Payment Before Dispatch',
-      percentage: m2Pct,
-      amount: remainingAmountRupees,
-      stage: 'before_dispatch',
-      tat_days: milestoneRule?.milestones?.[1]?.tat_days || 2,
-      payment_status: 'unpaid',
-      utr_number: null,
-      amount_paid: 0,
-      payment_date: null,
-      receipt_url: null,
-      receipt_filename: null,
-      sender_bank_name: null,
-      account_holder_name: null,
-    },
-  ];
+  const initialMilestones = isTrialOrder
+    ? [
+        {
+          milestone_number: 1,
+          title: 'Full Payment (Trial Kit Order)',
+          percentage: 100,
+          amount: grandTotalRupees,
+          stage: 'order_placement',
+          tat_days: 1,
+          payment_status: 'pending_verification',
+          utr_number: cleanUtr,
+          amount_paid: Number(amount_paid) || grandTotalRupees,
+          payment_date: payment_date ? new Date(payment_date) : new Date(),
+          receipt_url: receipt_url || null,
+          receipt_filename: receipt_filename || null,
+          sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+          account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+        }
+      ]
+    : [
+        {
+          milestone_number: 1,
+          title: milestoneRule?.milestones?.[0]?.milestone_name || 'Advance Payment at Order Placement',
+          percentage: m1Pct,
+          amount: advanceAmountRupees,
+          stage: 'order_placement',
+          tat_days: milestoneRule?.milestones?.[0]?.tat_days || 1,
+          payment_status: 'pending_verification',
+          utr_number: cleanUtr,
+          amount_paid: Number(amount_paid) || advanceAmountRupees,
+          payment_date: payment_date ? new Date(payment_date) : new Date(),
+          receipt_url: receipt_url || null,
+          receipt_filename: receipt_filename || null,
+          sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+          account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+        },
+        {
+          milestone_number: 2,
+          title: milestoneRule?.milestones?.[1]?.milestone_name || 'Remaining Payment Before Dispatch',
+          percentage: m2Pct,
+          amount: remainingAmountRupees,
+          stage: 'before_dispatch',
+          tat_days: milestoneRule?.milestones?.[1]?.tat_days || 2,
+          payment_status: 'unpaid',
+          utr_number: null,
+          amount_paid: 0,
+          payment_date: null,
+          receipt_url: null,
+          receipt_filename: null,
+          sender_bank_name: null,
+          account_holder_name: null,
+        },
+      ];
 
   const resolvedPaymentMethod = offline_payment_data.payment_method || (offline_payment_data.payment_gateway_used === 'icici_ecollection' ? 'icici_ecollection' : 'offline_bank_transfer');
   const resolvedGatewayUsed = offline_payment_data.payment_gateway_used || (offline_payment_data.payment_method === 'icici_ecollection' ? 'icici_ecollection' : 'bank_transfer');
@@ -544,7 +564,9 @@ async function createEpcOfflineOrder({
   if (isOnlineECollection && initialMilestones[0]) {
     initialMilestones[0].payment_status = 'verified';
     initialMilestones[0].verified_at = new Date();
-    initialMilestones[0].notes = 'Online ICICI eCollection advance verified';
+    initialMilestones[0].notes = isTrialOrder
+      ? 'Online ICICI eCollection trial kit full payment verified'
+      : 'Online ICICI eCollection advance verified';
   }
 
   // 4. Create EPC Order with atomic rollback guard
@@ -612,27 +634,27 @@ async function createEpcOfflineOrder({
     payment_status: isOnlineECollection ? 'captured' : 'pending_verification',
     payment_reference: cleanUtr,
     payment_milestones: {
-      configured_milestone_id: milestoneRule?._id || null,
+      configured_milestone_id: isTrialOrder ? null : (milestoneRule?._id || null),
       total_order_amount: grandTotalRupees,
       advance_percentage: m1Pct,
       advance_amount: advanceAmountRupees,
       remaining_percentage: m2Pct,
       remaining_amount: remainingAmountRupees,
-      current_milestone_due: isOnlineECollection ? (remainingAmountRupees > 0 ? 2 : 1) : 1,
-      milestone_verification_status: isOnlineECollection ? (remainingAmountRupees > 0 ? 'advance_verified' : 'fully_paid') : 'awaiting_advance',
+      current_milestone_due: 1,
+      milestone_verification_status: isOnlineECollection ? 'fully_paid' : 'awaiting_advance',
       milestones: initialMilestones,
     },
     payment_tracking: {
-      customer_payment_status: isOnlineECollection ? (remainingAmountRupees > 0 ? 'Partially Paid' : 'Paid') : 'Verification Pending',
-      current_stage: isOnlineECollection ? (remainingAmountRupees > 0 ? 'production_milestone' : 'final_settlement') : 'accounts_verification',
+      customer_payment_status: isOnlineECollection ? 'Paid' : 'Verification Pending',
+      current_stage: isOnlineECollection ? (isTrialOrder ? 'final_settlement' : (remainingAmountRupees > 0 ? 'production_milestone' : 'final_settlement')) : 'accounts_verification',
       delay_signal: 'green',
       days_elapsed: 0,
-      total_verified_amount: isOnlineECollection ? (Number(amount_paid) || advanceAmountRupees) : 0,
-      outstanding_amount: isOnlineECollection ? remainingAmountRupees : grandTotalRupees,
+      total_verified_amount: isOnlineECollection ? (Number(amount_paid) || grandTotalRupees) : 0,
+      outstanding_amount: isTrialOrder ? 0 : (isOnlineECollection ? remainingAmountRupees : grandTotalRupees),
     },
     offline_payment: {
       utr_number: cleanUtr,
-      amount_paid: Number(amount_paid) || advanceAmountRupees,
+      amount_paid: Number(amount_paid) || (isTrialOrder ? grandTotalRupees : advanceAmountRupees),
       payment_date: payment_date ? new Date(payment_date) : new Date(),
       receipt_url: receipt_url || null,
       receipt_filename: receipt_filename || null,
