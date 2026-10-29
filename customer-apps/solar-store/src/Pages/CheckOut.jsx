@@ -149,8 +149,8 @@ export default function CheckOut() {
     contact_phone: "",
   });
 
-  // ── Module 1.1: 3 Fulfillment Modes & Live Warehouse Capacity Check ────────
-  const [fulfillmentMode, setFulfillmentMode] = useState("franchisee_warehouse"); // 'franchisee_warehouse' | 'epc_warehouse' | 'direct_site'
+  // ── Module 1.1: Fulfillment Modes & Live Warehouse Capacity Check ──────────
+  const [fulfillmentMode, setFulfillmentMode] = useState("direct_site"); // 'direct_site' | 'epc_warehouse'
   const [capacityChecking, setCapacityChecking] = useState(false);
   const [capacityResult, setCapacityResult] = useState(null);
 
@@ -823,11 +823,11 @@ export default function CheckOut() {
       };
 
       // Capacity Guard Validation
-      if (fulfillmentMode === "franchisee_warehouse" && capacityResult && capacityResult.allowed === false) {
+      if (fulfillmentMode === "epc_warehouse" && capacityResult && capacityResult.allowed === false) {
         dispatch(
           setAlert({
             type: "error",
-            message: "Franchisee warehouse is at capacity limit. Please select Direct Delivery or EPC Warehouse to proceed.",
+            message: "EPC warehouse is at capacity limit. Please select Direct Site Delivery to proceed.",
           })
         );
         setSubmitting(false);
@@ -1324,49 +1324,35 @@ export default function CheckOut() {
               </div>
 
               <div className="space-y-4">
-                {/* ── Module 1.1: 3 Fulfillment Modes Selection ── */}
+                {/* ── Module 1.1: Fulfillment Modes Selection ── */}
                 <div className="space-y-3 pb-3 border-b border-border">
                   <label className="block text-xs font-black uppercase tracking-wider text-text-secondary">
                     Select Delivery Fulfillment Mode <span className="text-red-500">*</span>
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* Mode 1: Franchisee Warehouse */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Mode 1: Direct Site Address / Pincode Delivery */}
                     <div
-                      onClick={() => setFulfillmentMode("franchisee_warehouse")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "franchisee_warehouse"
+                      onClick={() => setFulfillmentMode("direct_site")}
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "direct_site"
                         ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
                         : "border-border bg-surface hover:border-primary/50"
                         }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-2xl">🏬</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "franchisee_warehouse" ? "border-primary bg-primary text-white" : "border-border"
+                          <span className="text-2xl">🚚</span>
+                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "direct_site" ? "border-primary bg-primary text-white" : "border-border"
                             }`}>
-                            {fulfillmentMode === "franchisee_warehouse" && <FiCheck size={10} />}
+                            {fulfillmentMode === "direct_site" && <FiCheck size={10} />}
                           </span>
                         </div>
-                        <h4 className="font-extrabold text-sm text-text-primary">Franchisee Warehouse</h4>
+                        <h4 className="font-extrabold text-sm text-text-primary">Direct Site Delivery</h4>
                         <p className="text-[11px] text-text-secondary leading-relaxed">
-                          Delivery to nearest authorized Franchisee Regional Hub Warehouse.
+                          Transport directly unloaded at the installation site address or pincode.
                         </p>
                       </div>
-
-                      {/* Live Capacity Validation Indicator */}
-                      <div className="mt-3 pt-2 border-t border-border/60">
-                        {capacityChecking ? (
-                          <span className="text-[10px] text-primary flex items-center gap-1 font-semibold animate-pulse">
-                            Checking live warehouse capacity...
-                          </span>
-                        ) : capacityResult?.allowed === false ? (
-                          <div className="p-1.5 bg-red-500/10 border border-red-500/30 rounded-lg text-[10px] text-red-600 font-bold flex items-center gap-1">
-                            <FiAlertTriangle className="shrink-0" /> At Capacity Limit ({capacityResult?.available_kits || 0} left)
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                            <FiCheckCircle className="shrink-0" /> Available Capacity Verified
-                          </div>
-                        )}
+                      <div className="mt-3 pt-2 border-t border-border/60 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                        <FiCheckCircle /> Site Pincode Delivery
                       </div>
                     </div>
 
@@ -1395,42 +1381,16 @@ export default function CheckOut() {
                         Central Direct Dispatch
                       </div>
                     </div>
-
-                    {/* Mode 3: Direct Site Address / Pincode Delivery */}
-                    <div
-                      onClick={() => setFulfillmentMode("direct_site")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "direct_site"
-                        ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
-                        : "border-border bg-surface hover:border-primary/50"
-                        }`}
-                    >
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-2xl">🚚</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "direct_site" ? "border-primary bg-primary text-white" : "border-border"
-                            }`}>
-                            {fulfillmentMode === "direct_site" && <FiCheck size={10} />}
-                          </span>
-                        </div>
-                        <h4 className="font-extrabold text-sm text-text-primary">Direct Site Delivery</h4>
-                        <p className="text-[11px] text-text-secondary leading-relaxed">
-                          Transport directly unloaded at the installation site address or pincode.
-                        </p>
-                      </div>
-                      <div className="mt-3 pt-2 border-t border-border/60 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                        <FiCheckCircle /> Site Pincode Delivery
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Capacity Warning Banner if Franchisee Warehouse is full */}
-                  {fulfillmentMode === "franchisee_warehouse" && capacityResult?.allowed === false && (
+                  {/* Capacity Warning Banner if EPC Warehouse is full */}
+                  {fulfillmentMode === "epc_warehouse" && capacityResult?.allowed === false && (
                     <div className="p-3 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2 animate-in fade-in duration-200">
                       <FiAlertTriangle className="text-amber-600 text-base shrink-0 mt-0.5" />
                       <div>
-                        <strong className="block font-bold">Franchisee warehouse at capacity limit.</strong>
+                        <strong className="block font-bold">EPC Warehouse at capacity limit.</strong>
                         <span>
-                          {capacityResult?.reason || "Current stored inventory and incoming reserved commitments have reached storage limits."} Please select <strong>Direct Delivery</strong> or <strong>EPC Warehouse</strong> above.
+                          {capacityResult?.reason || "Current stored inventory and incoming reserved commitments have reached storage limits."} Please select <strong>Direct Site Delivery</strong> above.
                         </span>
                       </div>
                     </div>

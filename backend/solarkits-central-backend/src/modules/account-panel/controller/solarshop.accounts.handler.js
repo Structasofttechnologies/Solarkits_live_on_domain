@@ -2647,26 +2647,65 @@ function computeOrderPaymentTracking(o, stageTats) {
   const payStatus = o.payment_status || 'pending';
   const mStatus = o.payment_milestones?.milestone_verification_status;
 
+  const m1 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
+  const m2 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
+  const hasMilestones = Boolean(
+    o.payment_milestones?.milestones?.length > 0 ||
+    o.payment_milestones?.advance_amount ||
+    o.payment_milestones?.remaining_amount
+  );
+
+  const isM2Verified = Boolean(
+    m2?.payment_status === 'verified' ||
+    mStatus === 'fully_paid' ||
+    o.follow_up?.status === 'completed'
+  );
+
+  const isM1Verified = Boolean(
+    m1?.payment_status === 'verified' ||
+    offVer === 'approved' ||
+    admApp === 'approved' ||
+    o.is_official_order_generated ||
+    (isOnline && payStatus !== 'failed' && payStatus !== 'rejected')
+  );
+
+  const isM2Pending = !isM2Verified && Boolean(
+    m2?.payment_status === 'pending_verification' ||
+    mStatus === 'final_payment_pending_verification' ||
+    o.follow_up?.status === 'second_payment_submitted' ||
+    (m2?.utr_number && !m2?.verified_by)
+  );
+
   // Calculate verified amount received
   let amountReceived = 0;
-  if (isOnline) {
-    if (payStatus === 'captured' || payStatus === 'paid' || offVer === 'approved' || admApp === 'approved') {
-      amountReceived = o.offline_payment?.amount_paid || grandTotal;
-      if (amountReceived <= 0 && grandTotal > 0) amountReceived = grandTotal;
-    } else if (o.offline_payment?.amount_paid) {
-      amountReceived = o.offline_payment.amount_paid;
+  if (hasMilestones) {
+    if (isM2Verified) {
+      amountReceived = grandTotal;
+    } else if (isM1Verified) {
+      const advPct = o.payment_milestones?.advance_percentage ?? (m1?.percentage || 30);
+      amountReceived = o.payment_milestones?.advance_amount || m1?.amount_paid || m1?.amount || o.offline_payment?.amount_paid || Math.round((grandTotal * advPct) / 100);
+    } else {
+      amountReceived = 0;
     }
   } else {
-    if (admApp === 'approved' || payStatus === 'captured' || mStatus === 'fully_paid') {
-      amountReceived = grandTotal;
-    } else if (mStatus === 'advance_verified' || offVer === 'approved') {
-      amountReceived = o.payment_milestones?.advance_amount || o.offline_payment?.amount_paid || (grandTotal * 0.3);
+    // Single 100% payment (no milestones)
+    if (isOnline) {
+      if (payStatus === 'captured' || payStatus === 'paid' || offVer === 'approved' || admApp === 'approved') {
+        amountReceived = grandTotal;
+      } else if (o.offline_payment?.amount_paid) {
+        amountReceived = o.offline_payment.amount_paid;
+      }
+    } else {
+      if (admApp === 'approved' || payStatus === 'captured' || payStatus === 'paid' || mStatus === 'fully_paid') {
+        amountReceived = grandTotal;
+      } else if (offVer === 'approved') {
+        amountReceived = o.offline_payment?.amount_paid || grandTotal;
+      }
     }
   }
   const outstandingAmount = Math.max(0, grandTotal - amountReceived);
 
-  // Customer Payment Status (10 standard statuses)
-  // CRITICAL NOTE: Online ICICI payments NEVER require Admin Approval!
+  // Customer Payment Status
   let customerPaymentStatus = 'Verification Pending';
   if (payStatus === 'refunded') {
     customerPaymentStatus = 'Refunded';
@@ -2674,10 +2713,10 @@ function computeOrderPaymentTracking(o, stageTats) {
     customerPaymentStatus = 'Refund Pending';
   } else if (payStatus === 'failed' || offVer === 'rejected' || (!isOnline && admApp === 'rejected')) {
     customerPaymentStatus = 'Payment Failed';
-  } else if (isOnline && (offVer === 'approved' || payStatus === 'captured' || payStatus === 'paid' || admApp === 'approved')) {
-    customerPaymentStatus = (amountReceived >= grandTotal && grandTotal > 0) ? 'Paid' : (amountReceived > 0 ? 'Partially Paid' : 'Paid');
-  } else if (amountReceived >= grandTotal && grandTotal > 0) {
+  } else if (isM2Verified || (amountReceived >= grandTotal && grandTotal > 0)) {
     customerPaymentStatus = 'Paid';
+  } else if (isM2Pending) {
+    customerPaymentStatus = 'Milestone 2 Submitted';
   } else if (amountReceived > 0) {
     customerPaymentStatus = 'Partially Paid';
   } else if (!isOnline && (offVer === 'submitted_for_approval' || (offVer === 'approved' && admApp === 'pending'))) {
@@ -2706,6 +2745,9 @@ function computeOrderPaymentTracking(o, stageTats) {
   } else if (customerPaymentStatus === 'Payment Initiated' || customerPaymentStatus === 'Payment Pending') {
     currentStageKey = 'initial_payment';
     stageStartDate = o.created_at;
+  } else if (customerPaymentStatus === 'Milestone 2 Submitted') {
+    currentStageKey = 'delivery_milestone';
+    stageStartDate = m2?.payment_date || o.updated_at || o.created_at;
   } else if (customerPaymentStatus === 'Partially Paid') {
     if (['ready_for_dispatch', 'dispatched', 'in_transit'].includes(o.order_status)) {
       currentStageKey = 'delivery_milestone';
@@ -2716,7 +2758,7 @@ function computeOrderPaymentTracking(o, stageTats) {
     }
   } else if (customerPaymentStatus === 'Paid') {
     currentStageKey = 'final_settlement';
-    stageStartDate = o.offline_payment?.admin_approved_at || o.offline_payment?.verified_at || o.updated_at || o.created_at;
+    stageStartDate = m2?.verified_at || o.offline_payment?.admin_approved_at || o.offline_payment?.verified_at || o.updated_at || o.created_at;
   } else {
     currentStageKey = isOnline ? 'final_settlement' : 'accounts_verification';
     stageStartDate = o.created_at;
@@ -2746,8 +2788,9 @@ function computeOrderPaymentTracking(o, stageTats) {
     delaySignal = 'green';
   }
 
+  const latestUtr = m2?.utr_number || m1?.utr_number || o.offline_payment?.utr_number || o.payment_reference || null;
+
   // Official order number & pre-approval request ID
-  // Online ICICI payments auto-generate official order upon capture or verification (NO admin approval needed)
   const isOfficialOrderGenerated = Boolean(
     o.is_official_order_generated ||
     admApp === 'approved' ||
@@ -2763,6 +2806,7 @@ function computeOrderPaymentTracking(o, stageTats) {
     customer_payment_status: customerPaymentStatus,
     current_payment_stage: currentStageKey,
     current_payment_stage_label: stageConfig.stage_name || currentStageKey,
+    latest_utr: latestUtr,
     days_elapsed: daysElapsed,
     payment_tat_days: configuredTatDays,
     delay_signal: delaySignal,
@@ -3052,7 +3096,7 @@ const get_unified_epc_orders = async (req, res) => {
         paid_amount: tracking.amount_received,
         offline_payment: o.offline_payment ? {
           ...o.offline_payment,
-          amount_received: o.offline_payment.amount_paid != null ? o.offline_payment.amount_paid : tracking.amount_received,
+          amount_received: tracking.amount_received,
           payment_receipt_url: o.offline_payment.receipt_url || o.offline_payment.payment_receipt_url || null,
         } : null,
         franchisee_name: isDirect ? null : (o.reseller_id?.business_name || 'Assigned Franchisee'),
@@ -3691,11 +3735,12 @@ const get_customer_payment_followups = async (req, res) => {
 
     const stageTats = await resolveStageTats();
 
-    // Base Condition: Advance verified and remaining milestone payment is pending!
+    // Base Condition: Advance verified and remaining milestone payment is pending (or second payment submitted)!
     const andConditions = [
       {
         $or: [
           { 'payment_milestones.milestone_verification_status': { $in: ['advance_verified', 'awaiting_final_payment', 'final_payment_pending_verification'] } },
+          { 'payment_milestones.milestones': { $elemMatch: { milestone_number: 2, utr_number: { $exists: true, $ne: null }, verified_by: null } } },
           {
             $and: [
               { $or: [{ 'offline_payment.admin_approval_status': 'approved' }, { is_official_order_generated: true }] },
@@ -3724,6 +3769,7 @@ const get_customer_payment_followups = async (req, res) => {
           { 'payment_milestones.milestone_verification_status': 'final_payment_pending_verification' },
           { 'follow_up.status': 'second_payment_submitted' },
           { 'payment_milestones.milestones.1.payment_status': 'pending_verification' },
+          { 'payment_milestones.milestones': { $elemMatch: { milestone_number: 2, utr_number: { $exists: true, $ne: null }, verified_by: null } } },
         ]
       });
     } else if (tab === 'promised') {
@@ -3803,7 +3849,10 @@ const get_customer_payment_followups = async (req, res) => {
       const m1 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
       const m2 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
 
-      const advanceAmt = o.payment_milestones?.advance_amount || m1?.amount || o.offline_payment?.amount_paid || Math.round(grandTotal * 0.3);
+      const advPct = o.payment_milestones?.advance_percentage ?? (m1?.percentage || 30);
+      const remPct = o.payment_milestones?.remaining_percentage ?? (m2?.percentage || (100 - advPct));
+
+      const advanceAmt = o.payment_milestones?.advance_amount || m1?.amount || o.offline_payment?.amount_paid || Math.round((grandTotal * advPct) / 100);
       const pendingAmt = o.payment_milestones?.remaining_amount || m2?.amount || Math.max(0, grandTotal - advanceAmt);
 
       const customerName = o.epc_id?.company_name || o.epc_id?.name || o.delivery_address?.contact_name || 'EPC Buyer';
@@ -3823,16 +3872,16 @@ const get_customer_payment_followups = async (req, res) => {
         payment_status: o.payment_status,
         grand_total: grandTotal,
         total_amount: grandTotal,
-        advance_percentage: o.payment_milestones?.advance_percentage || 30,
+        advance_percentage: advPct,
         advance_amount: advanceAmt,
         advance_utr: m1?.utr_number || o.offline_payment?.utr_number || '-',
         advance_verified_at: m1?.verified_at || o.offline_payment?.verified_at || o.offline_payment?.admin_approved_at || null,
-        remaining_percentage: o.payment_milestones?.remaining_percentage || 70,
+        remaining_percentage: remPct,
         remaining_amount: pendingAmt,
         outstanding_amount: pendingAmt,
         amount_received: advanceAmt,
         current_milestone_number: 2,
-        current_milestone_name: m2?.title || 'Milestone 2: 70% Remaining Payment Before Dispatch',
+        current_milestone_name: m2?.title || `Milestone 2: ${remPct}% Remaining Payment Before Dispatch`,
         milestone_verification_status: o.payment_milestones?.milestone_verification_status || 'advance_verified',
         milestone_2_submission: m2 ? {
           payment_status: m2.payment_status,
@@ -3882,6 +3931,7 @@ const get_customer_payment_followups = async (req, res) => {
     const allPendingFollowups = await EpcOrder.find({
       $or: [
         { 'payment_milestones.milestone_verification_status': { $in: ['advance_verified', 'awaiting_final_payment', 'final_payment_pending_verification'] } },
+        { 'payment_milestones.milestones': { $elemMatch: { milestone_number: 2, utr_number: { $exists: true, $ne: null }, verified_by: null } } },
         {
           $and: [
             { $or: [{ 'offline_payment.admin_approval_status': 'approved' }, { is_official_order_generated: true }] },
@@ -3917,7 +3967,8 @@ const get_customer_payment_followups = async (req, res) => {
 
       const m1 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
       const m2 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
-      const adv = o.payment_milestones?.advance_amount || m1?.amount || o.offline_payment?.amount_paid || Math.round(val * 0.3);
+      const advPct = o.payment_milestones?.advance_percentage ?? (m1?.percentage || 30);
+      const adv = o.payment_milestones?.advance_amount || m1?.amount || o.offline_payment?.amount_paid || Math.round((val * advPct) / 100);
       const pend = o.payment_milestones?.remaining_amount || m2?.amount || Math.max(0, val - adv);
 
       totalAdvanceCollected += adv;
@@ -3928,7 +3979,13 @@ const get_customer_payment_followups = async (req, res) => {
         overdueCount++;
       }
 
-      if (o.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification' || o.follow_up?.status === 'second_payment_submitted' || m2?.payment_status === 'pending_verification') {
+      const hasSubmitted =
+        o.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification' ||
+        o.follow_up?.status === 'second_payment_submitted' ||
+        m2?.payment_status === 'pending_verification' ||
+        Boolean(m2?.utr_number && !m2?.verified_by);
+
+      if (hasSubmitted) {
         paymentSubmittedCount++;
       }
 
@@ -4083,6 +4140,7 @@ const record_milestone_two_payment = async (req, res) => {
     }
 
     const paidAmt = Number(amount_paid) || m2.amount || order.payment_milestones.remaining_amount || 0;
+    const remPct = order.payment_milestones?.remaining_percentage || m2.percentage || 70;
     m2.payment_status = 'verified';
     m2.utr_number = cleanUtr;
     m2.amount_paid = paidAmt;
@@ -4092,7 +4150,7 @@ const record_milestone_two_payment = async (req, res) => {
     m2.sender_bank_name = sender_bank_name ? sender_bank_name.trim() : m2.sender_bank_name;
     m2.verified_by = req.user?.id || req.user?._id || null;
     m2.verified_at = new Date();
-    m2.notes = accounts_remarks || 'Milestone 2 (70%) verified by Accounts';
+    m2.notes = accounts_remarks || `Milestone 2 (${remPct}%) verified by Accounts`;
 
     order.payment_milestones.milestone_verification_status = 'fully_paid';
     order.payment_milestones.current_milestone_due = 2;
@@ -4107,14 +4165,14 @@ const record_milestone_two_payment = async (req, res) => {
       order.follow_up = { status: 'completed', history: [] };
     }
     order.follow_up.status = 'completed';
-    order.follow_up.remarks = `Milestone 2 (70%) payment of ₹${paidAmt} verified via UTR ${cleanUtr}`;
+    order.follow_up.remarks = `Milestone 2 (${remPct}%) payment of ₹${paidAmt} verified via UTR ${cleanUtr}`;
     order.follow_up.history.push({
       contacted_at: new Date(),
       contacted_by: req.user?.id || req.user?._id || null,
       contacted_by_name: req.user?.name || req.user?.email || 'Accounts Officer',
       contact_mode: 'call',
-      status: 'second_payment_submitted',
-      remarks: `Recorded & verified 70% milestone payment. UTR: ${cleanUtr}`,
+      status: 'completed',
+      remarks: `Recorded & verified ${remPct}% milestone payment. UTR: ${cleanUtr}`,
     });
 
     // Generate Final GST Tax Invoice if not generated

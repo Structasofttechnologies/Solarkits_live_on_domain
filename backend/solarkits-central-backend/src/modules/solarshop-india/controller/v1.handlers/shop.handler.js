@@ -3519,7 +3519,7 @@ const create_epc_offline_checkout = async (req, res) => {
       offline_payment_data.sender_bank_name = body.sender_bank_name;
     }
 
-    let fulfillment_mode = body.fulfillment_mode || 'franchisee_warehouse';
+    let fulfillment_mode = body.fulfillment_mode || 'direct_site';
     let order_load_metrics = body.order_load_metrics;
     if (typeof order_load_metrics === 'string') {
       try { order_load_metrics = JSON.parse(order_load_metrics); } catch (e) {}

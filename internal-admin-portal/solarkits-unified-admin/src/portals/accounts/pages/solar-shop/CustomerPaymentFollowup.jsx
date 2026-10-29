@@ -114,7 +114,7 @@ export default function CustomerPaymentFollowup() {
     submitting: false,
   });
 
-  // ── Milestone 2 (70%) Payment Verification Modal State ───────────────────
+  // ── Milestone 2 Payment Verification Modal State ─────────────────────────
   const [milestoneModal, setMilestoneModal] = useState({
     isOpen: false,
     order: null,
@@ -290,7 +290,7 @@ export default function CustomerPaymentFollowup() {
       sender_bank_name: m2Sub?.sender_bank_name || "",
       receiving_account_reference: "HDFC Bank - Current A/c 50200088991122",
       receipt_url: m2Sub?.receipt_url || "",
-      accounts_remarks: `Milestone 2 (70%) payment verified for Order ${order.order_number}`,
+      accounts_remarks: `Milestone 2 (${order.remaining_percentage || order.payment_milestones?.remaining_percentage || 70}%) payment verified for Order ${order.order_number}`,
       submitting: false,
       duplicateCheck: { checked: false, isDuplicate: false, matchingOrder: null, checking: false },
     });
@@ -372,8 +372,8 @@ export default function CustomerPaymentFollowup() {
             </span>
           </div>
           <p className="text-xs text-text-secondary max-w-3xl leading-relaxed">
-            Follow up on pending 70% milestone payments for customers whose 30% advance is verified.
-            Maintain contact call logs, record promised payment dates, and verify the final 70% payment to unlock warehouse dispatch.
+            Follow up on pending milestone payments for customers whose advance is verified.
+            Maintain contact call logs, record promised payment dates, and verify the final balance payment to unlock warehouse dispatch.
           </p>
         </div>
 
@@ -432,16 +432,16 @@ export default function CustomerPaymentFollowup() {
             </div>
           </div>
           <div className="text-[10px] text-text-secondary border-t border-border/60 pt-2 flex items-center justify-between">
-            <span>30% Advance Verified</span>
+            <span>Advance Verified</span>
             <span className="text-emerald-600 dark:text-emerald-400 font-bold">In Production Pipeline</span>
           </div>
         </div>
 
-        {/* Card 2: Advance Collected (Verified 30%) */}
+        {/* Card 2: Advance Collected */}
         <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase text-text-secondary tracking-wider">
-              Advance Collected (30%)
+              Advance Collected
             </span>
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
               <MdOutlineVerifiedUser />
@@ -461,11 +461,11 @@ export default function CustomerPaymentFollowup() {
           </div>
         </div>
 
-        {/* Card 3: Pending Collection (70% Outstanding) */}
+        {/* Card 3: Pending Recovery */}
         <div className="bg-surface rounded-2xl border border-border p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase text-text-secondary tracking-wider">
-              Pending Recovery (70%)
+              Pending Recovery
             </span>
             <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
               <MdPayments />
@@ -534,7 +534,7 @@ export default function CustomerPaymentFollowup() {
             { key: "all", label: "All Pending Follow-ups", count: stats.total_orders },
             {
               key: "awaiting_payment",
-              label: "Awaiting 70% Transfer",
+              label: "Awaiting Balance Transfer",
               count: Math.max(0, stats.total_orders - stats.payment_submitted_count),
             },
             {
@@ -733,8 +733,8 @@ export default function CustomerPaymentFollowup() {
                 <th className="py-3 px-3">Customer / Solar EPC</th>
                 <th className="py-3 px-3">Kit & Capacity</th>
                 <th className="py-3 px-3 text-right">Order Value (100%)</th>
-                <th className="py-3 px-3 text-right">Advance Paid (30%)</th>
-                <th className="py-3 px-3 text-right">Pending Balance (70%)</th>
+                <th className="py-3 px-3 text-right">Advance Paid</th>
+                <th className="py-3 px-3 text-right">Pending Balance</th>
                 <th className="py-3 px-3">Next Milestone</th>
                 <th className="py-3 px-3">Order Lifecycle</th>
                 <th className="py-3 px-3 text-center">TAT Elapsed</th>
@@ -793,7 +793,7 @@ export default function CustomerPaymentFollowup() {
                           </button>
                         </div>
                         <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 mt-1">
-                          <FiCheckCircle size={9} /> Advance 30% Verified
+                          <FiCheckCircle size={9} /> Advance {o.advance_percentage || o.payment_milestones?.advance_percentage || 30}% Verified
                         </span>
                         <div className="text-[10px] text-text-muted mt-0.5">
                           {formatDate(o.created_at)}
@@ -862,13 +862,13 @@ export default function CustomerPaymentFollowup() {
                         <span className="text-[9px] text-text-muted font-bold">Gross Total</span>
                       </td>
 
-                      {/* 5. Advance Paid (30% Verified) */}
+                      {/* 5. Advance Paid Verified */}
                       <td className="py-3 px-3 text-right">
                         <div className="font-bold text-emerald-600 dark:text-emerald-400">
                           {formatCurrency(o.advance_amount)}
                         </div>
                         <div className="text-[9px] text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-end gap-1 mt-0.5">
-                          <span>30% Verified</span>
+                          <span>{o.advance_percentage || o.payment_milestones?.advance_percentage || 30}% Verified</span>
                           <FiCheckCircle size={8} />
                         </div>
                         {o.advance_utr && o.advance_utr !== "-" && (
@@ -878,13 +878,13 @@ export default function CustomerPaymentFollowup() {
                         )}
                       </td>
 
-                      {/* 6. Pending Balance (70% Outstanding) */}
+                      {/* 6. Pending Balance Outstanding */}
                       <td className="py-3 px-3 text-right">
                         <div className="font-black text-amber-600 dark:text-amber-400 text-sm">
                           {formatCurrency(o.remaining_amount)}
                         </div>
                         <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 mt-0.5">
-                          70% Outstanding
+                          {o.remaining_percentage || o.payment_milestones?.remaining_percentage || 70}% Outstanding
                         </span>
                       </td>
 
@@ -892,7 +892,7 @@ export default function CustomerPaymentFollowup() {
                       <td className="py-3 px-3">
                         <div className="space-y-0.5">
                           <div className="font-bold text-text-primary text-[11px]">
-                            Milestone 2 (70%)
+                            Milestone 2 ({o.remaining_percentage || o.payment_milestones?.remaining_percentage || 70}%)
                           </div>
                           <div className="text-[9px] text-text-muted">
                             Trigger: Before Dispatch
@@ -971,7 +971,7 @@ export default function CustomerPaymentFollowup() {
                             {o.follow_up?.status === "promised_to_pay"
                               ? `Promised (${formatDate(o.follow_up.promised_payment_date)})`
                               : o.follow_up?.status === "second_payment_submitted"
-                              ? "70% UTR Submitted"
+                              ? `${o.remaining_percentage || o.payment_milestones?.remaining_percentage || 70}% UTR Submitted`
                               : o.follow_up?.status === "contacted"
                               ? "Follow-up Done"
                               : "Pending Call"}
@@ -999,15 +999,15 @@ export default function CustomerPaymentFollowup() {
                             <span>Follow-up</span>
                           </button>
 
-                          {/* Record / Verify 70% Payment */}
+                          {/* Record / Verify Milestone 2 Payment */}
                           <button
                             type="button"
                             onClick={() => handleOpenMilestoneModal(o)}
                             className="px-2.5 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/30 transition flex items-center gap-1"
-                            title="Record or Verify Milestone 2 (70%) Payment"
+                            title={`Record or Verify Milestone 2 (${o.remaining_percentage || o.payment_milestones?.remaining_percentage || 70}%) Payment`}
                           >
                             <FaFileInvoiceDollar size={12} />
-                            <span>Record 70%</span>
+                            <span>Record Balance</span>
                           </button>
 
                           {/* Transaction Details Side Drawer */}
@@ -1105,11 +1105,15 @@ export default function CustomerPaymentFollowup() {
                   <span className="font-black text-text-primary">{formatCurrency(followUpModal.order.grand_total)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-emerald-600 font-bold block uppercase">30% Verified</span>
+                  <span className="text-[10px] text-emerald-600 font-bold block uppercase">
+                    {followUpModal.order.advance_percentage || followUpModal.order.payment_milestones?.advance_percentage || 30}% Verified
+                  </span>
                   <span className="font-black text-emerald-600">{formatCurrency(followUpModal.order.advance_amount)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-amber-600 font-bold block uppercase">70% Due</span>
+                  <span className="text-[10px] text-amber-600 font-bold block uppercase">
+                    {followUpModal.order.remaining_percentage || followUpModal.order.payment_milestones?.remaining_percentage || 70}% Due
+                  </span>
                   <span className="font-black text-amber-600">{formatCurrency(followUpModal.order.remaining_amount)}</span>
                 </div>
               </div>
@@ -1128,7 +1132,7 @@ export default function CustomerPaymentFollowup() {
                   <option value="promised_to_pay">Customer Promised Payment Date</option>
                   <option value="contacted">Call Completed / Discussed Milestone 2</option>
                   <option value="details_sent">Bank Details / Payment Link Sent via WhatsApp</option>
-                  <option value="second_payment_submitted">Customer Claimed 70% Paid (UTR Shared)</option>
+                  <option value="second_payment_submitted">Customer Claimed Balance Paid (UTR Shared)</option>
                   <option value="pending">Call Scheduled / Follow-up Pending</option>
                 </select>
               </div>
@@ -1224,14 +1228,16 @@ export default function CustomerPaymentFollowup() {
         </div>
       )}
 
-      {/* ── Modal 2: Record / Verify Milestone 2 (70%) Payment ─────────────── */}
+      {/* ── Modal 2: Record / Verify Milestone 2 Payment ───────────────────── */}
       {milestoneModal.isOpen && milestoneModal.order && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-surface border border-border rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-5 border-b border-border flex items-center justify-between">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-base font-black text-text-primary">Record Milestone 2 (70%) Payment</h3>
+                  <h3 className="text-base font-black text-text-primary">
+                    Record Milestone 2 ({milestoneModal.order.remaining_percentage || milestoneModal.order.payment_milestones?.remaining_percentage || 70}%) Payment
+                  </h3>
                   <span className="font-mono text-xs font-bold text-emerald-600 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
                     {milestoneModal.order.order_number}
                   </span>
@@ -1254,7 +1260,7 @@ export default function CustomerPaymentFollowup() {
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
                 <div>
                   <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold uppercase block">
-                    Outstanding 70% Balance Due
+                    Outstanding {milestoneModal.order.remaining_percentage || milestoneModal.order.payment_milestones?.remaining_percentage || 70}% Balance Due
                   </span>
                   <span className="text-lg font-black text-amber-700 dark:text-amber-300">
                     {formatCurrency(milestoneModal.order.remaining_amount)}

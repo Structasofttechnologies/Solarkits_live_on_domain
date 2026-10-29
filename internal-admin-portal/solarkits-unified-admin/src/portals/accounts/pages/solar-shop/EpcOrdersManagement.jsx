@@ -611,12 +611,12 @@ export default function EpcOrdersManagement() {
           <Link
             to="/account-panel/solar-shop/customer-payment-followup"
             className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 shadow-sm"
-            title="Open Dedicated Customer Payment & Follow-up Desk (70% Pending)"
+            title="Open Dedicated Customer Payment & Follow-up Desk (Pending Balance)"
           >
             <MdOutlinePendingActions className="text-sm" />
             <span>Customer Payment & Follow-up</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
-              70% Pending
+              Balance Due
             </span>
           </Link>
         </div>
@@ -876,8 +876,10 @@ export default function EpcOrdersManagement() {
                 orders.map((o) => {
                   const isOnline = Boolean(o.is_online || o.payment_mode === "online" || o.payment_method === "icici_ecollection");
                   const isDirect = o.is_direct;
-                  const utr = o.offline_payment?.utr_number || o.payment_reference;
-                  const receiptUrl = o.offline_payment?.receipt_url;
+                  const m2 = o.payment_milestones?.milestones?.find((m) => m.milestone_number === 2);
+                  const m1 = o.payment_milestones?.milestones?.find((m) => m.milestone_number === 1);
+                  const utr = o.latest_utr || m2?.utr_number || m1?.utr_number || o.offline_payment?.utr_number || o.payment_reference;
+                  const receiptUrl = m2?.receipt_url || o.offline_payment?.receipt_url;
                   const offStatus = o.offline_payment?.verification_status || "pending";
                   const admStatus = o.offline_payment?.admin_approval_status || "pending";
                   const isOfficial = Boolean(o.is_official_order_generated || isOnline);
@@ -972,12 +974,24 @@ export default function EpcOrdersManagement() {
                           {formatCurrency(o.amount_received)}
                         </div>
                         {o.payment_milestones && (
-                          <div className="text-[9px] text-text-muted space-y-0.5">
-                            <div>M1 Req: {formatCurrency(o.payment_milestones.advance_amount)}</div>
-                            {o.amount_received === 0 && o.offline_payment?.amount_paid > 0 && (
-                              <div className="text-amber-600 dark:text-amber-400 font-bold">
-                                Claimed: {formatCurrency(o.offline_payment.amount_paid)}
+                          <div className="text-[9px] text-text-muted space-y-0.5 mt-0.5">
+                            {o.amount_received >= o.grand_total ? (
+                              <div className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                100% Cleared (M1 + M2)
                               </div>
+                            ) : (
+                              <>
+                                <div>M1 Paid: {formatCurrency(o.payment_milestones.advance_amount)} ({o.payment_milestones.advance_percentage || 30}%)</div>
+                                {o.milestone_verification_status === "final_payment_pending_verification" || o.customer_payment_status === "Milestone 2 Submitted" ? (
+                                  <div className="text-purple-600 dark:text-purple-400 font-bold">
+                                    M2 Submitted (Verify)
+                                  </div>
+                                ) : (
+                                  <div className="text-amber-600 dark:text-amber-400">
+                                    M2 Due: {formatCurrency(o.payment_milestones.remaining_amount)}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         )}
@@ -985,9 +999,14 @@ export default function EpcOrdersManagement() {
 
                       {/* 7. Outstanding Amount */}
                       <td className="py-3 px-3 text-right">
-                        <div className={`font-bold ${o.outstanding_amount > 0 ? "text-amber-600 dark:text-amber-400" : "text-text-muted"}`}>
-                          {formatCurrency(o.outstanding_amount)}
+                        <div className={`font-bold ${o.outstanding_amount > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                          {o.outstanding_amount > 0 ? formatCurrency(o.outstanding_amount) : "₹0.00"}
                         </div>
+                        {o.outstanding_amount === 0 && o.amount_received > 0 && (
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 mt-0.5">
+                            Fully Paid
+                          </span>
+                        )}
                       </td>
 
                       {/* 8. Payment Mode */}
@@ -1039,13 +1058,15 @@ export default function EpcOrdersManagement() {
                           <div className="text-[10px]">
                             <span className={`font-bold ${o.customer_payment_status === "Paid"
                                 ? "text-emerald-600 dark:text-emerald-400"
-                                : o.customer_payment_status === "Partially Paid"
-                                  ? "text-amber-600 dark:text-amber-400"
-                                  : o.customer_payment_status === "Awaiting Admin Approval"
-                                    ? "text-purple-600 dark:text-purple-400"
-                                    : o.customer_payment_status === "Payment Failed"
-                                      ? "text-rose-600"
-                                      : "text-text-muted"
+                                : o.customer_payment_status === "Milestone 2 Submitted"
+                                  ? "text-purple-600 dark:text-purple-400"
+                                  : o.customer_payment_status === "Partially Paid"
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : o.customer_payment_status === "Awaiting Admin Approval"
+                                      ? "text-purple-600 dark:text-purple-400"
+                                      : o.customer_payment_status === "Payment Failed"
+                                        ? "text-rose-600"
+                                        : "text-text-muted"
                               }`}>
                               {o.customer_payment_status}
                             </span>
@@ -1271,7 +1292,7 @@ export default function EpcOrdersManagement() {
               {accountsModal.m1_required > 0 && (
                 <div className="flex justify-between items-center bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
                   <span className="text-amber-800 dark:text-amber-300 font-bold">
-                    Milestone 1 Advance (30%):
+                    Milestone 1 Advance ({accountsModal.order.payment_milestones?.advance_percentage || 30}%):
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="font-black text-amber-900 dark:text-amber-200">

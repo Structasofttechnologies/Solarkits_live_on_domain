@@ -184,7 +184,7 @@ async function createEpcOfflineOrder({
   offline_payment_data = {},
   actor_id = null,
   req = null,
-  fulfillment_mode = 'franchisee_warehouse',
+  fulfillment_mode = 'direct_site',
   order_load_metrics = null,
 }) {
   if (!items || items.length === 0) {
@@ -568,7 +568,7 @@ async function createEpcOfflineOrder({
     reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
     fulfillment_source: fulfillmentSource,
-    fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
+    fulfillment_mode: fulfillment_mode || 'direct_site',
     order_load_metrics: (() => {
       // Always compute server-side from processedItems — never blindly trust frontend values.
       // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
@@ -1069,14 +1069,16 @@ async function submitEpcMilestonePayment({
     order.payment_milestones = { milestones: [] };
   }
 
+  const remPct = order.payment_milestones.remaining_percentage || 70;
+  const remAmount = order.payment_milestones.remaining_amount || Math.round(((order.grand_total_paise || 0) / 100) * (remPct / 100));
+
   let m2 = order.payment_milestones.milestones.find(m => m.milestone_number === Number(milestone_number));
   if (!m2) {
-    const remainingAmount = order.payment_milestones.remaining_amount || Math.round((order.grand_total_paise / 100) * 0.7);
     m2 = {
       milestone_number: 2,
-      title: 'Remaining Payment Before Dispatch',
-      percentage: 70,
-      amount: remainingAmount,
+      title: `Remaining Payment Before Dispatch (${remPct}%)`,
+      percentage: remPct,
+      amount: remAmount,
       stage: 'before_dispatch',
       tat_days: 2,
       payment_status: 'pending_verification',
@@ -1084,37 +1086,36 @@ async function submitEpcMilestonePayment({
     order.payment_milestones.milestones.push(m2);
   }
 
-  const isOnlinePayment = Boolean(
-    payment_method === 'icici_ecollection' ||
-    payment_gateway_used === 'icici_ecollection' ||
-    (req && req.body && (req.body.payment_method === 'icici_ecollection' || req.body.payment_gateway_used === 'icici_ecollection')) ||
-    order.is_online ||
-    order.payment_method === 'icici_ecollection' ||
-    order.payment_gateway_used === 'icici_ecollection'
-  );
-
-  if (isOnlinePayment) {
-    m2.payment_status = 'verified';
-    m2.verified_at = new Date();
-    m2.notes = 'Online ICICI eCollection Milestone 2 cleared';
-    order.payment_milestones.milestone_verification_status = 'fully_paid';
-    order.payment_status = 'captured';
-  } else {
-    m2.payment_status = 'pending_verification';
-    order.payment_milestones.milestone_verification_status = 'final_payment_pending_verification';
-  }
-
+  // Manual payment submission via form always enters verification queue
+  m2.payment_status = 'pending_verification';
   m2.utr_number = cleanUtr;
-  m2.amount_paid = Number(amount_paid) || m2.amount || order.payment_milestones.remaining_amount || 0;
+  m2.amount_paid = Number(amount_paid) || m2.amount || remAmount || 0;
   m2.payment_date = payment_date ? new Date(payment_date) : new Date();
   m2.receipt_url = receipt_url || m2.receipt_url;
   m2.receipt_filename = receipt_filename || m2.receipt_filename;
   m2.sender_bank_name = sender_bank_name ? sender_bank_name.trim() : m2.sender_bank_name;
   m2.account_holder_name = account_holder_name ? account_holder_name.trim() : m2.account_holder_name;
+  m2.payment_method = payment_method || m2.payment_method || 'offline_bank_transfer';
+  m2.payment_gateway_used = payment_gateway_used || m2.payment_gateway_used || 'bank_transfer';
   m2.rejection_reason = null;
 
+  order.payment_milestones.milestone_verification_status = 'final_payment_pending_verification';
   order.payment_milestones.current_milestone_due = 2;
   order.markModified('payment_milestones');
+
+  if (!order.follow_up) {
+    order.follow_up = { status: 'second_payment_submitted', history: [] };
+  } else {
+    order.follow_up.status = 'second_payment_submitted';
+    if (!order.follow_up.history) order.follow_up.history = [];
+  }
+  order.follow_up.history.push({
+    contacted_at: new Date(),
+    contacted_by_name: 'EPC Buyer',
+    status: 'second_payment_submitted',
+    remarks: `Milestone 2 (${remPct}%) payment proof submitted. UTR: ${cleanUtr}, Amount: ₹${m2.amount_paid}`,
+  });
+  order.markModified('follow_up');
 
   await order.save();
 

@@ -280,7 +280,8 @@ export default function ProjectOrderStatus() {
 
   // ── Milestone 2 Payment Handlers ──────────────────────────────────────────
   const handleOpenMilestonePay = async (order) => {
-    const remaining = order.payment_milestones?.remaining_amount || Math.round((order.total_amount || 0) * 0.7);
+    const remPct = order.payment_milestones?.remaining_percentage ?? (order.payment_milestones?.milestones?.find(m => m.milestone_number === 2)?.percentage || (100 - (order.payment_milestones?.advance_percentage || 30)));
+    const remaining = order.payment_milestones?.remaining_amount || Math.round((order.total_amount || 0) * (remPct / 100));
     setMilestonePaymentModalOrder(order);
     setMilestoneUtr("");
     setMilestoneAmount(String(remaining));
@@ -451,6 +452,10 @@ export default function ProjectOrderStatus() {
     const courier = (o.dispatch_tracking?.courier_name || "").toLowerCase();
     return orderNum.includes(q) || utr.includes(q) || kitName.includes(q) || lr.includes(q) || courier.includes(q);
   });
+
+  const modalRemPct = milestonePaymentModalOrder
+    ? (milestonePaymentModalOrder.payment_milestones?.remaining_percentage ?? (milestonePaymentModalOrder.payment_milestones?.milestones?.find(m => m.milestone_number === 2)?.percentage || (100 - (milestonePaymentModalOrder.payment_milestones?.advance_percentage || 30))))
+    : 70;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
@@ -1119,14 +1124,15 @@ export default function ProjectOrderStatus() {
                                 order.payment_milestones?.milestone_verification_status === "fully_paid" ||
                                 ["confirmed", "processing", "vehicle_assigned", "ready_for_dispatch", "dispatched", "in_transit", "reached_destination", "delivered"].includes(order.order_status || order.status);
                               const isM1Rejected = order.payment_status === "rejected" || m1?.payment_status === "rejected";
-                              const m1Amount = order.payment_milestones?.advance_amount || order.offline_payment?.amount_paid || Math.round((order.total_amount || 0) * 0.3);
+                              const advPct = order.payment_milestones?.advance_percentage ?? (m1?.percentage || 30);
+                              const m1Amount = order.payment_milestones?.advance_amount || order.offline_payment?.amount_paid || Math.round((order.total_amount || 0) * (advPct / 100));
                               const m1Utr = m1?.utr_number || order.offline_payment?.utr_number || utrStr;
 
                               return (
                                 <div className={`p-3.5 rounded-2xl border transition-all ${isM1Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM1Rejected ? "bg-red-500/5 border-red-500/30" : "bg-amber-500/5 border-amber-500/30"}`}>
                                   <div className="flex items-center justify-between mb-1">
                                     <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                                      Milestone 1 — Advance ({order.payment_milestones?.advance_percentage || 30}%)
+                                      Milestone 1 — Advance ({advPct}%)
                                     </span>
                                     <span className="font-black text-sm text-text-primary dark:text-white">
                                       ₹{Number(m1Amount).toLocaleString("en-IN")}
@@ -1162,7 +1168,8 @@ export default function ProjectOrderStatus() {
                               const isM2Pending = m2?.payment_status === "pending_verification" ||
                                 order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification" ||
                                 Boolean(m2?.utr_number && !isM2Verified);
-                              const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * 0.7));
+                              const remPct = order.payment_milestones?.remaining_percentage ?? (m2?.percentage || (100 - (order.payment_milestones?.advance_percentage || 30)));
+                              const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * (remPct / 100)));
                               const m2Utr = m2?.utr_number;
 
                               return (
@@ -1170,7 +1177,7 @@ export default function ProjectOrderStatus() {
                                   <div>
                                     <div className="flex items-center justify-between mb-1">
                                       <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
-                                        Milestone 2 — Before Dispatch ({order.payment_milestones?.remaining_percentage || 70}%)
+                                        Milestone 2 — Before Dispatch ({remPct}%)
                                       </span>
                                       <span className="font-black text-sm text-text-primary dark:text-white">
                                         ₹{Number(m2Amount).toLocaleString("en-IN")}
@@ -1181,15 +1188,21 @@ export default function ProjectOrderStatus() {
                                     </p>
                                   </div>
 
-                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 text-xs">
+                                  <div className="flex items-center justify-between mt-1.5 text-xs">
                                     {isM2Verified ? (
-                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                        <FaCheckCircle size={10} /> Fully Paid & Cleared
-                                      </span>
+                                      <>
+                                        <span className="text-[11px] text-text-secondary font-mono">{m2Utr ? `UTR: ${m2Utr}` : "Fully Cleared"}</span>
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                          <FaCheckCircle size={10} /> Fully Paid & Cleared
+                                        </span>
+                                      </>
                                     ) : isM2Pending ? (
-                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                                        <FaRegClock size={10} /> Balance UTR Submitted ({m2Utr})
-                                      </span>
+                                      <>
+                                        <span className="text-[11px] text-text-secondary font-mono">{m2Utr ? `UTR: ${m2Utr}` : "Payment Submitted"}</span>
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                          <FaRegClock size={10} /> Accounts Reviewing
+                                        </span>
+                                      </>
                                     ) : (
                                       <div className="flex items-center justify-between w-full">
                                         <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
@@ -1200,7 +1213,7 @@ export default function ProjectOrderStatus() {
                                           onClick={() => handleOpenMilestonePay(order)}
                                           className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
                                         >
-                                          <span>Pay 70% Balance (₹{Number(m2Amount).toLocaleString("en-IN")})</span>
+                                          <span>Pay {remPct}% Balance (₹{Number(m2Amount).toLocaleString("en-IN")})</span>
                                         </button>
                                       </div>
                                     )}
@@ -1785,7 +1798,7 @@ export default function ProjectOrderStatus() {
                   Milestone 2 Payment Clearance
                 </span>
                 <h3 className="text-lg font-black text-text-primary dark:text-white mt-1">
-                  Pay Remaining 70% Balance (Before Dispatch)
+                  Pay Remaining {modalRemPct}% Balance (Before Dispatch)
                 </h3>
               </div>
               <button
@@ -2128,7 +2141,7 @@ export default function ProjectOrderStatus() {
                   Cancel
                 </Button>
                 <Button type="submit" variant="primary" loading={milestoneSubmitting}>
-                  {milestonePaymentGateway === "icici" ? "Confirm ICICI 70% Payment Reference" : "Submit 70% Payment for Verification"}
+                  {milestonePaymentGateway === "icici" ? `Confirm ICICI ${modalRemPct}% Payment Reference` : `Submit ${modalRemPct}% Payment for Verification`}
                 </Button>
               </div>
             </form>

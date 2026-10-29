@@ -399,7 +399,7 @@ export default function EpcOfflinePaymentVerification() {
                       {o.payment_milestones && (
                         <div className="text-[10px] text-amber-600 font-semibold mt-0.5">
                           {o.payment_milestones.milestone_verification_status === "final_payment_pending_verification"
-                            ? "Milestone 2 (70% Final)"
+                            ? `Milestone 2 (${o.payment_milestones.remaining_percentage || 70}% Final)`
                             : `Milestone 1 (${o.payment_milestones.advance_percentage || 30}% Adv)`}
                         </div>
                       )}
