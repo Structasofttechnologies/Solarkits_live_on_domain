@@ -33,11 +33,15 @@ export const reserveDeliveryInventory = async (id, { sku, allocated_stock }) => 
   return res.data;
 };
 
-export const requestDeliveryOrderProcurement = async (id, { sku, requested_qty, notes }) => {
+export const requestDeliveryOrderProcurement = async (id, { sku, requested_qty, notes, items, kit_capacity, model_name, num_kits } = {}) => {
   const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/request-procurement`, {
     sku,
     requested_qty,
-    notes
+    notes,
+    items,
+    kit_capacity,
+    model_name,
+    num_kits
   }, {
     headers: authHeaderObj()
   });
@@ -238,6 +242,13 @@ export const allocatePreassembledKit = async (id, { kit_model_name, batch_code, 
 
 export const getBosKitCatalog = async () => {
   const res = await axios.get(`${API_URL}/warehouse/delivery-orders/bos-kit-catalog`, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+export const getVehiclePresets = async () => {
+  const res = await axios.get(`${API_URL}/warehouse/delivery-orders/vehicle-presets`, {
     headers: authHeaderObj()
   });
   return res.data;
