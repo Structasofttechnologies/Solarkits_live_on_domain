@@ -913,9 +913,16 @@ export default function PoOrder() {
     if (!allocatingOrder) return;
 
     const totalCommitted = allocatingOrder.target_committed_quantity || allocatingOrder.total_booked_quantity || 200;
-    const kitObj = availableKits.find((k) => String(k._id) === String(allocatingOrder.items?.[0]?.kit_id)) || availableKits[0];
+    const allocItem = allocatingOrder.items?.[0];
+    const kitObj = availableKits.find((k) => String(k._id) === String(allocItem?.kit_id || allocItem?.product_id)) || availableKits[0] || {};
     const isCombine = allocatingOrder.po_category === "COMBINE_PO";
     let epcList = [];
+
+    const poTotalTokenPaise = Number(
+      allocatingOrder.token_amount_paise ||
+      allocItem?.token_rate_paise ||
+      (kitObj.token_value ? kitObj.token_value * 100 : (kitObj.token_rate_per_kit_paise || 0))
+    );
 
     if (isCombine) {
       const sum = Object.values(allocateAllocations).reduce((acc, q) => acc + (parseInt(q, 10) || 0), 0);
@@ -928,6 +935,7 @@ export default function PoOrder() {
         .map(([buyerId, qty]) => {
           const buyer = epcBuyers.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
           const allocQ = parseInt(qty, 10);
+          const allocTokenPaise = totalCommitted > 0 ? Math.round(poTotalTokenPaise * (allocQ / totalCommitted)) : 0;
           return {
             epc_buyer_id: buyerId,
             buyer_id: buyerId,
@@ -935,8 +943,8 @@ export default function PoOrder() {
             buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
             gstin: buyer?.gstin || null,
             allocated_quantity: allocQ,
-            token_amount_paise: allocQ * (kitObj.token_rate_per_kit_paise || 0),
-            payment_status: "PENDING",
+            token_amount_paise: allocTokenPaise,
+            payment_status: (allocatingOrder.token_paid_paise >= allocTokenPaise && allocTokenPaise > 0) ? "PAID" : "PENDING",
           };
         });
     } else {
@@ -953,8 +961,8 @@ export default function PoOrder() {
             buyer_name: buyer?.name || buyer?.company_name || "EPC Partner",
             gstin: buyer?.gstin || null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 0),
-            payment_status: "PENDING",
+            token_amount_paise: poTotalTokenPaise,
+            payment_status: (allocatingOrder.token_paid_paise >= poTotalTokenPaise && poTotalTokenPaise > 0) ? "PAID" : "PENDING",
           },
         ];
       } else {
@@ -965,20 +973,32 @@ export default function PoOrder() {
             buyer_name: "Warehouse Stock",
             gstin: null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 0),
-            payment_status: "PENDING",
+            token_amount_paise: poTotalTokenPaise,
+            payment_status: (allocatingOrder.token_paid_paise >= poTotalTokenPaise && poTotalTokenPaise > 0) ? "PAID" : "PENDING",
           },
         ];
       }
     }
 
+    const allocUnitPricePaise = allocItem?.unit_price_paise != null && Number(allocItem.unit_price_paise) > 0
+      ? Number(allocItem.unit_price_paise)
+      : (kitObj.base_price_paise || 0);
+
+    const allocGstRate = allocItem?.gst_rate != null
+      ? Number(allocItem.gst_rate)
+      : (kitObj.gst_rate != null ? Number(kitObj.gst_rate) : 12);
+
+    const allocKitId = allocItem?.kit_id || allocItem?.product_id || kitObj._id;
+    const allocItemName = allocItem?.item_name || kitObj.name || "Solar Kit";
+
     const itemPayload = {
-      kit_id: kitObj._id,
-      item_name: kitObj.name,
+      kit_id: allocKitId,
+      product_id: allocKitId,
+      item_name: allocItemName,
       quantity: totalCommitted,
-      unit_price_paise: kitObj.base_price_paise,
-      gst_rate: 12,
-      token_rate_paise: kitObj.token_rate_per_kit_paise || 0,
+      unit_price_paise: allocUnitPricePaise,
+      gst_rate: allocGstRate,
+      token_rate_paise: poTotalTokenPaise,
       epc_allocations: epcList,
     };
 
@@ -2575,6 +2595,27 @@ export default function PoOrder() {
                           <span>{allocateError}</span>
                         </div>
                       )}
+
+                      {/* Rate Lock Guaranteed Notice */}
+                      <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2.5 text-emerald-800 dark:text-emerald-300 font-bold">
+                          <FiLock className="text-emerald-600 shrink-0" size={16} />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span>Locked Combokit Rate:</span>
+                              <span className="font-mono text-sm font-black text-emerald-700 dark:text-emerald-200">
+                                ₹{Math.round(((allocatingOrder.items?.[0]?.unit_price_paise || currentKit.base_price_paise || 0) / 100)).toLocaleString("en-IN")}/kit
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 font-normal mt-0.5">
+                              Guaranteed price lock will remain fixed for the allocated EPC partner until PO completion or expiry.
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[9px] uppercase font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0">
+                          Price Locked
+                        </span>
+                      </div>
 
                       {/* Configured Loose Order Quantities Strip for this Kit */}
                       <div

@@ -1,5 +1,6 @@
 const EpcAccount = require('./EpcAccount.schema');
 const EpcSignupRequest = require('./EpcSignupRequest.schema');
+const EpcType = require('./epc_types.schema');
 const EpcResellerRelationship = require('./epc_reseller_relationships.schema');
 const EpcTransferRequest = require('./epc_transfer_requests.schema');
 const WarehouseComboKit = require('./combo_kits.schema');
@@ -134,6 +135,7 @@ module.exports = {
   AdminNotification,
   EpcAccount,
   EpcSignupRequest,
+  EpcType,
   EpcResellerRelationship,
   EpcTransferRequest,
   WarehouseComboKit,

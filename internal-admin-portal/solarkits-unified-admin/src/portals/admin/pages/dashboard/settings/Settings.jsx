@@ -6,10 +6,16 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 const RoleSettings = lazy(() => import("./RoleSettings"));
 const HRSettings = lazy(() => import("./HRSettings"));
 const LocationSetting = lazy(() => import("./LocationSetting"));
+const EpcTypeSettings = lazy(() => import("./EpcTypeSettings"));
 
 export default function Settings() {
     return (
         <Routes>
+            <Route path='/epc-types/*' element={
+                <Suspense fallback={<Loader text='Loading EPC type settings...' />}>
+                    <EpcTypeSettings />
+                </Suspense>
+            } />
             <Route path='/role-settings/*' element={
                 <PermissionGuard requiredUniqueId="ADM_ROLE_SETTINGS">
                     <Suspense fallback={<Loader text='Load role settings...' />}>

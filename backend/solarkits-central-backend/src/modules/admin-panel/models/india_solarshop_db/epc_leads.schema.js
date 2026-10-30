@@ -35,7 +35,13 @@ const schema = new mongoose.Schema(
     },
     company_name: { type: String, required: true, trim: true, maxlength: 200 },
     contact_person: { type: String, required: true, trim: true, maxlength: 150 },
-    mobile_number: { type: String, required: true, trim: true, maxlength: 15, index: true },
+    mobile_number: {
+      type: String,
+      required: true,
+      trim: true,
+      match: [/^[6-9]\d{9}$/, 'Please enter a valid 10-digit Indian mobile number'],
+      index: true,
+    },
     email: { type: String, required: true, trim: true, lowercase: true, maxlength: 150, index: true },
     gst_number: { type: String, default: null, trim: true, uppercase: true, maxlength: 20, index: true },
     gst_verified: { type: Boolean, default: false },
@@ -68,6 +74,10 @@ const schema = new mongoose.Schema(
       default: 'direct_visit',
     },
     interested_products: [{ type: String, trim: true }], // e.g. 'Residential On-Grid', 'Commercial On-Grid', 'Solar Pump', 'Combo Kits', 'Off-Grid'
+
+    // EPC Classification Type (Government Contractor, Tender Bidder, New EPC, Experienced EPC)
+    epc_type: { type: String, default: 'New EPC', trim: true, index: true },
+    epc_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'epc_types', default: null },
 
     // Franchisee Attribution
     assigned_franchisee_id: {

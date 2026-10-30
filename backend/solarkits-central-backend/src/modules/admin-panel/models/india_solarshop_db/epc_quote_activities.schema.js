@@ -35,10 +35,10 @@ const schema = new mongoose.Schema(
     remarks: { type: String, default: null, trim: true, maxlength: 1000 },
 
     // ── Actor ─────────────────────────────────────────────────────────────────
-    performed_by:      { type: mongoose.Schema.Types.ObjectId, default: null },
+    performed_by: { type: mongoose.Schema.Types.ObjectId, default: null },
     performed_by_role: {
       type: String,
-      enum: ['reseller', 'bde', 'cms_user', 'system'],
+      enum: ['reseller', 'bde', 'cms_user', 'epc', 'system', 'admin'],
       required: true,
     },
     performed_by_name: { type: String, default: null, trim: true },
@@ -52,7 +52,7 @@ const schema = new mongoose.Schema(
   {
     collection: 'epc_quote_activities',
     timestamps: { createdAt: 'created_at', updatedAt: false }, // Immutable — no updatedAt
-    toJSON:   { virtuals: true },
+    toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 );

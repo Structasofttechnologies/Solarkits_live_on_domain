@@ -10,15 +10,15 @@ import api from "../services/api";
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const GST_STATE_MAP = {
-  "01":"Jammu & Kashmir","02":"Himachal Pradesh","03":"Punjab","04":"Chandigarh",
-  "05":"Uttarakhand","06":"Haryana","07":"Delhi","08":"Rajasthan","09":"Uttar Pradesh",
-  "10":"Bihar","11":"Sikkim","12":"Arunachal Pradesh","13":"Nagaland","14":"Manipur",
-  "15":"Mizoram","16":"Tripura","17":"Meghalaya","18":"Assam","19":"West Bengal",
-  "20":"Jharkhand","21":"Odisha","22":"Chhattisgarh","23":"Madhya Pradesh",
-  "24":"Gujarat","25":"Daman & Diu","26":"Dadra & Nagar Haveli","27":"Maharashtra",
-  "28":"Andhra Pradesh","29":"Karnataka","30":"Goa","31":"Lakshadweep","32":"Kerala",
-  "33":"Tamil Nadu","34":"Puducherry","35":"Andaman & Nicobar Islands","36":"Telangana",
-  "37":"Andhra Pradesh (New)","38":"Ladakh","97":"Other Territory","99":"Centre Jurisdiction",
+  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
+  "24": "Gujarat", "25": "Daman & Diu", "26": "Dadra & Nagar Haveli", "27": "Maharashtra",
+  "28": "Andhra Pradesh", "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala",
+  "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands", "36": "Telangana",
+  "37": "Andhra Pradesh (New)", "38": "Ladakh", "97": "Other Territory", "99": "Centre Jurisdiction",
 };
 
 export default function MyEpcBuyers() {
@@ -28,6 +28,13 @@ export default function MyEpcBuyers() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [tabFilter, setTabFilter] = useState("all"); // 'all' | 'assigned_bde' | 'self'
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [epcTypes, setEpcTypes] = useState([
+    { name: "Government Contractor", code: "govt_contractor" },
+    { name: "Tender Bidder", code: "tender_bidder" },
+    { name: "New EPC", code: "new_epc" },
+    { name: "Experienced EPC", code: "experienced_epc" },
+  ]);
 
   // Registration Multi-Step State
   const [step, setStep] = useState(1); // 1 = GST verify, 2 = EPC details form
@@ -37,13 +44,14 @@ export default function MyEpcBuyers() {
   const [gstResult, setGstResult] = useState(null);
 
   const [form, setForm] = useState({
-    name:         "",
-    email:        "",
-    whatsapp:     "",
+    name: "",
+    email: "",
+    whatsapp: "",
     company_name: "",
-    password:     "",
-    state_id:     "",
-    district_id:  "",
+    password: "",
+    state_id: "",
+    district_id: "",
+    epc_type: "New EPC",
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -54,7 +62,7 @@ export default function MyEpcBuyers() {
     setLoading(true);
     api.get('/india/v1/reseller/epc-buyers/list')
       .then((res) => { if (res.data?.status === "success") setBuyers(res.data.data); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   };
 
@@ -72,7 +80,7 @@ export default function MyEpcBuyers() {
           }));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     api.get('/india/v1/reseller/plans/my-subscription')
       .then((res) => {
@@ -80,12 +88,29 @@ export default function MyEpcBuyers() {
           setPlan(res.data.data.plan || res.data.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
+
+    api.get('/epc-types/active')
+      .then((res) => {
+        if (res.data?.status === "success" && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          setEpcTypes(res.data.data);
+        }
+      })
+      .catch(() => {
+        api.get('/india/v1/epc-types/active')
+          .then((res2) => {
+            if (res2.data?.status === "success" && Array.isArray(res2.data.data) && res2.data.data.length > 0) {
+              setEpcTypes(res2.data.data);
+            }
+          })
+          .catch(() => { });
+      });
   }, []);
 
   const filteredBuyers = buyers.filter((b) => {
-    if (tabFilter === "assigned_bde") return b.is_assigned_by_bde;
-    if (tabFilter === "self") return !b.is_assigned_by_bde;
+    if (tabFilter === "assigned_bde" && !b.is_assigned_by_bde) return false;
+    if (tabFilter === "self" && b.is_assigned_by_bde) return false;
+    if (typeFilter !== "all" && (b.epc_type || "New EPC").toLowerCase() !== typeFilter.toLowerCase()) return false;
     return true;
   });
 
@@ -140,7 +165,7 @@ export default function MyEpcBuyers() {
     setGstResult(null);
     setGstError("");
     setError("");
-    setForm({ name: "", email: "", whatsapp: "", company_name: "", password: "", state_id: form.state_id, district_id: form.district_id });
+    setForm({ name: "", email: "", whatsapp: "", company_name: "", password: "", state_id: form.state_id, district_id: form.district_id, epc_type: "New EPC" });
   };
 
   // ── Step 2: Register Submit ──────────────────────────────────────────────────
@@ -151,14 +176,15 @@ export default function MyEpcBuyers() {
 
     try {
       const payload = {
-        name:         form.name.trim(),
-        email:        form.email.trim(),
-        whatsapp:     form.whatsapp.trim(),
+        name: form.name.trim(),
+        email: form.email.trim(),
+        whatsapp: form.whatsapp.trim(),
         company_name: form.company_name.trim(),
-        password:     form.password,
-        state_id:     form.state_id,
-        district_id:  form.district_id,
-        gstin:        gstResult?.gstin || null,
+        password: form.password,
+        state_id: form.state_id,
+        district_id: form.district_id,
+        epc_type: form.epc_type || "New EPC",
+        gstin: gstResult?.gstin || null,
         gstin_verified: !!gstResult,
         gstin_trade_name: gstResult?.trade_name || null,
         gstin_legal_name: gstResult?.legal_name || null,
@@ -278,17 +304,15 @@ export default function MyEpcBuyers() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setTabFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              tabFilter === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${tabFilter === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
           >
             All EPCs ({buyers.length})
           </button>
           <button
             onClick={() => setTabFilter('assigned_bde')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
-              tabFilter === 'assigned_bde' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${tabFilter === 'assigned_bde' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+              }`}
           >
             <span>Assigned by BDE</span>
             <span className="bg-white/20 text-white px-1.5 py-0.2 rounded-full text-[10px] font-black">
@@ -297,12 +321,25 @@ export default function MyEpcBuyers() {
           </button>
           <button
             onClick={() => setTabFilter('self')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              tabFilter === 'self' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${tabFilter === 'self' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
           >
             Self Onboarded
           </button>
+
+          {/* EPC Type Dropdown Filter */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All EPC Types</option>
+            {epcTypes.map((t) => (
+              <option key={t.id || t.code || t.name} value={t.name}>
+                {t.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -335,7 +372,14 @@ export default function MyEpcBuyers() {
                 {filteredBuyers.map((b) => (
                   <tr key={b.id || b._id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-5 py-4">
-                      <div className="font-black text-slate-900">{b.company_name || b.name}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-slate-900">{b.company_name || b.name}</span>
+                        {b.epc_type && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200">
+                            {b.epc_type}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 font-medium mt-1 space-y-0.5">
                         <div>
                           Contact: <span className="font-semibold text-slate-700">{b.contact_person || b.name}</span>
@@ -398,13 +442,12 @@ export default function MyEpcBuyers() {
                       </span>
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold capitalize ${
-                        b.status === 'approved' || b.status === 'active'
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold capitalize ${b.status === 'approved' || b.status === 'active'
                           ? 'bg-emerald-100 text-emerald-800'
                           : b.status === 'pending'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
                         {b.status === 'approved' || b.status === 'active' ? (
                           <FiCheckCircle size={13} />
                         ) : b.status === 'pending' ? (
@@ -719,6 +762,21 @@ export default function MyEpcBuyers() {
                     </select>
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">EPC Classification / Type</label>
+                  <select
+                    value={form.epc_type}
+                    onChange={(e) => setForm({ ...form, epc_type: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {epcTypes.map((t) => (
+                      <option key={t._id || t.id || t.name} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Create Password *</label>

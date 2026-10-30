@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { 
+const {
   get_combo_kits_by_district,
   get_best_seller_kits,
   get_inventory_status,
@@ -102,7 +102,7 @@ router.put("/epc/users/:id", verify_auth, epcProfileHandler.update_epc_user);
 router.delete("/epc/users/:id", verify_auth, epcProfileHandler.delete_epc_user);
 
 // ── Checkout phone OTP (same proven flow as forgot-password OTP) ──────────────
-router.post("/checkout/send-phone-otp",   verify_auth, checkout_send_phone_otp);
+router.post("/checkout/send-phone-otp", verify_auth, checkout_send_phone_otp);
 router.post("/checkout/verify-phone-otp", verify_auth, checkout_verify_phone_otp);
 
 router.get("/cart", verify_auth, get_cart);
@@ -144,9 +144,9 @@ router.post("/po/:id/reorder", verify_auth, reorder_against_epc_po);
 // These routes serve industry-aware content to authenticated EPC buyers.
 // All requests validated: JWT + approved UserIndustryMap.
 const epcIndustryHandler = require("../../controller/epc.industry.dashboard.handler");
-router.get("/industry/my-industries",    verify_auth, epcIndustryHandler.get_my_industries);
-router.get("/industry/dashboard-content",verify_auth, epcIndustryHandler.get_dashboard_content);
-router.get("/industry/theme",            verify_auth, epcIndustryHandler.get_industry_theme);
+router.get("/industry/my-industries", verify_auth, epcIndustryHandler.get_my_industries);
+router.get("/industry/dashboard-content", verify_auth, epcIndustryHandler.get_dashboard_content);
+router.get("/industry/theme", verify_auth, epcIndustryHandler.get_industry_theme);
 
 // ── Technical Specifications & Combined Kit Datasheet (Storefront) ───────
 const { get_or_create_settings } = require('../../../admin-panel/controller/datasheet_settings.handler');
@@ -178,6 +178,13 @@ router.get("/combokit/:id/combined-datasheet-pdf", async (req, res) => {
     return res.status(500).json({ status: "error", message: err.message });
   }
 });
+
+// ── EPC Quotations (BDE / Franchisee generated quotations for this EPC) ───────
+const epcQuotesHandler = require("../../controller/epc.quotes.handler");
+router.get("/quotes", verify_auth, epcQuotesHandler.list_quotes);
+router.get("/quotes/dashboard", verify_auth, epcQuotesHandler.get_dashboard);
+router.get("/quotes/:id", verify_auth, epcQuotesHandler.get_quote);
+router.get("/quotes/:id/pdf", verify_auth, epcQuotesHandler.get_pdf);
 
 module.exports = router;
 

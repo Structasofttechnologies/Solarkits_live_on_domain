@@ -146,10 +146,10 @@ export default function BdeEpcQuotes() {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.followups)
-          ? raw.followups
-          : Array.isArray(res.data?.followups)
-          ? res.data.followups
-          : [];
+            ? raw.followups
+            : Array.isArray(res.data?.followups)
+              ? res.data.followups
+              : [];
         setFollowups(list);
       } else {
         setFollowups([]);
@@ -360,11 +360,10 @@ export default function BdeEpcQuotes() {
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
           onClick={() => setActiveTab('quotes')}
-          className={`px-4 py-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
-            activeTab === 'quotes'
+          className={`px-4 py-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${activeTab === 'quotes'
               ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+            }`}
         >
           <FileText className="w-4 h-4" />
           <span>All Quotes</span>
@@ -375,11 +374,10 @@ export default function BdeEpcQuotes() {
 
         <button
           onClick={() => setActiveTab('followups')}
-          className={`px-4 py-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
-            activeTab === 'followups'
+          className={`px-4 py-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${activeTab === 'followups'
               ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+            }`}
         >
           <Calendar className="w-4 h-4" />
           <span>Follow-up Pipeline</span>
@@ -387,11 +385,10 @@ export default function BdeEpcQuotes() {
 
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
-            activeTab === 'analytics'
+          className={`px-4 py-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${activeTab === 'analytics'
               ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+            }`}
         >
           <TrendingUp className="w-4 h-4" />
           <span>Territory Insights</span>
@@ -507,7 +504,7 @@ export default function BdeEpcQuotes() {
                               to={`/epc-quotes/${q._id}`}
                               className="text-indigo-600 hover:underline flex items-center gap-1.5"
                             >
-                              <span>{q.quote_number}</span>
+                              <span>{q.quote_number || `DRAFT-${q._id?.slice(-6)?.toUpperCase() || 'NEW'}`}</span>
                               {q.revision_number > 0 && (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
                                   R{q.revision_number}
@@ -679,11 +676,10 @@ export default function BdeEpcQuotes() {
               <button
                 key={tab.id}
                 onClick={() => setFollowupFilter(tab.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  followupFilter === tab.id
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${followupFilter === tab.id
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -717,9 +713,8 @@ export default function BdeEpcQuotes() {
                             {fu.quote_id?.quote_number || 'Quotation'}
                           </span>
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isOverdue ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                            }`}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isOverdue ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                              }`}
                           >
                             {isOverdue ? 'Overdue' : fu.status}
                           </span>
@@ -862,18 +857,16 @@ export default function BdeEpcQuotes() {
                 <button
                   type="button"
                   onClick={() => setShareMethod('email')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
-                    shareMethod === 'email' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${shareMethod === 'email' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'
+                    }`}
                 >
                   <Mail className="w-4 h-4" /> Email PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => setShareMethod('whatsapp')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
-                    shareMethod === 'whatsapp' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${shareMethod === 'whatsapp' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
+                    }`}
                 >
                   <Send className="w-4 h-4" /> WhatsApp
                 </button>
@@ -1060,18 +1053,16 @@ export default function BdeEpcQuotes() {
                   <button
                     type="button"
                     onClick={() => setOrderType('epc_order')}
-                    className={`p-3 rounded-xl border text-xs font-bold text-left ${
-                      orderType === 'epc_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
-                    }`}
+                    className={`p-3 rounded-xl border text-xs font-bold text-left ${orderType === 'epc_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
+                      }`}
                   >
                     EPC Direct Order
                   </button>
                   <button
                     type="button"
                     onClick={() => setOrderType('fpo_order')}
-                    className={`p-3 rounded-xl border text-xs font-bold text-left ${
-                      orderType === 'fpo_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
-                    }`}
+                    className={`p-3 rounded-xl border text-xs font-bold text-left ${orderType === 'fpo_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
+                      }`}
                   >
                     Franchisee PO
                   </button>

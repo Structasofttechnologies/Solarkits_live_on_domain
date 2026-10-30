@@ -113,6 +113,13 @@ router.get(
   handler.get_territory
 );
 
+router.delete(
+  '/territory/:bde_id/:assignment_id',
+  check_auth,
+  check_permissions([{ unique_code: 'ADM_BDE_MGMT', permissions: ['edit', 'delete'] }]),
+  handler.remove_territory_assignment
+);
+
 // Franchisee Plan Assignment
 router.post(
   '/plans/assign',

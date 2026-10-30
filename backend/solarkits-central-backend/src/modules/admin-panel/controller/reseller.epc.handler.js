@@ -17,7 +17,7 @@ const { reviewResellerEpcSignup } = require('../utils/epc.reseller.service');
  */
 const list_reseller_epc_buyers = async (req, res) => {
   try {
-    const { reseller_id, status } = req.query;
+    const { reseller_id, status, epc_type } = req.query;
     const query = {
       onboarded_by_reseller_id: { $ne: null },
       deleted_at: null,
@@ -28,6 +28,9 @@ const list_reseller_epc_buyers = async (req, res) => {
     }
     if (status && ['pending', 'approved', 'rejected'].includes(status)) {
       query.status = status;
+    }
+    if (epc_type && epc_type !== 'all') {
+      query.epc_type = new RegExp('^' + epc_type.trim() + '$', 'i');
     }
 
     const rows = await EpcAccount.find(query)
@@ -51,6 +54,8 @@ const list_reseller_epc_buyers = async (req, res) => {
       states:                 r.states,
       districts:              r.districts,
       status:                 r.status,
+      epc_type:               r.epc_type || 'New EPC',
+      epc_type_id:            r.epc_type_id || null,
       reseller:               r.onboarded_by_reseller_id,
       onboarding_source:      r.onboarding_source,
       reseller_assigned_date: r.reseller_assigned_date,

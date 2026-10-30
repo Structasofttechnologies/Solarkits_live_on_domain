@@ -1504,9 +1504,11 @@ export default function EpcPoAllocations() {
                               <span className="text-text-secondary">Remaining Quota:</span>
                               <span className="font-bold text-emerald-600 dark:text-emerald-400">{remaining} Kits</span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-text-secondary">Unit Price (excl. GST):</span>
-                              <span className="font-bold text-text-primary dark:text-white">₹{unitPrice.toLocaleString("en-IN")}</span>
+                            <div className="flex justify-between items-center py-1 px-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                              <span className="text-emerald-800 dark:text-emerald-300 font-bold flex items-center gap-1">
+                                <FiLock size={12} className="text-emerald-600 shrink-0" /> Guaranteed Locked Price:
+                              </span>
+                              <span className="font-black text-emerald-700 dark:text-emerald-200">₹{unitPrice.toLocaleString("en-IN")}/kit</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-text-secondary">GST Rate:</span>
@@ -2036,9 +2038,14 @@ export default function EpcPoAllocations() {
                             <span className="font-bold text-text-primary text-xs line-clamp-1">
                               {it.item_name || "Solar Combo Kit"}
                             </span>
-                            <span className="text-xs font-black text-primary">
-                              ₹{unitPrice.toLocaleString("en-IN")}/kit + GST
-                            </span>
+                            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-xs font-black">
+                              <FiLock size={11} className="text-emerald-600" />
+                              <span>Locked Rate: ₹{unitPrice.toLocaleString("en-IN")}/kit + GST</span>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 px-2.5 py-1 rounded-lg border border-emerald-500/15 flex items-center justify-between">
+                            <span>🔒 Guaranteed PO Price Lock Active</span>
+                            <span className="font-medium">Valid until quota completed or PO expired</span>
                           </div>
                           <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border/60 text-center">
                             <div>

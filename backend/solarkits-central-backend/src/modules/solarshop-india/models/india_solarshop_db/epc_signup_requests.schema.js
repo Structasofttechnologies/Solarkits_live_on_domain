@@ -10,6 +10,8 @@ const schema = new mongoose.Schema({
   state_id:        { type: mongoose.Schema.Types.ObjectId, required: true },
   district_id:     { type: mongoose.Schema.Types.ObjectId, required: true },
   reference_image: { type: String, default: null },
+  epc_type:        { type: String, default: null, trim: true },
+  epc_type_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'epc_types', default: null },
   reviewed_by:     { type: mongoose.Schema.Types.ObjectId, default: null }, 
   reviewed_at:     { type: Date, default: null },
   deleted_at:      { type: Date, default: null }

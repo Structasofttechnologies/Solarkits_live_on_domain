@@ -54,6 +54,7 @@ router.post('/leads/create', verify_bde_auth, handler.create_bde_lead);
 router.get('/leads/list', verify_bde_auth, handler.list_bde_leads);
 router.get('/leads/detail/:id', verify_bde_auth, handler.get_bde_lead_detail);
 router.put('/leads/update/:id', verify_bde_auth, handler.update_bde_lead);
+router.get('/leads/activity/:id', verify_bde_auth, handler.get_lead_activities);
 router.post('/leads/activity/:id', verify_bde_auth, handler.add_lead_activity);
 router.post('/leads/follow-up/:id', verify_bde_auth, handler.schedule_follow_up);
 router.put('/leads/stage/:id', verify_bde_auth, handler.update_lead_stage);

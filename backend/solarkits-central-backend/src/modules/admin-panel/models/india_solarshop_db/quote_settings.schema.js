@@ -131,6 +131,29 @@ const schema = new mongoose.Schema(
     allow_manual_discount:   { type: Boolean, default: false },
     max_discount_pct:        { type: Number, default: 0, min: 0, max: 100 },
 
+    // ── PDF Quotation Theme & Template Styling ────────────────────────────────
+    pdf_theme: {
+      primary_color:          { type: String, default: '#ea580c' },
+      secondary_color:        { type: String, default: '#0f172a' },
+      accent_color:           { type: String, default: '#0284c7' },
+      light_bg_color:         { type: String, default: '#f8fafc' },
+      border_color:           { type: String, default: '#e2e8f0' },
+      company_name:           { type: String, default: 'SolarKits India' },
+      company_tagline:        { type: String, default: "India's Premier Solar ComboKit Distribution Platform" },
+      commercial_notes_title: { type: String, default: 'COMMERCIAL & STATUTORY NOTES' },
+      commercial_notes: {
+        type: [String],
+        default: [
+          'Prices quoted are in Indian Rupees (INR) and valid up to the expiration date.',
+          'Dispatched directly through authorized distribution hubs with transit insurance.',
+          'Refer to Page 2 for Detailed Technical Bill of Materials (BOM) & Equipment Specifications.',
+          'Standard statutory warranty coverage applies as detailed in technical specifications.',
+        ],
+      },
+      bom_page_title:         { type: String, default: 'TECHNICAL SPECIFICATIONS & BILL OF MATERIALS (BOM)' },
+      footer_text:            { type: String, default: 'SolarKits India • Confidential Commercial Proposal • All Rights Reserved' },
+    },
+
     // ── Admin ─────────────────────────────────────────────────────────────────
     updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
   },

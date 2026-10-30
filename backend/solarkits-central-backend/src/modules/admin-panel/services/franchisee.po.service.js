@@ -287,6 +287,50 @@ async function createPoDraft({
     }
   }
 
+    // ── Early Resolution of Linked Parent PO (for Drawdowns / Reorders against PO) ────
+    const isPoOrder = (order_type === 'po_order' || order_type === 'bulk_po');
+    let parentPoDoc = null;
+    let is_final_po_settlement = false;
+    let token_adjusted_paise = 0;
+    let net_payable_paise = 0;
+
+    if (!isPoOrder && parent_po_id) {
+      if (franchisee_id) {
+        parentPoDoc = await FpoOrder.findOne({ _id: parent_po_id, franchisee_id, deleted_at: null });
+      } else if (epc_id) {
+        parentPoDoc = await FpoOrder.findOne({
+          _id: parent_po_id,
+          deleted_at: null,
+          $or: [
+            { epc_id: epc_id },
+            { 'items.epc_allocations.epc_buyer_id': epc_id },
+          ],
+        });
+      } else {
+        parentPoDoc = await FpoOrder.findOne({ _id: parent_po_id, deleted_at: null });
+      }
+
+      if (!parentPoDoc) {
+        throw new Error('Linked parent PO order not found or unauthorized.');
+      }
+
+      // 1. Strict Expiry & Status Validations
+      if (parentPoDoc.status === 'EXPIRED') {
+        throw new Error(`Cannot reorder against PO ${parentPoDoc.po_number}: This Purchase Order is already EXPIRED.`);
+      }
+      if (['CANCELLED', 'REJECTED', 'COMPLETED'].includes(parentPoDoc.status)) {
+        throw new Error(`Cannot reorder against PO ${parentPoDoc.po_number}: PO status is ${parentPoDoc.status}.`);
+      }
+
+      const now = new Date();
+      const poExpiryDate = parentPoDoc.lock_expires_at || parentPoDoc.expires_at;
+      if (poExpiryDate && now > new Date(poExpiryDate)) {
+        throw new Error(
+          `Cannot reorder against PO ${parentPoDoc.po_number}: The PO validity expired on ${new Date(poExpiryDate).toLocaleDateString('en-IN')}. Please settle or request a refund.`
+        );
+      }
+    }
+
     const hasItems = Array.isArray(items) && items.length > 0;
     let subtotal_paise = 0;
     let tax_total_paise = 0;
@@ -320,10 +364,26 @@ async function createPoDraft({
         const item = items[i];
         const moq_rule = validationResults[i]?.moq_rule;
 
-        const tax_paise = Math.round((item.unit_price_paise || 0) * item.quantity * ((item.gst_rate || 0) / 100));
-        const total_price_paise = (item.unit_price_paise || 0) * item.quantity + tax_paise;
+        // ── Strictly Enforce Immutable Locked Price from Parent PO ─────────────
+        let effectiveUnitPricePaise = item.unit_price_paise || 0;
+        let effectiveGstRate = item.gst_rate || 0;
+        let effectiveKitId = (item.kit_id && mongoose.Types.ObjectId.isValid(item.kit_id)) ? item.kit_id : null;
+        let effectiveProductId = (item.product_id && mongoose.Types.ObjectId.isValid(item.product_id)) ? item.product_id : null;
+        let effectiveItemName = item.item_name;
 
-        subtotal_paise += (item.unit_price_paise || 0) * item.quantity;
+        if (parentPoDoc && Array.isArray(parentPoDoc.items) && parentPoDoc.items.length > 0) {
+          const parentItem = parentPoDoc.items[0];
+          effectiveUnitPricePaise = parentItem.unit_price_paise;
+          if (parentItem.gst_rate != null) effectiveGstRate = parentItem.gst_rate;
+          if (parentItem.kit_id) effectiveKitId = parentItem.kit_id;
+          if (parentItem.product_id) effectiveProductId = parentItem.product_id;
+          if (parentItem.item_name) effectiveItemName = parentItem.item_name;
+        }
+
+        const tax_paise = Math.round((effectiveUnitPricePaise || 0) * item.quantity * ((effectiveGstRate || 0) / 100));
+        const total_price_paise = (effectiveUnitPricePaise || 0) * item.quantity + tax_paise;
+
+        subtotal_paise += (effectiveUnitPricePaise || 0) * item.quantity;
         tax_total_paise += tax_paise;
 
         // Commission snapshot
@@ -346,9 +406,9 @@ async function createPoDraft({
         builtItems.push({
           project_type_id: validProjTypeId,
           project_type_name: item.project_type_name || null,
-          kit_id: validKitId,
-          product_id: validProductId,
-          item_name: item.item_name,
+          kit_id: effectiveKitId,
+          product_id: effectiveProductId,
+          item_name: effectiveItemName,
           item_code: item.item_code || null,
           quantity: item.quantity,
           epc_allocations: Array.isArray(item.epc_allocations) ? item.epc_allocations : [],
@@ -358,8 +418,8 @@ async function createPoDraft({
             max_quantity: moq_rule.max_quantity,
             rule_id: moq_rule._id,
           } : null,
-          unit_price_paise: item.unit_price_paise || 0,
-          gst_rate: item.gst_rate || 0,
+          unit_price_paise: effectiveUnitPricePaise,
+          gst_rate: effectiveGstRate,
           tax_paise,
           total_price_paise,
           commission_method,
@@ -385,7 +445,6 @@ async function createPoDraft({
     const expires_at = new Date(Date.now() + po_validity_days * 24 * 60 * 60 * 1000);
 
     // ── Dynamic Token Amount Calculation & Quota Handling ───────────────────────
-    const isPoOrder = (order_type === 'po_order' || order_type === 'bulk_po');
     let token_amount_paise = 0;
     let token_paid_paise = 0;
     let token_payment_status = 'PENDING';
@@ -423,47 +482,9 @@ async function createPoDraft({
     }
 
     // ── Loose Order PO Linkage & Admin-Configured Token Settlement ────────────────
-    let parentPoDoc = null;
-    let is_final_po_settlement = false;
-    let token_adjusted_paise = 0;
-    let net_payable_paise = grand_total_paise;
+    net_payable_paise = grand_total_paise;
 
-    if (!isPoOrder && parent_po_id) {
-      if (franchisee_id) {
-        parentPoDoc = await FpoOrder.findOne({ _id: parent_po_id, franchisee_id, deleted_at: null });
-      } else if (epc_id) {
-        parentPoDoc = await FpoOrder.findOne({
-          _id: parent_po_id,
-          deleted_at: null,
-          $or: [
-            { epc_id: epc_id },
-            { 'items.epc_allocations.epc_buyer_id': epc_id },
-          ],
-        });
-      } else {
-        parentPoDoc = await FpoOrder.findOne({ _id: parent_po_id, deleted_at: null });
-      }
-
-      if (!parentPoDoc) {
-        throw new Error('Linked parent PO order not found or unauthorized.');
-      }
-
-      // 1. Strict Expiry & Status Validations
-      if (parentPoDoc.status === 'EXPIRED') {
-        throw new Error(`Cannot reorder against PO ${parentPoDoc.po_number}: This Purchase Order is already EXPIRED.`);
-      }
-      if (['CANCELLED', 'REJECTED', 'COMPLETED'].includes(parentPoDoc.status)) {
-        throw new Error(`Cannot reorder against PO ${parentPoDoc.po_number}: PO status is ${parentPoDoc.status}.`);
-      }
-
-      const now = new Date();
-      const poExpiryDate = parentPoDoc.lock_expires_at || parentPoDoc.expires_at;
-      if (poExpiryDate && now > new Date(poExpiryDate)) {
-        throw new Error(
-          `Cannot reorder against PO ${parentPoDoc.po_number}: The PO validity expired on ${new Date(poExpiryDate).toLocaleDateString('en-IN')}. Please settle or request a refund.`
-        );
-      }
-
+    if (!isPoOrder && parentPoDoc) {
       // 2. Quota Availability Check
       const currentRemaining = parentPoDoc.remaining_quantity != null ? parentPoDoc.remaining_quantity : (parentPoDoc.total_booked_quantity || 0);
       if (totalItemQty > currentRemaining) {
@@ -1056,10 +1077,25 @@ async function createPoDraft({
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const moq_rule = validationResults[i]?.moq_rule;
-        const tax_paise = Math.round((item.unit_price_paise || 0) * item.quantity * ((item.gst_rate || 0) / 100));
-        const total_price_paise = (item.unit_price_paise || 0) * item.quantity + tax_paise;
 
-        subtotal_paise += (item.unit_price_paise || 0) * item.quantity;
+        // ── Strictly Preserve Locked Unit Price & GST Rate from PO Creation ─────────
+        const existingItem = order.items?.[i] || order.items?.[0];
+        const lockedUnitPricePaise = (existingItem?.unit_price_paise != null && Number(existingItem.unit_price_paise) > 0)
+          ? Number(existingItem.unit_price_paise)
+          : (Number(item.unit_price_paise) || 0);
+
+        const lockedGstRate = (existingItem?.gst_rate != null)
+          ? Number(existingItem.gst_rate)
+          : (Number(item.gst_rate) || 0);
+
+        const lockedKitId = existingItem?.kit_id || item.kit_id || null;
+        const lockedProductId = existingItem?.product_id || item.product_id || null;
+        const lockedItemName = existingItem?.item_name || item.item_name || 'Solar Kit';
+
+        const tax_paise = Math.round(lockedUnitPricePaise * item.quantity * (lockedGstRate / 100));
+        const total_price_paise = (lockedUnitPricePaise * item.quantity) + tax_paise;
+
+        subtotal_paise += lockedUnitPricePaise * item.quantity;
         tax_total_paise += tax_paise;
 
         let commission_method = null;
@@ -1073,13 +1109,12 @@ async function createPoDraft({
               : (commissionRule.commission_percentage || 0) * 100;
           }
         }
-
         builtItems.push({
           project_type_id: item.project_type_id || null,
           project_type_name: item.project_type_name || null,
-          kit_id: item.kit_id || null,
-          product_id: item.product_id || null,
-          item_name: item.item_name,
+          kit_id: lockedKitId,
+          product_id: lockedProductId,
+          item_name: lockedItemName,
           item_code: item.item_code || null,
           quantity: item.quantity,
           epc_allocations: Array.isArray(item.epc_allocations) ? item.epc_allocations : [],
@@ -1089,8 +1124,8 @@ async function createPoDraft({
             max_quantity: moq_rule.max_quantity,
             rule_id: moq_rule._id,
           } : null,
-          unit_price_paise: item.unit_price_paise || 0,
-          gst_rate: item.gst_rate || 0,
+          unit_price_paise: lockedUnitPricePaise,
+          gst_rate: lockedGstRate,
           tax_paise,
           total_price_paise,
           commission_method,
@@ -1135,8 +1170,11 @@ async function createPoDraft({
         }
       });
 
+      // Preserve existing lock_expires_at if already valid and active, otherwise set from lockDays
       const lockDays = Number(po_settings.po_lock_days || po_settings.po_validity_days || 30);
-      order.lock_expires_at = new Date(Date.now() + lockDays * 24 * 60 * 60 * 1000);
+      if (!order.lock_expires_at || new Date(order.lock_expires_at) < new Date()) {
+        order.lock_expires_at = new Date(Date.now() + lockDays * 24 * 60 * 60 * 1000);
+      }
 
       if (order.po_category === 'SINGLE_PO') {
         if (builtItems[0]?.epc_allocations?.length === 1) {
@@ -1153,14 +1191,33 @@ async function createPoDraft({
       order.total_booked_quantity = totalItemQty;
       order.remaining_quantity = totalItemQty;
       order.token_amount_paise = token_amount_paise;
-      order.token_payment_status = 'PENDING';
 
-      order.status = 'AWAITING_TOKEN_PAYMENT';
+      // Check if token was already paid (e.g. at PO creation or advance escrow)
+      const isTokenAlreadyPaid = (order.token_paid_paise != null && order.token_paid_paise >= token_amount_paise);
+      order.token_payment_status = isTokenAlreadyPaid ? 'PAID' : 'PENDING';
+      order.token_balance_paise = order.token_paid_paise || 0;
+
+      if (isTokenAlreadyPaid) {
+        builtItems.forEach((it) => {
+          if (Array.isArray(it.epc_allocations)) {
+            it.epc_allocations.forEach((alloc) => {
+              alloc.payment_status = 'PAID';
+              alloc.token_paid_paise = alloc.token_amount_paise;
+              alloc.paid_at = alloc.paid_at || new Date();
+            });
+          }
+        });
+      }
+
+      const nextStatus = isTokenAlreadyPaid ? 'PO_STARTED' : 'AWAITING_TOKEN_PAYMENT';
+      order.status = nextStatus;
       order.status_history.push({
-        status: 'AWAITING_TOKEN_PAYMENT',
+        status: nextStatus,
         changed_by: actor_id,
         actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'cms_user'),
-        note: 'Products and EPC partners allocated. Awaiting token payment.',
+        note: isTokenAlreadyPaid
+          ? 'Products and EPC partner allocated. Token already paid — PO Started!'
+          : 'Products and EPC partners allocated. Awaiting token payment.',
         changed_at: new Date(),
       });
       order.updated_by = actor_id;

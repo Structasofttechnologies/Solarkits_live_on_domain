@@ -25,7 +25,7 @@ const apiFetch = (method, endpoint, data) =>
 
 const STATUS_BADGES = {
   approved: { label: "Approved", bg: "bg-success-soft", text: "text-success", icon: FiCheckCircle },
-  pending:  { label: "Pending Review", bg: "bg-warning-soft", text: "text-warning", icon: FiClock },
+  pending: { label: "Pending Review", bg: "bg-warning-soft", text: "text-warning", icon: FiClock },
   rejected: { label: "Rejected", bg: "bg-danger-soft", text: "text-danger", icon: FiXCircle },
 };
 
@@ -45,12 +45,34 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [epcTypes, setEpcTypes] = useState([
+    { name: "Government Contractor" },
+    { name: "Tender Bidder" },
+    { name: "New EPC" },
+    { name: "Experienced EPC" }
+  ]);
+
+  useEffect(() => {
+    const fetchEpcTypes = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/epc-types/active`, { headers: authHeaderObj() });
+        if (res.data?.status === "success" && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          setEpcTypes(res.data.data);
+        }
+      } catch {
+        // keep fallback defaults
+      }
+    };
+    fetchEpcTypes();
+  }, []);
 
   const fetchBuyers = useCallback(async () => {
     setLoading(true);
     try {
       let url = `${API_BASE}/reseller-mgmt/epc-buyers/list?req_for=view&unique_id=${MODULE_UID}`;
       if (statusFilter) url += `&status=${statusFilter}`;
+      if (typeFilter) url += `&epc_type=${typeFilter}`;
       const res = await axios.get(url, { headers: authHeaderObj() });
       if (res.data?.status === "success") setBuyers(res.data.data);
     } catch {
@@ -58,7 +80,7 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
     } finally {
       setLoading(false);
     }
-  }, [dispatch, statusFilter]);
+  }, [dispatch, statusFilter, typeFilter]);
 
   useEffect(() => {
     fetchBuyers();
@@ -76,12 +98,14 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
     }
   };
 
-  const filtered = buyers.filter(
-    (b) =>
+  const filtered = buyers.filter((b) => {
+    const matchesSearch =
       b.name.toLowerCase().includes(search.toLowerCase()) ||
       b.email.toLowerCase().includes(search.toLowerCase()) ||
-      (b.reseller?.business_name || "").toLowerCase().includes(search.toLowerCase())
-  );
+      (b.reseller?.business_name || "").toLowerCase().includes(search.toLowerCase());
+    const matchesType = !typeFilter || typeFilter === "all" || (b.epc_type || "New EPC").toLowerCase() === typeFilter.toLowerCase();
+    return matchesSearch && matchesType;
+  });
 
   return (
     <div className="space-y-6">
@@ -121,6 +145,19 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
         </select>
+
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-semibold"
+        >
+          <option value="">All EPC Types</option>
+          {epcTypes.map((t) => (
+            <option key={t._id || t.id || t.name} value={t.name}>
+              {t.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -156,6 +193,13 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
                       <td className="px-5 py-3.5">
                         <div className="font-semibold text-text-primary">{b.name}</div>
                         <div className="text-xs text-text-muted mt-0.5 font-mono">ID: {b.id}</div>
+                        {b.epc_type && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                              🏷️ {b.epc_type}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5">
                         {b.reseller ? (
