@@ -67,7 +67,15 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedState, setSelectedState] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("pending");
+  const [selectedEpcType, setSelectedEpcType] = useState("all");
   const [states, setStates] = useState([]);
+  const [epcTypes, setEpcTypes] = useState([
+    { name: "Government Contractor" },
+    { name: "Tender Bidder" },
+    { name: "New EPC" },
+    { name: "Experienced EPC" }
+  ]);
+  const [epcTypeStats, setEpcTypeStats] = useState({});
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -157,6 +165,23 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     }
   }, [moduleUniqueId, countryId]);
 
+  // Fetch active EPC types
+  useEffect(() => {
+    const fetchEpcTypes = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/epc-types/active`, {
+          headers: { ...authHeaderObj() }
+        });
+        if (res.data?.status === "success" && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          setEpcTypes(res.data.data);
+        }
+      } catch (e) {
+        console.warn("Could not fetch active EPC types:", e?.message);
+      }
+    };
+    fetchEpcTypes();
+  }, []);
+
   // Fetch requests with pagination and filters
   const fetchRequests = async () => {
     setLoading(true);
@@ -192,7 +217,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
         limit: itemsPerPage,
         ...(debouncedSearchQuery && { search: debouncedSearchQuery }),
         ...(selectedState !== "all" && { state: selectedState }),
-        ...(selectedStatus !== "all" && { status: selectedStatus })
+        ...(selectedStatus !== "all" && { status: selectedStatus }),
+        ...(selectedEpcType !== "all" && { epc_type: selectedEpcType })
       });
 
       const response = await axios.get(
@@ -202,6 +228,9 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
 
       if (response.data.status === "success") {
         apiRequests = response.data.data || [];
+        if (response.data.summary?.by_epc_type) {
+          setEpcTypeStats(response.data.summary.by_epc_type);
+        }
       }
     } catch (error) {
       console.warn("Backend API fetch for EPC requests warning:", error.message);
@@ -241,6 +270,10 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       combined = combined.filter((r) => (r.status || 'pending').toLowerCase() === selectedStatus.toLowerCase());
     }
 
+    if (selectedEpcType !== "all") {
+      combined = combined.filter((r) => (r.epc_type || 'New EPC').toLowerCase() === selectedEpcType.toLowerCase());
+    }
+
     setRequests(combined);
     setTotalRecords(combined.length);
     setTotalPages(Math.max(1, Math.ceil(combined.length / itemsPerPage)));
@@ -252,6 +285,14 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       today: rawAll.filter((r) => r.created_at?.startsWith(todayStr)).length,
       thisWeek: rawAll.length
     });
+
+    // Calculate EPC Type breakdown counts across all requests
+    const countsByType = {};
+    rawAll.forEach((r) => {
+      const type = r.epc_type || "New EPC";
+      countsByType[type] = (countsByType[type] || 0) + 1;
+    });
+    setEpcTypeStats((prev) => ({ ...countsByType, ...prev, ...countsByType }));
 
     setLoading(false);
   };
@@ -524,6 +565,12 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     setCurrentPage(1);
   };
 
+  // Handle EPC type filter change - reset to page 1
+  const handleEpcTypeChange = (value) => {
+    setSelectedEpcType(value);
+    setCurrentPage(1);
+  };
+
   // Format date display
   const formatDateDisplay = (dateString) => {
     if (!dateString) return "—";
@@ -594,6 +641,7 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     setSearchQuery("");
     setSelectedState("all");
     setSelectedStatus("all");
+    setSelectedEpcType("all");
     setCurrentPage(1);
   };
 
@@ -610,7 +658,7 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       };
       return () => channel.close();
     }
-  }, [currentPage, itemsPerPage, debouncedSearchQuery, selectedState, selectedStatus]);
+  }, [currentPage, itemsPerPage, debouncedSearchQuery, selectedState, selectedStatus, selectedEpcType]);
 
   // Calculate displayed record range
   const startIndex = totalRecords === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
@@ -692,6 +740,21 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
             />
           </div>
 
+          {/* EPC Classification Filter */}
+          <div className="lg:w-56">
+            <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">EPC Classification</label>
+            <Dropdown
+              value={selectedEpcType}
+              onChange={handleEpcTypeChange}
+              options={[
+                { text: "All EPC Types", value: "all" },
+                ...epcTypes.map((t) => ({ text: t.name, value: t.name }))
+              ]}
+              placeholder="All EPC Types"
+              className="w-full h-11"
+            />
+          </div>
+
           {/* Actions: Refresh & Reset */}
           <div className="flex items-end gap-2">
             <button
@@ -704,7 +767,7 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
               <span>Refresh</span>
             </button>
 
-            {(searchQuery || selectedState !== "all" || selectedStatus !== "pending") && (
+            {(searchQuery || selectedState !== "all" || selectedStatus !== "pending" || selectedEpcType !== "all") && (
               <Button
                 onClick={clearFilters}
                 variant="ghost"
@@ -732,11 +795,10 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
               <button
                 key={tab.id}
                 onClick={() => handleStatusChange(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-2 ${
-                  isActive
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-2 ${isActive
                     ? `${tab.color} ring-2 ring-primary/20 shadow-xs`
                     : "bg-surface text-text-secondary border-border/60 hover:bg-surface-hover"
-                }`}
+                  }`}
               >
                 <span>{tab.label}</span>
                 {tab.count !== undefined && (
@@ -744,6 +806,40 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
                     {tab.count}
                   </span>
                 )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quick Filter: EPC Classification Live Breakdown */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
+          <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mr-1">EPC Types:</span>
+          <button
+            onClick={() => handleEpcTypeChange("all")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-2 ${selectedEpcType === "all"
+                ? "bg-primary text-white border-primary shadow-xs"
+                : "bg-surface text-text-secondary border-border/60 hover:bg-surface-hover"
+              }`}
+          >
+            <span>All Types</span>
+          </button>
+          {epcTypes.map((t) => {
+            const isActive = selectedEpcType.toLowerCase() === t.name.toLowerCase();
+            const count = epcTypeStats[t.name] || 0;
+            return (
+              <button
+                key={t.name}
+                onClick={() => handleEpcTypeChange(t.name)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-2 ${isActive
+                    ? "bg-primary text-white border-primary shadow-xs"
+                    : "bg-surface text-text-secondary border-border/60 hover:bg-surface-hover"
+                  }`}
+              >
+                <span>{t.name}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${isActive ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+                  }`}>
+                  {count}
+                </span>
               </button>
             );
           })}
@@ -818,6 +914,14 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
                         </button>
                       ) : (
                         <div className="text-[10px] text-text-muted/60 italic">No GST Provided</div>
+                      )}
+
+                      {request.epc_type && (
+                        <div className="pt-0.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            🏷️ {request.epc_type}
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -906,11 +1010,10 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
                 {/* Column 5: Status */}
                 <td className="px-6 py-4 text-center">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-xs ${getStatusBadge(request.status)}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      request.status?.toLowerCase() === 'approved' ? 'bg-emerald-500' :
-                      request.status?.toLowerCase() === 'rejected' ? 'bg-rose-500' :
-                      'bg-amber-500 animate-pulse'
-                    }`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${request.status?.toLowerCase() === 'approved' ? 'bg-emerald-500' :
+                        request.status?.toLowerCase() === 'rejected' ? 'bg-rose-500' :
+                          'bg-amber-500 animate-pulse'
+                      }`} />
                     <span className="capitalize">{request.status || 'pending'}</span>
                   </span>
                 </td>
@@ -985,11 +1088,10 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
                     </div>
                   ) : (
                     <div className="flex items-center justify-end">
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${
-                        request.status?.toLowerCase() === 'approved'
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${request.status?.toLowerCase() === 'approved'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400'
                           : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400'
-                      }`}>
+                        }`}>
                         {request.status?.toLowerCase() === 'approved' ? '✓ Approved' : '✕ Rejected'}
                       </span>
                     </div>
@@ -1001,15 +1103,15 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
         </div>
 
         <div className="p-6 border-t border-border bg-surface-hover/20">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-              totalItems={totalRecords}
-              pageSize={itemsPerPage}
-              className="w-full"
-            />
-         </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalItems={totalRecords}
+            pageSize={itemsPerPage}
+            className="w-full"
+          />
+        </div>
       </div>
 
       {/* Modals & Dialogs */}
@@ -1038,20 +1140,20 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
 
           <div className="text-center space-y-4">
             <div className="space-y-1">
-               <h3 className="text-lg font-black text-text-primary uppercase tracking-tight">
-                 {confirmDialog.action === "approve" ? "Registry Confirmation" : "Termination Protocol"}
-               </h3>
-               <p className="text-xs text-text-muted font-bold uppercase tracking-widest opacity-60">
-                 Validating identity for {confirmDialog.companyName}
-               </p>
+              <h3 className="text-lg font-black text-text-primary uppercase tracking-tight">
+                {confirmDialog.action === "approve" ? "Registry Confirmation" : "Termination Protocol"}
+              </h3>
+              <p className="text-xs text-text-muted font-bold uppercase tracking-widest opacity-60">
+                Validating identity for {confirmDialog.companyName}
+              </p>
             </div>
 
             <div className="bg-surface-hover/50 p-5 rounded-2xl border border-border shadow-inner space-y-3">
-               <p className="text-[10px] font-black text-text-primary">{confirmDialog.companyName}</p>
-               <div className="h-px bg-border/40 w-12 mx-auto" />
-               <div className="flex flex-col items-center gap-1">
-                 <p className="text-[10px] font-bold text-text-muted">{confirmDialog.email}</p>
-               </div>
+              <p className="text-[10px] font-black text-text-primary">{confirmDialog.companyName}</p>
+              <div className="h-px bg-border/40 w-12 mx-auto" />
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[10px] font-bold text-text-muted">{confirmDialog.email}</p>
+              </div>
             </div>
 
             {confirmDialog.request?.onboarding_source === 'bde' && (
@@ -1082,21 +1184,21 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
             {confirmDialog.action === "approve" && (
               <div className="space-y-4 text-left">
                 <div className="space-y-2">
-                   <label className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] ml-1">
-                     Asset Verification {confirmDialog.request?.onboarding_source === 'bde' ? '(Optional for BDE GST-Verified)' : '*'}
-                   </label>
-                   <CustomFilePicker
-                     name="reference_image"
-                     onChange={handleFileChange}
-                     accept="image/*"
-                     files={selectedFile ? [selectedFile] : []}
-                     className="w-full"
-                   />
+                  <label className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] ml-1">
+                    Asset Verification {confirmDialog.request?.onboarding_source === 'bde' ? '(Optional for BDE GST-Verified)' : '*'}
+                  </label>
+                  <CustomFilePicker
+                    name="reference_image"
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    files={selectedFile ? [selectedFile] : []}
+                    className="w-full"
+                  />
                 </div>
                 {confirmDialog.request?.onboarding_source !== 'bde' && (
                   <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 flex gap-3">
-                     <FaInfoCircle className="text-primary mt-0.5" size={14} />
-                     <p className="text-[10px] font-bold text-primary uppercase leading-relaxed tracking-tight">Approval requires a verified reference document (JPEG/PNG). Max payload capacity: 5MB.</p>
+                    <FaInfoCircle className="text-primary mt-0.5" size={14} />
+                    <p className="text-[10px] font-bold text-primary uppercase leading-relaxed tracking-tight">Approval requires a verified reference document (JPEG/PNG). Max payload capacity: 5MB.</p>
                   </div>
                 )}
                 {fileError && <p className="text-xs font-black text-danger uppercase tracking-widest text-center animate-pulse">{fileError}</p>}
@@ -1107,16 +1209,16 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
           </div>
 
           <div className="flex gap-3 pt-6 border-t border-border">
-             <Button variant="secondary" onClick={() => setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null })} className="flex-1 rounded-xl">Cancel</Button>
-             <Button
-               variant={confirmDialog.action === "approve" ? "success" : "danger"}
-               onClick={confirmAction}
-               loading={uploadingImage || (processingId === confirmDialog.requestId)}
-               className="flex-1 rounded-xl shadow-lg font-black uppercase tracking-widest text-xs"
-               disabled={confirmDialog.action === "approve" && !selectedFile && confirmDialog.request?.onboarding_source !== 'bde' && !confirmDialog.request?.reference_image}
-             >
-               Confirm {confirmDialog.action}
-             </Button>
+            <Button variant="secondary" onClick={() => setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null })} className="flex-1 rounded-xl">Cancel</Button>
+            <Button
+              variant={confirmDialog.action === "approve" ? "success" : "danger"}
+              onClick={confirmAction}
+              loading={uploadingImage || (processingId === confirmDialog.requestId)}
+              className="flex-1 rounded-xl shadow-lg font-black uppercase tracking-widest text-xs"
+              disabled={confirmDialog.action === "approve" && !selectedFile && confirmDialog.request?.onboarding_source !== 'bde' && !confirmDialog.request?.reference_image}
+            >
+              Confirm {confirmDialog.action}
+            </Button>
           </div>
         </div>
       </Dialog>
@@ -1128,10 +1230,10 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
         size="xl"
       >
         <div className="relative aspect-video bg-surface rounded-2xl overflow-hidden border border-border group shadow-2xl">
-           <img src={imageModal.imageUrl} alt="Ref" className="w-full h-full object-contain" />
-           <div className="absolute inset-x-0 bottom-0 p-6 bg-linear-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-              <p className="text-white font-black text-[10px]">Registry Credential Asset View</p>
-           </div>
+          <img src={imageModal.imageUrl} alt="Ref" className="w-full h-full object-contain" />
+          <div className="absolute inset-x-0 bottom-0 p-6 bg-linear-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+            <p className="text-white font-black text-[10px]">Registry Credential Asset View</p>
+          </div>
         </div>
       </Dialog>
     </div>

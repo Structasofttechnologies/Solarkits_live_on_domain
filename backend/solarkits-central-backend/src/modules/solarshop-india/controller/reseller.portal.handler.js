@@ -2071,6 +2071,8 @@ const list_my_epc_buyers = async (req, res) => {
         state_name: e.state_name || e.states?.[0]?.name || 'Regional State',
         district_name: e.district_name || e.districts?.[0]?.name || 'Regional District',
         status: e.status || 'active',
+        epc_type: e.epc_type || 'New EPC',
+        epc_type_id: e.epc_type_id || null,
         is_assigned_by_bde: !!assignedByBde || e.onboarding_source === 'bde',
         assigned_by_bde_name: assignedByBde,
         assigned_by_bde_id: bdeCode,

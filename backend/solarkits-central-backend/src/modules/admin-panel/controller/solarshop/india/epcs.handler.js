@@ -6,7 +6,7 @@ const { delete_uploaded_files } = require("../../../utils/upload.files");
 
 const get_epc_requests = async (req, res) => {
     try {
-        let { page = 1, limit = 10, search = "", state = "", status = "pending" } = req.query;
+        let { page = 1, limit = 10, search = "", state = "", status = "pending", epc_type = "" } = req.query;
         page = parseInt(page);
         limit = parseInt(limit);
         const skip = (page - 1) * limit;
@@ -21,6 +21,7 @@ const get_epc_requests = async (req, res) => {
             ];
         }
         if (state && state !== "all") filter.state_id = state;
+        if (epc_type && epc_type !== "all") filter.epc_type = new RegExp('^' + epc_type.trim() + '$', 'i');
 
         const total = await EpcSignupRequest.countDocuments(filter);
         const requests = await EpcSignupRequest.find(filter)
@@ -55,7 +56,9 @@ const get_epc_requests = async (req, res) => {
             assigned_reseller_id: r.assigned_reseller_id || null,
             assigned_reseller_name: r.assigned_reseller_name || null,
             is_direct_store_epc: r.is_direct_store_epc || false,
-            auto_assigned: r.auto_assigned || false
+            auto_assigned: r.auto_assigned || false,
+            epc_type: r.epc_type || r.account_id?.epc_type || 'New EPC',
+            epc_type_id: r.epc_type_id || r.account_id?.epc_type_id || null
         }));
 
         const today = new Date();
@@ -63,8 +66,15 @@ const get_epc_requests = async (req, res) => {
         const weekStart = new Date(today);
         weekStart.setDate(today.getDate() - today.getDay());
 
+        const epcTypeAgg = await EpcSignupRequest.aggregate([
+            { $group: { _id: { $ifNull: ["$epc_type", "New EPC"] }, count: { $sum: 1 } } }
+        ]);
+        const byEpcType = {};
+        epcTypeAgg.forEach(item => { if (item._id) byEpcType[item._id] = item.count; });
+
         const summary = {
             total_requests: total,
+            by_epc_type: byEpcType,
             today_requests: await EpcSignupRequest.countDocuments({ created_at: { $gte: today } }),
             this_week_requests: await EpcSignupRequest.countDocuments({ created_at: { $gte: weekStart } }),
             this_week_reqests: await EpcSignupRequest.countDocuments({ created_at: { $gte: weekStart } }) // ⚡ Fallback for frontend typo
@@ -227,10 +237,10 @@ const update_epc_request_status = async (req, res) => {
     } catch (error) {
         if (req.files) delete_uploaded_files(req.files);
         console.error("❌ update_epc_request_status Error:", error);
-        return res.status(500).json({ 
-            status: "error", 
+        return res.status(500).json({
+            status: "error",
             message: "Failed to update request",
-            error: error.message 
+            error: error.message
         });
     }
 };

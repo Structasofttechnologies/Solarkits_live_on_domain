@@ -806,6 +806,8 @@ exports.create_epc_lead = async (req, res) => {
       interested_products,
       follow_up_date,
       remarks,
+      epc_type,
+      epc_type_id,
     } = req.body;
 
     if (!company_name || !contact_person || !mobile_number || !email || !state_name || !district_name) {
@@ -905,6 +907,8 @@ exports.create_epc_lead = async (req, res) => {
       address_line: address_line ? address_line.trim() : null,
       lead_source: lead_source || 'direct_visit',
       interested_products: Array.isArray(interested_products) ? interested_products : [],
+      epc_type: epc_type ? epc_type.trim() : 'New EPC',
+      epc_type_id: epc_type_id || null,
       created_by_bde_id: bdeId,
       current_bde_id: bdeId,
       lead_status: 'New',
@@ -965,7 +969,7 @@ async function _syncOnboardedEpcAccountsToLeads(bdeId, territory) {
 exports.list_epc_leads = async (req, res) => {
   try {
     const bdeId = req.user.id;
-    const { search = '', status = '', district = '', state = '', franchisee = '', page = 1, limit = 50 } = req.query;
+    const { search = '', status = '', district = '', state = '', franchisee = '', epc_type = '', page = 1, limit = 50 } = req.query;
 
     const territories = await _getBdeTerritories(bdeId);
     const territory = territories[0] || null;
@@ -1006,6 +1010,9 @@ exports.list_epc_leads = async (req, res) => {
     if (franchisee && franchisee !== 'all') {
       baseQuery.assigned_franchisee_id = franchisee;
     }
+    if (epc_type && epc_type !== 'all') {
+      baseQuery.epc_type = new RegExp(`^${epc_type}$`, 'i');
+    }
 
     const query = { ...baseQuery };
     if (status && status !== 'all') {
@@ -1043,10 +1050,19 @@ exports.list_epc_leads = async (req, res) => {
       stageCounts[st] = await EPCLead.countDocuments({ ...baseQuery, lead_status: st });
     }
 
+    // EPC Type aggregation counts for BDE leads
+    const typeAgg = await EPCLead.aggregate([
+      { $match: { ...baseQuery, epc_type: { $ne: null } } },
+      { $group: { _id: '$epc_type', count: { $sum: 1 } } }
+    ]);
+    const epcTypeCounts = {};
+    typeAgg.forEach(t => { if (t._id) epcTypeCounts[t._id] = t.count; });
+
     return res.status(200).json({
       status: 'success',
       data: leads,
       stage_counts: stageCounts,
+      epc_type_counts: epcTypeCounts,
       total_all_leads: totalAll,
       pagination: {
         total: totalAll,
@@ -1485,6 +1501,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
       address,
       pincode,
       reseller_id,
+      epc_type,
+      epc_type_id,
     } = req.body;
 
     const epcCompanyName = company_name || trade_name || legal_name;
@@ -1597,6 +1615,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
       address: address ? address.trim() : null,
       pincode: pincode ? pincode.trim() : null,
       status: 'pending', // Pending Admin Approval
+      epc_type: epc_type ? epc_type.trim() : 'New EPC',
+      epc_type_id: epc_type_id || null,
       is_email_verified: true,
       onboarding_source: 'bde',
       onboarded_by_bde_id: bdeId,
@@ -1626,6 +1646,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
       email: cleanEmail,
       whatsapp: cleanMobile,
       status: 'pending',
+      epc_type: epc_type ? epc_type.trim() : 'New EPC',
+      epc_type_id: epc_type_id || null,
       state_id: geoState?._id || territory?.state_id || null,
       district_id: geoDistrict?._id || null,
       state_name: finalStateName,
@@ -1673,6 +1695,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
         pincode: pincode ? pincode.trim() : linkedLead.pincode,
         address_line: address ? address.trim() : linkedLead.address_line,
         lead_status: finalLeadStatus,
+        epc_type: epc_type ? epc_type.trim() : (linkedLead.epc_type || 'New EPC'),
+        epc_type_id: epc_type_id || linkedLead.epc_type_id || null,
         onboarded_at: new Date(),
         onboarded_epc_account_id: epcAccount._id,
         onboarded_epc_company_id: epcCompany._id,
@@ -1707,6 +1731,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
         created_by_bde_id: bdeId,
         current_bde_id: bdeId,
         lead_status: finalLeadStatus,
+        epc_type: epc_type ? epc_type.trim() : (linkedLead.epc_type || 'New EPC'),
+        epc_type_id: epc_type_id || linkedLead.epc_type_id || null,
         onboarded_at: new Date(),
         onboarded_epc_account_id: epcAccount._id,
         onboarded_epc_company_id: epcCompany._id,

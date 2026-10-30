@@ -15,6 +15,10 @@ const schema = new mongoose.Schema({
   is_whatsapp_verified: { type: Boolean, default: false },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
 
+  // --- EPC Classification Type ---
+  epc_type:                 { type: String, default: null, trim: true },
+  epc_type_id:              { type: mongoose.Schema.Types.ObjectId, ref: 'epc_types', default: null },
+
   // --- Phase 5: Reseller Onboarding Pipeline (backward-compatible) ---
   onboarded_by_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
   onboarding_source:        { type: String, enum: ['direct', 'reseller', 'bde', 'portal', 'lead'], default: 'direct' },

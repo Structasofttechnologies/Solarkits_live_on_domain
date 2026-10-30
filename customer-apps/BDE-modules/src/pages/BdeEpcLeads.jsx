@@ -82,6 +82,20 @@ function getStageBadge(stage) {
   return map[stage] || 'bg-slate-50 text-slate-600 border-slate-200';
 }
 
+function getEpcTypeBadge(type) {
+  switch ((type || '').toLowerCase()) {
+    case 'government contractor':
+      return 'bg-purple-50 text-purple-800 border-purple-200';
+    case 'tender bidder':
+      return 'bg-blue-50 text-blue-800 border-blue-200';
+    case 'experienced epc':
+      return 'bg-amber-50 text-amber-800 border-amber-200';
+    case 'new epc':
+    default:
+      return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+  }
+}
+
 export default function BdeEpcLeads() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
@@ -96,6 +110,14 @@ export default function BdeEpcLeads() {
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
   const [districtFilter, setDistrictFilter] = useState('all');
+  const [epcTypeFilter, setEpcTypeFilter] = useState('all');
+  const [epcTypeCounts, setEpcTypeCounts] = useState({});
+  const [epcTypes, setEpcTypes] = useState([
+    { name: 'Government Contractor', code: 'govt_contractor' },
+    { name: 'Tender Bidder', code: 'tender_bidder' },
+    { name: 'New EPC', code: 'new_epc' },
+    { name: 'Experienced EPC', code: 'experienced_epc' },
+  ]);
 
   // Modals & Drawers
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -120,6 +142,7 @@ export default function BdeEpcLeads() {
     address_line: '',
     lead_source: 'direct_visit',
     interested_products: ['Residential On-Grid'],
+    epc_type: 'New EPC',
     follow_up_date: '',
     remarks: '',
   });
@@ -132,12 +155,14 @@ export default function BdeEpcLeads() {
           search,
           status: stageFilter,
           district: districtFilter,
+          epc_type: epcTypeFilter !== 'all' ? epcTypeFilter : undefined,
           limit: 100,
         },
       });
       if (res.data?.status === 'success') {
         setLeads(res.data.data || []);
         setStageCounts(res.data.stage_counts || {});
+        setEpcTypeCounts(res.data.epc_type_counts || {});
         setTotalAllCount(res.data.total_all_leads || res.data.pagination?.total || 0);
 
         const activeTerritories = Array.isArray(res.data.territories) && res.data.territories.length > 0
@@ -160,11 +185,30 @@ export default function BdeEpcLeads() {
     } finally {
       setLoading(false);
     }
-  }, [search, stageFilter, districtFilter]);
+  }, [search, stageFilter, districtFilter, epcTypeFilter]);
 
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  // Fetch Dynamic Active EPC Classification Types
+  useEffect(() => {
+    api.get('/epc-types/active')
+      .then((res) => {
+        if (res.data?.status === 'success' && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          setEpcTypes(res.data.data);
+        }
+      })
+      .catch(() => {
+        api.get('/india/v1/epc-types/active')
+          .then((res2) => {
+            if (res2.data?.status === 'success' && Array.isArray(res2.data.data) && res2.data.data.length > 0) {
+              setEpcTypes(res2.data.data);
+            }
+          })
+          .catch(() => { });
+      });
+  }, []);
 
   // Derive districts for the currently selected state in formData
   const selectedStateTerritory = territories.find(
@@ -281,6 +325,7 @@ export default function BdeEpcLeads() {
       address_line: '',
       lead_source: 'direct_visit',
       interested_products: ['Residential On-Grid'],
+      epc_type: 'New EPC',
       follow_up_date: '',
       remarks: '',
     });
@@ -302,6 +347,7 @@ export default function BdeEpcLeads() {
       address_line: lead.address_line || '',
       lead_source: lead.lead_source || 'direct_visit',
       interested_products: lead.interested_products || ['Residential On-Grid'],
+      epc_type: lead.epc_type || 'New EPC',
       follow_up_date: lead.follow_up_date ? lead.follow_up_date.split('T')[0] : '',
       remarks: lead.remarks || '',
     });
@@ -511,6 +557,20 @@ export default function BdeEpcLeads() {
               </select>
             )}
 
+            {/* EPC Type Filter */}
+            <select
+              value={epcTypeFilter}
+              onChange={(e) => setEpcTypeFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none"
+            >
+              <option value="all">All EPC Types</option>
+              {epcTypes.map((t) => (
+                <option key={t.id || t.code || t.name} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
             {/* View Mode Toggle */}
             <div className="flex items-center bg-slate-100 p-1 rounded-xl">
               <button
@@ -555,6 +615,43 @@ export default function BdeEpcLeads() {
               </span>
             </button>
           ))}
+        </div>
+
+        {/* EPC Types Quick Filter & Live Metrics Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-slate-100 text-xs">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+            EPC Type:
+          </span>
+          <button
+            onClick={() => setEpcTypeFilter('all')}
+            className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition text-[11px] ${epcTypeFilter === 'all'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+          >
+            All Types ({totalLeadsCount})
+          </button>
+          {epcTypes.map((t) => {
+            const count = epcTypeCounts[t.name] || 0;
+            return (
+              <button
+                key={t.id || t.code || t.name}
+                onClick={() => setEpcTypeFilter(t.name)}
+                className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition text-[11px] flex items-center gap-1.5 ${epcTypeFilter === t.name
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+              >
+                <span>{t.name}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${epcTypeFilter === t.name ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -601,7 +698,14 @@ export default function BdeEpcLeads() {
                 {leads.map((lead) => (
                   <tr key={lead._id} className="hover:bg-slate-50/80 transition">
                     <td className="px-4 py-3.5">
-                      <div className="font-mono text-[11px] text-blue-600 font-bold">{lead.lead_id}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-[11px] text-blue-600 font-bold">{lead.lead_id}</span>
+                        {lead.epc_type && (
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-black border uppercase tracking-wider ${getEpcTypeBadge(lead.epc_type)}`}>
+                            {lead.epc_type}
+                          </span>
+                        )}
+                      </div>
                       <div className="font-bold text-slate-900 text-sm mt-0.5">{lead.company_name}</div>
                       {lead.interested_products?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -630,8 +734,8 @@ export default function BdeEpcLeads() {
                           <div className="font-mono font-bold text-slate-700 text-[11px]">{lead.gst_number}</div>
                           <span
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold mt-1 ${lead.gst_verified
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
                               }`}
                           >
                             {lead.gst_verified ? 'Verified' : 'Pending Verification'}
@@ -729,7 +833,14 @@ export default function BdeEpcLeads() {
                     <div key={l._id} className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono text-blue-600 font-bold">{l.lead_id}</span>
-                        <span className="text-[10px] font-semibold text-slate-400">{l.district_name}</span>
+                        <div className="flex items-center gap-1">
+                          {l.epc_type && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black border ${getEpcTypeBadge(l.epc_type)}`}>
+                              {l.epc_type}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-semibold text-slate-400">{l.district_name}</span>
+                        </div>
                       </div>
                       <h4 className="text-xs font-bold text-slate-900 leading-tight">{l.company_name}</h4>
                       <p className="text-[11px] text-slate-500 font-medium">Contact: {l.contact_person}</p>
@@ -1029,6 +1140,28 @@ export default function BdeEpcLeads() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                   />
                 </div>
+
+                {/* EPC Classification Tier */}
+                <div className="sm:col-span-2 p-3 bg-blue-50/60 border border-blue-200/70 rounded-2xl">
+                  <label className="block font-black text-slate-800 mb-1">
+                    EPC Classification Type <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={formData.epc_type}
+                    onChange={(e) => setFormData({ ...formData, epc_type: e.target.value })}
+                    className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-xs shadow-xs"
+                  >
+                    {epcTypes.map((t) => (
+                      <option key={t.id || t._id || t.code || t.name} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Specify whether contractor is a Government Contractor, Tender Bidder, New EPC, or Experienced EPC.
+                  </p>
+                </div>
               </div>
 
               <div>
@@ -1042,8 +1175,8 @@ export default function BdeEpcLeads() {
                         key={p}
                         onClick={() => handleToggleProduct(p)}
                         className={`px-3 py-1.5 rounded-xl font-semibold transition ${isSelected
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
                         {p}

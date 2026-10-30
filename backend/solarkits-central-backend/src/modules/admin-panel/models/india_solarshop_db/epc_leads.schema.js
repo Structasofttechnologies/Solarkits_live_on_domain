@@ -75,6 +75,10 @@ const schema = new mongoose.Schema(
     },
     interested_products: [{ type: String, trim: true }], // e.g. 'Residential On-Grid', 'Commercial On-Grid', 'Solar Pump', 'Combo Kits', 'Off-Grid'
 
+    // EPC Classification Type (Government Contractor, Tender Bidder, New EPC, Experienced EPC)
+    epc_type: { type: String, default: 'New EPC', trim: true, index: true },
+    epc_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'epc_types', default: null },
+
     // Franchisee Attribution
     assigned_franchisee_id: {
       type: mongoose.Schema.Types.ObjectId,

@@ -32,7 +32,7 @@ const { logAudit } = require('./audit.service');
  * Register a new EPC Buyer sub-account via Reseller onboarding.
  */
 async function registerEpcByReseller(resellerId, epcData = {}) {
-  const { name, email, whatsapp, password, company_name, state_id, district_id, reference_image, gstin } = epcData;
+  const { name, email, whatsapp, password, company_name, state_id, district_id, reference_image, gstin, epc_type, epc_type_id } = epcData;
 
   // 1. Verify reseller active and KYC status
   const reseller = await Reseller.findOne({ _id: resellerId, deleted_at: null }).lean();
@@ -105,7 +105,7 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     const { GeoLevel1 } = require('../models/geolocation_db');
     const epcStateCode = cleanGstin.substring(0, 2);
     const GST_STATE_CODE_MAP = {
-      '01':'Jammu & Kashmir','02':'Himachal Pradesh','03':'Punjab','04':'Chandigarh','05':'Uttarakhand','06':'Haryana','07':'Delhi','08':'Rajasthan','09':'Uttar Pradesh','10':'Bihar','11':'Sikkim','12':'Arunachal Pradesh','13':'Nagaland','14':'Manipur','15':'Mizoram','16':'Tripura','17':'Meghalaya','18':'Assam','19':'West Bengal','20':'Jharkhand','21':'Odisha','22':'Chhattisgarh','23':'Madhya Pradesh','24':'Gujarat','25':'Daman & Diu','26':'Dadra & Nagar Haveli','27':'Maharashtra','28':'Andhra Pradesh','29':'Karnataka','30':'Goa','31':'Lakshadweep','32':'Kerala','33':'Tamil Nadu','34':'Puducherry','35':'Andaman & Nicobar Islands','36':'Telangana','37':'Andhra Pradesh (New)','38':'Ladakh'
+      '01': 'Jammu & Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab', '04': 'Chandigarh', '05': 'Uttarakhand', '06': 'Haryana', '07': 'Delhi', '08': 'Rajasthan', '09': 'Uttar Pradesh', '10': 'Bihar', '11': 'Sikkim', '12': 'Arunachal Pradesh', '13': 'Nagaland', '14': 'Manipur', '15': 'Mizoram', '16': 'Tripura', '17': 'Meghalaya', '18': 'Assam', '19': 'West Bengal', '20': 'Jharkhand', '21': 'Odisha', '22': 'Chhattisgarh', '23': 'Madhya Pradesh', '24': 'Gujarat', '25': 'Daman & Diu', '26': 'Dadra & Nagar Haveli', '27': 'Maharashtra', '28': 'Andhra Pradesh', '29': 'Karnataka', '30': 'Goa', '31': 'Lakshadweep', '32': 'Kerala', '33': 'Tamil Nadu', '34': 'Puducherry', '35': 'Andaman & Nicobar Islands', '36': 'Telangana', '37': 'Andhra Pradesh (New)', '38': 'Ladakh'
     };
     const gstStateName = GST_STATE_CODE_MAP[epcStateCode];
     let gstStateObj = null;
@@ -186,24 +186,26 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
 
   // 5. Create EPC Account
   const epcAccount = await EpcAccount.create({
-    name:                     name.trim(),
-    email:                    cleanEmail,
-    whatsapp:                 cleanWhatsapp,
+    name: name.trim(),
+    email: cleanEmail,
+    whatsapp: cleanWhatsapp,
     password_hash,
-    states:                   effStateId ? [effStateId] : [],
-    districts:                effDistrictId ? [effDistrictId] : [],
-    status:                   'pending',
+    states: effStateId ? [effStateId] : [],
+    districts: effDistrictId ? [effDistrictId] : [],
+    status: 'pending',
+    epc_type: epc_type ? epc_type.trim() : 'New EPC',
+    epc_type_id: epc_type_id || null,
     onboarded_by_reseller_id: resellerId,
-    primary_reseller_id:      resellerId,
-    onboarding_source:        'reseller',
-    reseller_assigned_date:   new Date(),
-    gstin:                    cleanGstin,
-    gstin_verified_at:        gstResult ? new Date() : null,
-    gstin_legal_name:         gstResult?.legal_name || null,
-    gstin_trade_name:         gstResult?.trade_name || null,
-    gstin_registration_status:gstResult?.business_status || null,
-    is_gstin_active:          Boolean(gstResult?.is_valid),
-    onboarding_gstin_log_id:  gstResult?.log_id || null,
+    primary_reseller_id: resellerId,
+    onboarding_source: 'reseller',
+    reseller_assigned_date: new Date(),
+    gstin: cleanGstin,
+    gstin_verified_at: gstResult ? new Date() : null,
+    gstin_legal_name: gstResult?.legal_name || null,
+    gstin_trade_name: gstResult?.trade_name || null,
+    gstin_registration_status: gstResult?.business_status || null,
+    is_gstin_active: Boolean(gstResult?.is_valid),
+    onboarding_gstin_log_id: gstResult?.log_id || null,
   });
 
   // 6. Create Active Relationship
@@ -217,15 +219,17 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
 
   // 7. Create EPC Signup Request for Admin Review Queue
   const signupRequest = await EpcSignupRequest.create({
-    account_id:               epcAccount._id,
-    company_name:             (company_name || name).trim(),
-    email:                    cleanEmail,
-    whatsapp:                 cleanWhatsapp,
-    status:                   'pending',
-    state_id:                 effStateId,
-    reference_image:          reference_image || null,
+    account_id: epcAccount._id,
+    company_name: (company_name || name).trim(),
+    email: cleanEmail,
+    whatsapp: cleanWhatsapp,
+    status: 'pending',
+    epc_type: epc_type ? epc_type.trim() : 'New EPC',
+    epc_type_id: epc_type_id || null,
+    state_id: effStateId,
+    reference_image: reference_image || null,
     onboarded_by_reseller_id: resellerId,
-    onboarding_source:        'reseller',
+    onboarding_source: 'reseller',
   });
 
   await logAudit({
@@ -238,11 +242,11 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
   });
 
   return {
-    account_id:        epcAccount._id,
+    account_id: epcAccount._id,
     signup_request_id: signupRequest._id,
-    status:            'pending',
-    company_name:      signupRequest.company_name,
-    gstin:             cleanGstin,
+    status: 'pending',
+    company_name: signupRequest.company_name,
+    gstin: cleanGstin,
   };
 }
 

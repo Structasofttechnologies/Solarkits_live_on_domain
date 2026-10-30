@@ -26,7 +26,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
 
     const cleanOrigin = origin.replace(/\/+$/, '');
-    
+
     // Check exact whitelist or pattern matches
     const isWhitelisted =
       FRONTEND_URLS.includes(cleanOrigin) ||
@@ -43,7 +43,7 @@ app.use(cors({
     if (isWhitelisted) {
       return callback(null, true);
     }
-    
+
     return callback(null, true);
   },
   credentials: true,
@@ -104,16 +104,16 @@ adminRouter.use('/reseller-mgmt/plans', require('./modules/admin-panel/routes/re
 adminRouter.use('/resellers/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
 
 // ─── Store Management Module ──────────────────────────────────────────────────
-adminRouter.use('/store-management/subtypes',   require('./modules/admin-panel/routes/franchisee.subtypes.route'));
-adminRouter.use('/reseller-mgmt/subtypes',      require('./modules/admin-panel/routes/franchisee.subtypes.route'));
+adminRouter.use('/store-management/subtypes', require('./modules/admin-panel/routes/franchisee.subtypes.route'));
+adminRouter.use('/reseller-mgmt/subtypes', require('./modules/admin-panel/routes/franchisee.subtypes.route'));
 adminRouter.use('/store-management/onboarding', require('./modules/admin-panel/routes/store.management.onboarding.route'));
-adminRouter.use('/reseller-mgmt/onboarding',    require('./modules/admin-panel/routes/store.management.onboarding.route'));
-adminRouter.use('/store-management/payments',   require('./modules/admin-panel/routes/store.management.payment.route'));
-adminRouter.use('/reseller-mgmt/payments',      require('./modules/admin-panel/routes/store.management.payment.route'));
-adminRouter.use('/store-management/bde',        require('./modules/admin-panel/routes/store.management.bde.route'));
-adminRouter.use('/reseller-mgmt/bde',           require('./modules/admin-panel/routes/store.management.bde.route'));
+adminRouter.use('/reseller-mgmt/onboarding', require('./modules/admin-panel/routes/store.management.onboarding.route'));
+adminRouter.use('/store-management/payments', require('./modules/admin-panel/routes/store.management.payment.route'));
+adminRouter.use('/reseller-mgmt/payments', require('./modules/admin-panel/routes/store.management.payment.route'));
+adminRouter.use('/store-management/bde', require('./modules/admin-panel/routes/store.management.bde.route'));
+adminRouter.use('/reseller-mgmt/bde', require('./modules/admin-panel/routes/store.management.bde.route'));
 adminRouter.use('/store-management/warehouses', require('./modules/admin-panel/routes/store.management.warehouse.route'));
-adminRouter.use('/reseller-mgmt/warehouses',    require('./modules/admin-panel/routes/store.management.warehouse.route'));
+adminRouter.use('/reseller-mgmt/warehouses', require('./modules/admin-panel/routes/store.management.warehouse.route'));
 adminRouter.use('/reseller-mgmt/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/resellers/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/reseller-mgmt', require('./modules/admin-panel/routes/reseller.admin.route'));
@@ -131,51 +131,52 @@ adminRouter.use('/website-content', require('./modules/admin-panel/routes/websit
 adminRouter.use('/website-configurations', require('./modules/admin-panel/routes/website.content.route'));
 
 // ─── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ───────
-adminRouter.use('/franchisee/po-settings',      require('./modules/admin-panel/routes/franchisee.po.settings.route'));
+adminRouter.use('/franchisee/po-settings', require('./modules/admin-panel/routes/franchisee.po.settings.route'));
 adminRouter.use('/franchisee/commission-rules', require('./modules/admin-panel/routes/franchisee.commission.rules.route'));
-adminRouter.use('/franchisee/moq-rules',        require('./modules/admin-panel/routes/franchisee.moq.rules.route'));
-adminRouter.use('/franchisee/kit-targets',      require('./modules/admin-panel/routes/franchisee.kit.targets.route'));
-adminRouter.use('/franchisee/po',               require('./modules/admin-panel/routes/franchisee.po.route'));
-adminRouter.use('/franchisee/performance',      require('./modules/admin-panel/routes/franchisee.performance.route'));
-adminRouter.use('/franchisee/goals',            require('./modules/admin-panel/routes/franchisee.goal.route'));
+adminRouter.use('/franchisee/moq-rules', require('./modules/admin-panel/routes/franchisee.moq.rules.route'));
+adminRouter.use('/franchisee/kit-targets', require('./modules/admin-panel/routes/franchisee.kit.targets.route'));
+adminRouter.use('/franchisee/po', require('./modules/admin-panel/routes/franchisee.po.route'));
+adminRouter.use('/franchisee/performance', require('./modules/admin-panel/routes/franchisee.performance.route'));
+adminRouter.use('/franchisee/goals', require('./modules/admin-panel/routes/franchisee.goal.route'));
 
 // ─── Phase BDE: SolarKits BDE Management System ──────────────────────────────
-adminRouter.use('/bde-mgmt',                     require('./modules/admin-panel/routes/bde.admin.route'));
-adminRouter.use('/bde',                          require('./modules/admin-panel/routes/bde.admin.route'));
+adminRouter.use('/bde-mgmt', require('./modules/admin-panel/routes/bde.admin.route'));
+adminRouter.use('/bde', require('./modules/admin-panel/routes/bde.admin.route'));
 
 // ─── Step 3: Franchisee Store Setup & Operations ─────────────────────────────
-adminRouter.use('/store-setup',                  require('./modules/admin-panel/routes/store.setup.admin.route'));
+adminRouter.use('/store-setup', require('./modules/admin-panel/routes/store.setup.admin.route'));
 
 // ─── Margin & Commission Settings Module ─────────────────────────────────────
-adminRouter.use('/company/margin-goals',         require('./modules/admin-panel/routes/company_margin_goals.route'));
+adminRouter.use('/company/margin-goals', require('./modules/admin-panel/routes/company_margin_goals.route'));
 
 // ─── Service Ticket / Kit Item Replacement Module ─────────────────────────────
-adminRouter.use('/service-tickets',              require('./modules/admin-panel/routes/service_ticket.admin.route'));
+adminRouter.use('/service-tickets', require('./modules/admin-panel/routes/service_ticket.admin.route'));
 
 // ─── EPC Quotation Management Settings ─────────────────────────────────────
-adminRouter.use('/quote-settings',               require('./modules/admin-panel/routes/admin.quote.settings.route'));
+adminRouter.use('/quote-settings', require('./modules/admin-panel/routes/admin.quote.settings.route'));
 
 // ─── Know My Margin (KMM) Estimator & BOM Settings ───────────────────────────
-adminRouter.use('/estimator',                    require('./modules/admin-panel/routes/estimator.admin.route'));
-adminRouter.use('/project-boms',                 require('./modules/admin-panel/routes/estimator.admin.route'));
+adminRouter.use('/estimator', require('./modules/admin-panel/routes/estimator.admin.route'));
+adminRouter.use('/project-boms', require('./modules/admin-panel/routes/estimator.admin.route'));
 
 // ─── Delivery Management & Route Consolidation System ─────────────────────────
-adminRouter.use('/delivery-management',           require('./modules/admin-panel/routes/delivery.management.route'));
+adminRouter.use('/delivery-management', require('./modules/admin-panel/routes/delivery.management.route'));
 
 // ─── Warehouse Panel routes accessible via Admin API ─────────────────────────
-adminRouter.use('/warehouse',                    require('./modules/warehouse-panel/routes/warehouse.route'));
+adminRouter.use('/warehouse', require('./modules/warehouse-panel/routes/warehouse.route'));
 
 // ─── Admin Notification System & Real-Time Stream ────────────────────────────
-adminRouter.use('/notifications',                require('./modules/admin-panel/routes/admin.notifications.route'));
+adminRouter.use('/notifications', require('./modules/admin-panel/routes/admin.notifications.route'));
 
 // ─── Region-wise Payment Gateway Configuration & Order Processing ─────────
-adminRouter.use('/payment-config',                require('./modules/admin-panel/routes/region.payment.config.route'));
+adminRouter.use('/payment-config', require('./modules/admin-panel/routes/region.payment.config.route'));
 
 // ─── Product-Wise Payment Milestone Configuration & Checkout Resolution ───
-adminRouter.use('/payment-milestones',            require('./modules/admin-panel/routes/product.payment.milestones.route'));
+adminRouter.use('/payment-milestones', require('./modules/admin-panel/routes/product.payment.milestones.route'));
 
 // ─── Centralized Order & Stage Approval Workflow Engine ───────────────────────
-adminRouter.use('/order-approvals',               require('./modules/admin-panel/routes/order.approval.route'));
+adminRouter.use('/order-approvals', require('./modules/admin-panel/routes/order.approval.route'));
+adminRouter.use('/epc-types', require('./modules/admin-panel/routes/epc.types.route'));
 
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
@@ -244,6 +245,7 @@ app.use('/account-api/api/v1/payments/icici', iciciEcollectionRouter);
 require('./modules/solarshop-india/utils/scheduler');
 require('./modules/warehouse-panel/utils/scheduler');
 require('./utils/autoSeedAccounts');
+require('./utils/autoSeedEpcTypes');
 
 // Global Error Handler (catches JSON parse errors, CORS, and unhandled exceptions)
 app.use((err, req, res, next) => {
