@@ -25,16 +25,24 @@ import { authHeaderObj } from "@/app/authHeader";
 import ReactCountryFlag from "react-country-flag";
 import DropdownWithSearchInput from "./DropdownWithSearchInput";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/admin-api";
+
+const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return 'Just now';
+    const d = new Date(dateStr);
+    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return `${Math.floor(diffSec / 86400)}d ago`;
+};
+
 export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard" }) {
     const { theme, toggleTheme } = useTheme();
     const [showPopup, setShowPopup] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [notifications, setNotifications] = useState([
-        { id: 1, title: "New Message", message: "You have received a new message from John", time: "2 min ago", read: false },
-        { id: 2, title: "System Update", message: "System maintenance scheduled for tomorrow", time: "1 hour ago", read: true },
-        { id: 3, title: "Payment Received", message: "Payment of $500 has been processed", time: "3 hours ago", read: false },
-        { id: 4, title: "Welcome", message: "Welcome to the dashboard! Get started with our guide", time: "1 day ago", read: true },
-    ]);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const popupRef = useRef(null);
     const notificationsRef = useRef(null);
@@ -360,20 +368,65 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const unreadCount = notifications.filter(n => !n.read).length;
-
-    const markAsRead = (id) => {
-        setNotifications(notifications.map(notif =>
-            notif.id === id ? { ...notif, read: true } : notif
-        ));
+    const fetchNotifications = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/notifications?limit=25`, {
+                headers: authHeaderObj()
+            });
+            if (res.data?.status === 'success') {
+                const list = (res.data?.data?.notifications || []).map(n => ({
+                    id: n._id || n.id,
+                    title: n.title,
+                    message: n.message,
+                    time: formatTimeAgo(n.created_at || n.createdAt),
+                    read: n.is_read,
+                    category: n.category,
+                    priority: n.priority,
+                    action_url: n.action_url
+                }));
+                setNotifications(list);
+                setUnreadCount(res.data?.data?.unread_count ?? list.filter(x => !x.read).length);
+            }
+        } catch (_) {}
     };
 
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(notif => ({ ...notif, read: true })));
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const markAsRead = async (id) => {
+        try {
+            await axios.patch(`${API_URL}/notifications/${id}/read`, {}, { headers: authHeaderObj() });
+        } catch (_) {}
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
     };
 
-    const deleteNotification = (id) => {
-        setNotifications(notifications.filter(notif => notif.id !== id));
+    const markAllAsRead = async () => {
+        try {
+            await axios.post(`${API_URL}/notifications/mark-all-read`, {}, { headers: authHeaderObj() });
+        } catch (_) {}
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        setUnreadCount(0);
+    };
+
+    const deleteNotification = async (id) => {
+        try {
+            await axios.delete(`${API_URL}/notifications/${id}`, { headers: authHeaderObj() });
+        } catch (_) {}
+        setNotifications(prev => prev.filter(n => n.id !== id));
+    };
+
+    const handleNotificationClick = (notification) => {
+        if (!notification.read) {
+            markAsRead(notification.id);
+        }
+        setShowNotifications(false);
+        if (notification.action_url) {
+            navigate(notification.action_url);
+        }
     };
 
     // Resolve active panel name from allowed panels or fallback based on pathname
@@ -644,7 +697,8 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
                                     notifications.map((notification) => (
                                         <div
                                             key={notification.id}
-                                            className={`p-3 sm:p-4 border-b border-border hover:bg-linear-120 hover:from-primary/5 hover:to-primary/10 transition-all duration-200 ${!notification.read ? 'bg-linear-120 from-primary/5 to-primary/10' : ''
+                                            onClick={() => handleNotificationClick(notification)}
+                                            className={`p-3 sm:p-4 border-b border-border hover:bg-linear-120 hover:from-primary/5 hover:to-primary/10 transition-all duration-200 cursor-pointer ${!notification.read ? 'bg-linear-120 from-primary/5 to-primary/10' : ''
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start">
@@ -670,7 +724,7 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
                                                         <IconButton
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => markAsRead(notification.id)}
+                                                            onClick={(e) => { e.stopPropagation(); markAsRead(notification.id); }}
                                                             className="p-1 hover:bg-success/10 hover:text-success transition-colors"
                                                             title="Mark as read"
                                                         >
@@ -680,7 +734,7 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
                                                     <IconButton
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => deleteNotification(notification.id)}
+                                                        onClick={(e) => { e.stopPropagation(); deleteNotification(notification.id); }}
                                                         className="p-1 hover:bg-danger/10 hover:text-danger transition-colors"
                                                         title="Delete"
                                                     >
