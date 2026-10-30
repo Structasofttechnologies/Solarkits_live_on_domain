@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { DeliveryOrder, PoRequest, CompanyWarehouse } = require('../models/company_warehouse_db');
+const { sendAdminNotification } = require('../../admin-panel/services/admin.notification.service');
 
 /**
  * GET /warehouse-api/delivery-orders
@@ -121,30 +122,36 @@ exports.get_delivery_orders = async (req, res) => {
       const isOverdue = ordObj.delivery_status !== 'delivered' && daysElapsed > slaDays;
       const overdueDays = isOverdue ? (daysElapsed - slaDays) : 0;
 
-      // Resolve true kits count & capacity for this order
-      let totalKits = Number(ordObj.num_kits) || Number(ordObj.total_kits) || 0;
-      if (!totalKits && ordObj.epcs && ordObj.epcs.length > 0) {
-        totalKits = ordObj.epcs.reduce((acc, epc) => {
+      // Resolve true kits count & capacity dynamically for this order
+      let epcKits = 0;
+      if (ordObj.epcs && ordObj.epcs.length > 0) {
+        epcKits = ordObj.epcs.reduce((acc, epc) => {
           const match = (epc.boskit_qty || '').match(/(\d+)/) || (epc.inverter_qty || '').match(/(\d+)/);
-          return acc + (match ? parseInt(match[1]) : 0);
+          return acc + (match ? parseInt(match[1], 10) : 0);
         }, 0);
       }
-      if (!totalKits) {
-        // Smart infer from inverters, ACDB, or lightning arrestor
-        const inv = (ordObj.items || []).find(i => i.category === 'inverter' || (i.product_name && i.product_name.toLowerCase().includes('inverter')));
-        const acdb = (ordObj.items || []).find(i => i.sku?.includes('ACDB') || (i.product_name && i.product_name.toLowerCase().includes('acdb')));
-        const lig = (ordObj.items || []).find(i => i.sku?.includes('LIG-') || (i.product_name && i.product_name.toLowerCase().includes('lightning arrestor')));
-        totalKits = inv?.ordered_qty || acdb?.ordered_qty || lig?.ordered_qty || 1;
-      }
+      const inv = (ordObj.items || []).find(i => i.category === 'inverter' || (i.product_name && i.product_name.toLowerCase().includes('inverter')));
+      const acdb = (ordObj.items || []).find(i => i.sku?.includes('ACDB') || (i.product_name && i.product_name.toLowerCase().includes('acdb')));
+      const lig = (ordObj.items || []).find(i => i.sku?.includes('LIG-') || (i.product_name && i.product_name.toLowerCase().includes('lightning arrestor')));
+      const itemKits = inv?.ordered_qty || acdb?.ordered_qty || lig?.ordered_qty || 0;
+
+      let totalKits = Math.max(
+        epcKits,
+        itemKits,
+        Number(ordObj.num_kits) || 0,
+        Number(ordObj.total_kits) || 0
+      ) || 1;
 
       let detectedCap = ordObj.system_capacity || '';
+      if (!detectedCap && ordObj.epcs && ordObj.epcs.length > 0) {
+        detectedCap = ordObj.epcs.find(e => e.system_capacity)?.system_capacity || '';
+      }
       if (!detectedCap) {
-        const inv = (ordObj.items || []).find(i => i.category === 'inverter' || (i.product_name && i.product_name.toLowerCase().includes('inverter')));
         const capMatch = (inv?.product_name || inv?.sku || '').match(/(\d+)\s*k[wv]/i);
         detectedCap = capMatch ? `${capMatch[1]} kW` : '3 kW';
       }
 
-      const detectedModel = ordObj.solarkit_model || `${detectedCap} Solarkits DCR Combokit`;
+      const detectedModel = ordObj.solarkit_model || (ordObj.epcs?.find(e => e.solarkit_model)?.solarkit_model) || `${detectedCap} Solarkits DCR Combokit`;
 
       // Available Free Warehouse Stock = Base Stock - Total stock committed/inwarded across orders
       const enrichedItems = (ordObj.items || []).map(it => {
@@ -249,7 +256,7 @@ exports.get_delivery_orders = async (req, res) => {
       material_inward: await DeliveryOrder.countDocuments({
         ...baseQuery,
         sent_for_delivery_at: null,
-        delivery_status: { $in: ['new_order', 'partially_inwarded'] }
+        delivery_status: { $in: ['new_order', 'partially_inwarded', 'inward_completed', 'inward_done'] }
       }),
       pending_inward: await DeliveryOrder.countDocuments({
         ...baseQuery,
@@ -303,28 +310,35 @@ exports.get_delivery_order_by_id = async (req, res) => {
     }
     const ordObj = order.toObject();
 
-    let totalKits = Number(ordObj.num_kits) || Number(ordObj.total_kits) || 0;
-    if (!totalKits && ordObj.epcs && ordObj.epcs.length > 0) {
-      totalKits = ordObj.epcs.reduce((acc, epc) => {
+    let epcKits = 0;
+    if (ordObj.epcs && ordObj.epcs.length > 0) {
+      epcKits = ordObj.epcs.reduce((acc, epc) => {
         const match = (epc.boskit_qty || '').match(/(\d+)/) || (epc.inverter_qty || '').match(/(\d+)/);
-        return acc + (match ? parseInt(match[1]) : 0);
+        return acc + (match ? parseInt(match[1], 10) : 0);
       }, 0);
     }
-    if (!totalKits) {
-      const inv = (ordObj.items || []).find(i => i.category === 'inverter' || (i.product_name && i.product_name.toLowerCase().includes('inverter')));
-      const acdb = (ordObj.items || []).find(i => i.sku?.includes('ACDB') || (i.product_name && i.product_name.toLowerCase().includes('acdb')));
-      const lig = (ordObj.items || []).find(i => i.sku?.includes('LIG-') || (i.product_name && i.product_name.toLowerCase().includes('lightning arrestor')));
-      totalKits = inv?.ordered_qty || acdb?.ordered_qty || lig?.ordered_qty || 1;
-    }
+    const inv = (ordObj.items || []).find(i => i.category === 'inverter' || (i.product_name && i.product_name.toLowerCase().includes('inverter')));
+    const acdb = (ordObj.items || []).find(i => i.sku?.includes('ACDB') || (i.product_name && i.product_name.toLowerCase().includes('acdb')));
+    const lig = (ordObj.items || []).find(i => i.sku?.includes('LIG-') || (i.product_name && i.product_name.toLowerCase().includes('lightning arrestor')));
+    const itemKits = inv?.ordered_qty || acdb?.ordered_qty || lig?.ordered_qty || 0;
+
+    let totalKits = Math.max(
+      epcKits,
+      itemKits,
+      Number(ordObj.num_kits) || 0,
+      Number(ordObj.total_kits) || 0
+    ) || 1;
 
     let detectedCap = ordObj.system_capacity || '';
+    if (!detectedCap && ordObj.epcs && ordObj.epcs.length > 0) {
+      detectedCap = ordObj.epcs.find(e => e.system_capacity)?.system_capacity || '';
+    }
     if (!detectedCap) {
-      const inv = (ordObj.items || []).find(i => i.category === 'inverter' || (i.product_name && i.product_name.toLowerCase().includes('inverter')));
       const capMatch = (inv?.product_name || inv?.sku || '').match(/(\d+)\s*k[wv]/i);
       detectedCap = capMatch ? `${capMatch[1]} kW` : '3 kW';
     }
 
-    const detectedModel = ordObj.solarkit_model || `${detectedCap} Solarkits DCR Combokit`;
+    const detectedModel = ordObj.solarkit_model || (ordObj.epcs?.find(e => e.solarkit_model)?.solarkit_model) || `${detectedCap} Solarkits DCR Combokit`;
 
     const epcsList = (ordObj.epcs && ordObj.epcs.length > 0)
       ? ordObj.epcs.map(epc => ({
@@ -502,6 +516,15 @@ exports.request_procurement = async (req, res) => {
       timestamp: new Date(),
       notes: `Requisition ${requestNumber} with ${poItems.length} BOM components for ${descName} sent to Account Manager login for supplier booking. ${notes || ''}`.trim()
     });
+
+    sendAdminNotification({
+      title: `⚡ Material Requisition: Order #${order.order_number}`,
+      message: `Warehouse Manager requested procurement of materials (${descName} - ${poItems.length} components) under ${requestNumber}.`,
+      category: 'inventory',
+      priority: 'urgent',
+      action_url: '/account-panel/procurement',
+      metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, request_number: requestNumber, event: 'procurement_requested' }
+    }).catch(err => console.warn('[Procurement Notification Error]:', err.message));
 
     await order.save();
 
@@ -701,6 +724,15 @@ exports.inward_material = async (req, res) => {
         timestamp: new Date(),
         notes: `All ${order.items.length} items inwarded and verified under batch ${generatedBatchId}. Order remains in New Orders queue awaiting user to click Send for Delivery.`
       });
+
+      sendAdminNotification({
+        title: `📦 100% Inward Complete: Order #${order.order_number}`,
+        message: `Warehouse completed 100% material inward for Delivery Order ${order.delivery_order_id}. All items verified & ready for delivery dispatch.`,
+        category: 'orders',
+        priority: 'high',
+        action_url: '/account-panel/delivery-management',
+        metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'inward_completed' }
+      }).catch(err => console.warn('[Inward Notification Error]:', err.message));
     } else {
       order.delivery_status = 'partially_inwarded';
       order.audit_trail.push({
@@ -709,6 +741,15 @@ exports.inward_material = async (req, res) => {
         timestamp: new Date(),
         notes: `Batch ${generatedBatchId} inwarded (${inwardedItemsLog.reduce((s, it) => s + it.qty, 0)} units). Remaining pending units: ${totalPending}. BOS Kit Status: ${order.kit_preparation_status}. Order remains in New Orders.`
       });
+
+      sendAdminNotification({
+        title: `📥 Inward Recorded: Order #${order.order_number}`,
+        message: `Batch ${generatedBatchId} inwarded for Order #${order.order_number}. Remaining pending units: ${totalPending}.`,
+        category: 'orders',
+        priority: 'normal',
+        action_url: '/warehouse/new-orders',
+        metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'partially_inwarded' }
+      }).catch(err => console.warn('[Inward Notification Error]:', err.message));
     }
 
     await order.save();
@@ -923,6 +964,15 @@ exports.initiate_dispatch = async (req, res) => {
       timestamp: new Date(),
       notes: `Vehicle loaded, rear photo verified, docket attached, E-Way Bill #${order.eway_bill.eway_bill_number} checked. Moved to Track Delivery.`
     });
+
+    sendAdminNotification({
+      title: `🛣️ Delivery Dispatched: Order #${order.order_number}`,
+      message: `Delivery Order ${order.delivery_order_id} is dispatched & in transit via vehicle ${order.incoming_truck_group?.vehicle_number || order.transport_details?.vehicle_number || 'Truck'}. Destination: ${order.destination?.city || order.destination?.district}, ${order.destination?.state}.`,
+      category: 'orders',
+      priority: 'high',
+      action_url: '/warehouse/track-delivery',
+      metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'in_transit' }
+    }).catch(err => console.warn('[Dispatch Notification Error]:', err.message));
 
     await order.save();
     return res.status(200).json({
@@ -1182,6 +1232,15 @@ exports.send_for_delivery = async (req, res) => {
       timestamp: new Date(),
       notes: `All materials 100% inwarded. Sent to Out for Delivery. Alert sent to Account Manager to verify 2nd half payment across all EPCs.`
     });
+
+    sendAdminNotification({
+      title: `🚚 Order Sent for Delivery: Order #${order.order_number}`,
+      message: `Delivery Order ${order.delivery_order_id} is 100% inwarded and moved to Out for Delivery. Alert sent to Account Manager to verify 2nd half payment across all EPCs.`,
+      category: 'orders',
+      priority: 'urgent',
+      action_url: '/account-panel/delivery-management',
+      metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'sent_for_delivery' }
+    }).catch(err => console.warn('[Send for Delivery Notification Error]:', err.message));
 
     await order.save();
 
@@ -1574,28 +1633,29 @@ exports.update_kit_assembly = async (req, res) => {
       order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || order.kit_assembly_details.kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
       order.kit_preparation_status = 'in_assembly';
     }
-    // 5. Final Dispatch Staging / Kit Ready
+    // 5. Assembly Completed & Marked Ready for this Order (Staged at Workstation)
     else if (stage === 'mark_kit_ready' || stage === 'kit_ready') {
       order.kit_assembly_details.qc_verified = true;
       order.kit_assembly_details.qc_status = 'passed';
       order.kit_assembly_details.packed_and_labeled = true;
+      order.kit_assembly_details.assembly_status = 'completed';
+      order.kit_assembly_details.assembled_at = order.kit_assembly_details.assembled_at || new Date();
+      order.kit_assembly_details.ready_at = new Date();
       order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || order.kit_assembly_details.kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
       order.kit_preparation_status = 'kit_ready';
 
-      // Full assembly complete: update all BOS Kit items to received_qty = ordered_qty, pending_qty = 0
-      (order.items || []).forEach(it => {
-        const isBos = (it.sku || '').startsWith('BOS-KIT-') || (it.category || '').toLowerCase().includes('bos kit') || (it.product_name || '').toLowerCase().includes('bos kit');
-        if (isBos) {
-          it.received_qty = it.ordered_qty;
-          it.pending_qty = 0;
-        }
-      });
+      // Keep pending_qty active so warehouse manager can allocate & inward these assembled kits in New Orders
+      const bosItem = (order.items || []).find(it => (it.sku || '').startsWith('BOS-KIT-') || (it.category || '').toLowerCase().includes('bos kit') || (it.product_name || '').toLowerCase().includes('bos kit'));
+      order.kit_assembly_details.assembled_kits_ready = bosItem?.pending_qty || order.num_kits || 1;
 
-      // Recalculate total pending across all items
-      const totalPending = (order.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
-      if (totalPending === 0) {
-        order.delivery_status = 'inward_completed';
-      }
+      sendAdminNotification({
+        title: `🛠️ BOS Kits Assembled: Order #${order.order_number}`,
+        message: `${order.kit_assembly_details.assembled_kits_ready} BOS Kits assembled & QC passed for Order #${order.order_number}. Workstation finished. Allocate & inward in New Orders.`,
+        category: 'inventory',
+        priority: 'normal',
+        action_url: '/warehouse/new-orders',
+        metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'kit_ready' }
+      }).catch(err => console.warn('[Kit Ready Notification Error]:', err.message));
     }
 
     order.audit_trail.push({
@@ -1708,13 +1768,7 @@ exports.get_bos_kit_catalog = async (req, res) => {
     if (rawDb) {
       try {
         const kits = await rawDb.collection('pc_comobo_kit').find({
-          deleted_at: null,
-          $or: [
-            { name: /1.*k\.?w/i },
-            { name: /2.*k\.?w/i },
-            { name: /3.*k\.?w/i },
-            { capacity: { $in: [1, 2, 3] } }
-          ]
+          deleted_at: null
         }).sort({ capacity: 1 }).toArray();
 
         if (kits && kits.length > 0) {

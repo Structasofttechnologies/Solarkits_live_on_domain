@@ -112,6 +112,31 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   // Mode: 'order_specific' (Order Fulfillment) vs 'stock_inventory' (Pre-Assembly for Warehouse Stock)
   const [boskitWorkstationMode, setBoskitWorkstationMode] = useState('order_specific');
 
+  // Raw Inward Materials Inventory in Warehouse (Required components for BOS Kit assembly)
+  const DEFAULT_RAW_STOCK = [
+    { name: 'Black AC Cable – 2.5 sq. mm', sku: 'CAB-POLYC-BLAC-ACCA-2.5MM', category: 'Cables', rack: 'Bay 2 / Cable Rack', qty: 250, unit: 'Mtr' },
+    { name: 'Red AC Cable – 2.5 sq. mm', sku: 'CAB-POLYC-REDA-ACCA-2.5MM', category: 'Cables', rack: 'Bay 2 / Cable Rack', qty: 250, unit: 'Mtr' },
+    { name: 'BLACK DC CABLE - 2.5 SQ MM', sku: 'CAB-POLYC-BLAC-DCCA-2.5MM', category: 'Cables', rack: 'Bay 2 / Cable Rack', qty: 50, unit: 'Roll' },
+    { name: 'RED DC CABLE - 2.5 SQMM', sku: 'CAB-POLYC-REDD-DCCA-2.5MM', category: 'Cables', rack: 'Bay 2 / Cable Rack', qty: 50, unit: 'Roll' },
+    { name: 'Lightning Arrestor Cable 16 sq.mm Aluminium', sku: 'CAB-SUNNO-LIGH-LIGH-16SQMM', category: 'Cables', rack: 'Bay 2 / Rack 3', qty: 150, unit: 'Mtr' },
+    { name: 'Green Copper Earthing Cable – 2.5 sq. mm', sku: 'CAB-SUNNO-GREE-EART-2.5MM', category: 'Cables', rack: 'Bay 2 / Cable Rack', qty: 180, unit: 'Mtr' },
+    { name: 'L T ACDB Single Phase', sku: 'AC-LT-LTAC-SING-16A', category: 'Switchgear', rack: 'Bay 3 / Shelf A', qty: 25, unit: 'Box' },
+    { name: 'DCDB', sku: 'DCD-LARSE-DCDB-1STR-1A', category: 'Switchgear', rack: 'Bay 3 / Shelf C', qty: 30, unit: 'Box' },
+    { name: 'MC4 CONNECTOR', sku: 'MC4-SIBAS-MC4C-STAN-30A', category: 'Connectors', rack: 'Bay 1 / Bin 05', qty: 120, unit: 'Pairs' },
+    { name: 'Earthing Rod', sku: 'EAR-REPUT-EART-COPP-1M', category: 'Earthing', rack: 'Yard / Pallet 4', qty: 40, unit: 'Pcs' },
+    { name: 'Earthing Compound', sku: 'EAR-REPUT-EART-CHEM-10KG', category: 'Earthing', rack: 'Bay 1 / Pallet 02', qty: 50, unit: 'Bag (10Kg)' },
+    { name: 'Earthing Lugs', sku: 'EAR-REPUT-EART-EART-1', category: 'Earthing', rack: 'Bay 1 / Bin 08', qty: 80, unit: 'Pcs' },
+    { name: 'Lightning Arrestor - SIngle Spike', sku: 'LIG-REPUT-LIGH-FRP-1METER', category: 'Protection', rack: 'Bay 3 / Bin 10', qty: 30, unit: 'Pcs' },
+    { name: 'UV Resistant Cable Tie', sku: 'UVR-CRETO-UVRE-CABL-1', category: 'Hardware', rack: 'Bay 1 / Bin 02', qty: 400, unit: 'Pcs' },
+    { name: 'Single Nail Cable Clamp', sku: 'CLA-REPUT-SING-CABL-1', category: 'Fasteners', rack: 'Bay 1 / Bin 12', qty: 250, unit: 'Pcs' },
+    { name: 'PVC Bend (L-Bow)', sku: 'PVC-REPUT-PVCB-PVCB-1', category: 'Conduits', rack: 'Bay 1 / Bin 14', qty: 90, unit: 'Pcs' },
+    { name: 'PVC Tee', sku: 'PVC-REPUT-PVCT-PVCT-1', category: 'Conduits', rack: 'Bay 1 / Bin 15', qty: 60, unit: 'Pcs' },
+    { name: 'Wire Tap', sku: 'WIR-REPUT-WIRE-WIRE-1', category: 'Hardware', rack: 'Bay 1 / Bin 03', qty: 40, unit: 'Pcs' },
+    { name: 'Wall Grip', sku: 'WAL-REPUT-WALL-1235-1235', category: 'Hardware', rack: 'Bay 1 / Bin 04', qty: 100, unit: 'Pcs' },
+    { name: 'Screw', sku: 'SCR-REPUT-SCRE-NUTB-1038', category: 'Hardware', rack: 'Bay 1 / Bin 06', qty: 150, unit: 'Pcs' },
+    { name: 'LA Clamp', sku: 'CLA-REPUT-LACL-LACL-1', category: 'Protection', rack: 'Bay 3 / Bin 11', qty: 30, unit: 'Pcs' }
+  ];
+
   // Pre-Assembled Warehouse Stock Models (Balance of System Packages ONLY - Panels & Inverters are inwarded separately)
   const DEFAULT_STOCK_MODELS = [
     {
@@ -263,6 +288,24 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     return preassembledStock.reduce((acc, m) => acc + (m.ready_stock || 0), 0);
   }, [preassembledStock]);
 
+  // Warehouse Inward Raw Materials Inventory State
+  const [warehouseRawStock, setWarehouseRawStock] = useState(() => {
+    try {
+      const saved = localStorage.getItem('solarkits_warehouse_raw_stock');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return DEFAULT_RAW_STOCK;
+  });
+
+  // Active Buffer Pre-Assembly Job (Sequential 5-Stage Workstation)
+  const [activeBufferJob, setActiveBufferJob] = useState(() => {
+    try {
+      const saved = localStorage.getItem('solarkits_active_buffer_job');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return null;
+  });
+
   // Modal State for Pre-Assembling into Stock (Part 2)
   const [stockAssemblyModalOpen, setStockAssemblyModalOpen] = useState(false);
   const [selectedStockModelId, setSelectedStockModelId] = useState('1kw-dcr');
@@ -283,6 +326,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   const [selectedOrderForInward, setSelectedOrderForInward] = useState(null);
   const [inwardInputs, setInwardInputs] = useState({});
   const [inwardRemarks, setInwardRemarks] = useState('');
+  const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState('');
+  const [defaultStorageRack, setDefaultStorageRack] = useState('BAY-A1-01');
+  const [qcPassed, setQcPassed] = useState(true);
+  const [damageNotes, setDamageNotes] = useState('');
   const [submittingInward, setSubmittingInward] = useState(false);
   const [activeInwardTab, setActiveInwardTab] = useState('inward'); // 'inward' or 'history'
 
@@ -435,8 +483,40 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     }
   };
 
-  // Pre-Assemble into Warehouse Stock from Inward Inventory (Part 2)
-  const handleConfirmAssembleForStock = async (e) => {
+  // ── Raw Material Stock Inward Validation for BOS Kits ──
+  const checkRawMaterialStock = (model, qty) => {
+    if (!model || !model.bom_components || model.bom_components.length === 0) {
+      return { hasShortage: false, items: [] };
+    }
+    const items = model.bom_components.map(comp => {
+      const required = (comp.qty || 1) * qty;
+      const compNameClean = (comp.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matched = warehouseRawStock.find(r => {
+        const rawNameClean = (r.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return r.sku === comp.sku ||
+               rawNameClean === compNameClean ||
+               rawNameClean.includes(compNameClean) ||
+               compNameClean.includes(rawNameClean);
+      });
+      const available = matched ? (matched.qty || 0) : 0;
+      const isShort = available < required;
+      return {
+        name: comp.name,
+        sku: comp.sku || matched?.sku || 'BOS-RAW',
+        category: matched?.category || 'Components',
+        rack: matched?.rack || 'Bay 2 / Shelves',
+        required,
+        available,
+        unit: comp.unit || matched?.unit || 'Pcs',
+        isShort
+      };
+    });
+    const hasShortage = items.some(i => i.isShort);
+    return { hasShortage, items };
+  };
+
+  // Start 5-Stage Buffer Assembly Job (Replaces instant magic addition)
+  const handleStartBufferAssemblyJob = (e) => {
     if (e) e.preventDefault();
     const qty = parseInt(stockAssembleQty) || 1;
     if (qty <= 0) {
@@ -446,61 +526,230 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const model = preassembledStock.find(m => m.id === selectedStockModelId);
     if (!model) return;
 
+    // Prerequisite: Check if required raw materials are inwarded
+    const { hasShortage, items } = checkRawMaterialStock(model, qty);
+    if (hasShortage) {
+      const shortList = items.filter(i => i.isShort).map(i => i.name).slice(0, 3).join(', ');
+      dispatch(setAlert({
+        message: `Assembly Locked! Raw materials not inwarded: ${shortList}. Pehle 'Material Inward' tab me jakar material inward karein!`,
+        type: 'warning'
+      }));
+      return;
+    }
+
     try {
       setSubmittingStockAssembly(true);
       const newBatches = [];
+      const yr = new Date().getFullYear();
+      const randCode = Date.now().toString().slice(-4);
       for (let i = 0; i < qty; i++) {
-        newBatches.push(`WH-BOS-${model.id.toUpperCase()}-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}${i + 1}`);
+        newBatches.push(`WH-BOS-${model.id.toUpperCase()}-${yr}-${randCode}${i + 1}`);
       }
 
-      const updatedStock = preassembledStock.map(m => {
-        if (m.id === model.id) {
-          return {
-            ...m,
-            ready_stock: m.ready_stock + qty,
-            batch_codes: [...(m.batch_codes || []), ...newBatches],
-            storage_location: stockAssemblyRack || m.storage_location
-          };
-        }
-        return m;
-      });
-      setPreassembledStock(updatedStock);
-      try {
-        localStorage.setItem('solarkits_preassembled_stock', JSON.stringify(updatedStock));
-      } catch {
-        // ignore localStorage write error
-      }
-
-      const newHistItem = {
-        id: `hist-${Date.now()}`,
+      const newJob = {
+        job_id: `BUFF-JOB-${model.id.toUpperCase()}-${randCode}`,
+        model_id: model.id,
         model_name: model.name,
-        batch_code: newBatches.join(', '),
+        category: model.category,
+        capacity: model.capacity,
         qty,
-        assembled_by: stockAssemblyOperator || 'Warehouse Assembly Team',
-        storage_location: stockAssemblyRack || model.storage_location,
-        timestamp: new Date().toISOString()
+        target_rack: stockAssemblyRack || model.storage_location,
+        technician: stockAssemblyOperator || 'Warehouse Assembly Lead',
+        bom_components: model.bom_components || [],
+        current_stage: 1, // 1 to 5 sequential stages
+        started_at: new Date().toISOString(),
+        batches: newBatches
       };
-      const updatedHistory = [newHistItem, ...stockAssemblyHistory];
-      setStockAssemblyHistory(updatedHistory);
-      try {
-        localStorage.setItem('solarkits_stock_assembly_history', JSON.stringify(updatedHistory));
-      } catch {
-        // ignore localStorage write error
-      }
 
-      dispatch(setAlert({
-        message: `Successfully assembled ${qty} unit(s) of "${model.name}" into Warehouse Ready Stock! Stored at ${stockAssemblyRack || model.storage_location}.`,
-        type: 'success'
-      }));
+      setActiveBufferJob(newJob);
+      try {
+        localStorage.setItem('solarkits_active_buffer_job', JSON.stringify(newJob));
+      } catch (_) {}
 
       setStockAssemblyModalOpen(false);
-      setStockAssembleQty(1);
-    } catch (err) {
-      console.error(err);
-      dispatch(setAlert({ message: 'Failed to assemble kits into stock.', type: 'error' }));
+      dispatch(setAlert({
+        message: `🚀 Buffer Assembly Job started for ${qty} Kit(s)! Proceed with Stage 1: Raw Material Picking.`,
+        type: 'info'
+      }));
     } finally {
       setSubmittingStockAssembly(false);
     }
+  };
+
+  // Advance Buffer Assembly Stage (1 -> 2 -> 3 -> 4 -> 5)
+  const handleAdvanceBufferStage = (targetStage) => {
+    if (!activeBufferJob) return;
+    const nextStage = targetStage !== undefined ? targetStage : activeBufferJob.current_stage + 1;
+    if (nextStage > 5) return;
+
+    const updatedJob = {
+      ...activeBufferJob,
+      current_stage: nextStage
+    };
+    setActiveBufferJob(updatedJob);
+    try {
+      localStorage.setItem('solarkits_active_buffer_job', JSON.stringify(updatedJob));
+    } catch (_) {}
+
+    const stageNames = {
+      2: 'Stage 2: Wiring & Enclosure Assembly',
+      3: 'Stage 3: Electrical QC Inspection',
+      4: 'Stage 4: Packaging & Buffer Batch Labeling',
+      5: 'Stage 5: Final Buffer Rack Placement'
+    };
+
+    dispatch(setAlert({
+      message: `Progressed to ${stageNames[nextStage]}!`,
+      type: 'success'
+    }));
+  };
+
+  // Finalize Buffer Stock & Add to WH Inventory (Stage 5 completion)
+  const handleFinalizeBufferStock = () => {
+    if (!activeBufferJob) return;
+    const { model_id, qty, target_rack, technician, batches } = activeBufferJob;
+    const model = preassembledStock.find(m => m.id === model_id);
+    if (!model) return;
+
+    // Deduct consumed raw materials
+    const updatedRawStock = warehouseRawStock.map(r => {
+      const comp = (model.bom_components || []).find(c => {
+        const cNameClean = (c.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const rNameClean = (r.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return r.sku === c.sku || rNameClean === cNameClean || rNameClean.includes(cNameClean) || cNameClean.includes(rNameClean);
+      });
+      if (comp) {
+        const consumed = (comp.qty || 1) * qty;
+        return { ...r, qty: Math.max(0, r.qty - consumed) };
+      }
+      return r;
+    });
+    setWarehouseRawStock(updatedRawStock);
+    try {
+      localStorage.setItem('solarkits_warehouse_raw_stock', JSON.stringify(updatedRawStock));
+    } catch (_) {}
+
+    // Credit kits to ready_stock
+    const updatedStock = preassembledStock.map(m => {
+      if (m.id === model.id) {
+        return {
+          ...m,
+          ready_stock: (m.ready_stock || 0) + qty,
+          batch_codes: [...(m.batch_codes || []), ...batches],
+          storage_location: target_rack || m.storage_location
+        };
+      }
+      return m;
+    });
+    setPreassembledStock(updatedStock);
+    try {
+      localStorage.setItem('solarkits_preassembled_stock', JSON.stringify(updatedStock));
+    } catch (_) {}
+
+    // Log in production history
+    const newHistItem = {
+      id: `hist-${Date.now()}`,
+      model_name: model.name,
+      batch_code: batches.join(', '),
+      qty,
+      assembled_by: technician || 'Warehouse Assembly Team',
+      storage_location: target_rack || model.storage_location,
+      timestamp: new Date().toISOString()
+    };
+    const updatedHistory = [newHistItem, ...stockAssemblyHistory];
+    setStockAssemblyHistory(updatedHistory);
+    try {
+      localStorage.setItem('solarkits_stock_assembly_history', JSON.stringify(updatedHistory));
+    } catch (_) {}
+
+    setActiveBufferJob(null);
+    try {
+      localStorage.removeItem('solarkits_active_buffer_job');
+    } catch (_) {}
+
+    dispatch(setAlert({
+      message: `🎉 Successfully completed assembly of ${qty} kit(s) into Warehouse Ready Stock! Stored at ${target_rack}.`,
+      type: 'success'
+    }));
+  };
+
+  // Abort Buffer Job
+  const handleAbortBufferJob = () => {
+    setActiveBufferJob(null);
+    try {
+      localStorage.removeItem('solarkits_active_buffer_job');
+    } catch (_) {}
+    dispatch(setAlert({ message: 'Buffer assembly job cancelled.', type: 'info' }));
+  };
+
+  // Reset Model Stock to Clean Default (Fix for the 26 kits and 24 batch codes)
+  const handleResetModelStock = (modelId) => {
+    const updatedStock = preassembledStock.map(m => {
+      if (m.id === modelId) {
+        const cleanCount = m.id === '1kw-dcr' ? 4 : m.id === '2kw-dcr' ? 3 : 2;
+        const cleanBatches = Array.from({ length: cleanCount }, (_, i) => 
+          `WH-BOS-${(m.capacity || m.id).toUpperCase().replace(/\s+/g, '')}-2026-D${i + 1}01`
+        );
+        return {
+          ...m,
+          ready_stock: cleanCount,
+          batch_codes: cleanBatches
+        };
+      }
+      return m;
+    });
+    setPreassembledStock(updatedStock);
+    try {
+      localStorage.setItem('solarkits_preassembled_stock', JSON.stringify(updatedStock));
+    } catch (_) {}
+    dispatch(setAlert({ message: `Reset stock for model to clean default (${3} kits).`, type: 'info' }));
+  };
+
+  // Quick Inward Raw Materials (Testing helper)
+  const handleQuickInwardRawStock = (modelId, qty = 2) => {
+    const model = preassembledStock.find(m => m.id === modelId) || preassembledStock[0];
+    if (!model) return;
+    const updated = warehouseRawStock.map(r => {
+      const comp = (model.bom_components || []).find(c => {
+        const cNameClean = (c.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const rNameClean = (r.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return r.sku === c.sku || rNameClean === cNameClean || rNameClean.includes(cNameClean) || cNameClean.includes(rNameClean);
+      });
+      if (comp) {
+        return { ...r, qty: r.qty + (comp.qty * qty * 2) + 20 };
+      }
+      return r;
+    });
+    setWarehouseRawStock(updated);
+    try {
+      localStorage.setItem('solarkits_warehouse_raw_stock', JSON.stringify(updated));
+    } catch (_) {}
+    dispatch(setAlert({
+      message: `Inwarded bulk raw materials into warehouse stock for "${model.name}". Materials are now sufficient for assembly!`,
+      type: 'success'
+    }));
+  };
+
+  // Simulate Shortage (Testing helper)
+  const handleSimulateShortage = (modelId) => {
+    const model = preassembledStock.find(m => m.id === modelId) || preassembledStock[0];
+    if (!model) return;
+    const shortNames = (model.bom_components || []).slice(0, 3).map(c => (c.name || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const updated = warehouseRawStock.map(r => {
+      const rNameClean = (r.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (shortNames.some(s => rNameClean.includes(s) || s.includes(rNameClean))) {
+        return { ...r, qty: 0 };
+      }
+      return r;
+    });
+    setWarehouseRawStock(updated);
+    try {
+      localStorage.setItem('solarkits_warehouse_raw_stock', JSON.stringify(updated));
+    } catch (_) {}
+    dispatch(setAlert({
+      message: `Simulated raw material shortage for "${model.name}". Inward is now required before assembly!`,
+      type: 'warning'
+    }));
   };
 
   const handleSendForDelivery = async (order) => {
@@ -768,21 +1017,20 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     });
   }, [orders, selectedQueueTab]);
 
-  // Centralized helper to extract true kit count & capacity for any delivery order
+  // Centralized helper to extract true kit count & capacity for any delivery order dynamically
   const getOrderKitMetrics = (ord) => {
     if (!ord) return { totalKits: 1, capacity: '3 kW', modelName: 'Solarkits DCR Combokit' };
 
-    // 1. Direct fields
-    let kits = Number(ord.num_kits) || Number(ord.total_kits) || 0;
+    // 1. Extract from EPC array (dynamic order data from Account Manager / Solar Shop)
+    let epcKits = 0;
     let cap = ord.system_capacity || '';
     let model = ord.solarkit_model || '';
 
-    // 2. Scan EPC array
-    if (!kits && ord.epcs && ord.epcs.length > 0) {
-      kits = ord.epcs.reduce((acc, epc) => {
+    if (ord.epcs && ord.epcs.length > 0) {
+      epcKits = ord.epcs.reduce((acc, epc) => {
         const match = (epc.boskit_qty || '').match(/(\d+)/) ||
                       (epc.inverter_qty || '').match(/(\d+)/);
-        return acc + (match ? parseInt(match[1]) : 0);
+        return acc + (match ? parseInt(match[1], 10) : 0);
       }, 0);
       if (!cap) {
         cap = ord.epcs.find(e => e.system_capacity)?.system_capacity || '';
@@ -792,7 +1040,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       }
     }
 
-    // 3. Scan items for inverters, ACDB, lightning arrestor, panels (from Account Panel PIs)
+    // 2. Scan items for inverters, ACDB, lightning arrestor, panels
     const items = ord.items || [];
     let detectedFromItems = 0;
     for (const it of items) {
@@ -800,30 +1048,42 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       const sku = (it.sku || '').toUpperCase();
       const cat = (it.category || '').toLowerCase();
 
+      // Inverter: 1 inverter = 1 kit
       if (cat === 'inverter' || name.includes('inverter') || sku.includes('HAV-') || sku.includes('INV-')) {
         if ((it.ordered_qty || 0) > detectedFromItems) detectedFromItems = it.ordered_qty;
         const capMatch = (it.product_name || '').match(/(\d+)\s*k[wv]/i) || sku.match(/(\d+)KW/i);
         if (capMatch && !cap) cap = `${capMatch[1]} kW`;
       }
+      // ACDB: 1 ACDB = 1 kit
       if (sku.includes('ACDB') || name.includes('acdb')) {
         if ((it.ordered_qty || 0) > detectedFromItems) detectedFromItems = it.ordered_qty;
       }
+      // Lightning arrestor: 1 = 1 kit
       if (name.includes('lightning arrestor') || sku.includes('LIG-')) {
         if ((it.ordered_qty || 0) > detectedFromItems) detectedFromItems = it.ordered_qty;
       }
+      // Earthing rod: 3 rods = 1 kit
       if (name.includes('earthing rod') || sku.includes('EAR-')) {
         const fromRods = Math.round((it.ordered_qty || 0) / 3);
         if (fromRods > detectedFromItems) detectedFromItems = fromRods;
       }
+      // Panels: 9 panels = 1 kit (e.g. 225 panels = 25 kits, 630 panels = 70 kits)
       if (cat.includes('panel') || name.includes('module') || name.includes('panel')) {
-        if (it.ordered_qty === 225 && detectedFromItems === 0) detectedFromItems = 25;
-        if (it.ordered_qty === 630 && detectedFromItems === 0) detectedFromItems = 70;
+        const pQty = it.ordered_qty || 0;
+        if (pQty > 0) {
+          const fromPanels = Math.round(pQty / 9);
+          if (fromPanels > detectedFromItems) detectedFromItems = fromPanels;
+        }
       }
     }
 
-    if (!kits && detectedFromItems > 0) {
-      kits = detectedFromItems;
-    }
+    // 3. Resolve true totalKits dynamically (taking max so that epc or item quantities always govern)
+    let kits = Math.max(
+      epcKits,
+      detectedFromItems,
+      Number(ord.num_kits) || 0,
+      Number(ord.total_kits) || 0
+    );
 
     if (!kits) kits = 1;
     if (!cap) cap = '3 kW';
@@ -871,7 +1131,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const bosProductName = `BOS Kit (${capacity || '3 kW'} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`;
 
     if (existingBosIndex >= 0) {
-      if (items[existingBosIndex].ordered_qty < totalKits) {
+      if (items[existingBosIndex].ordered_qty !== totalKits) {
         items[existingBosIndex].ordered_qty = totalKits;
         items[existingBosIndex].pending_qty = Math.max(0, totalKits - (items[existingBosIndex].received_qty || 0));
       }
@@ -912,9 +1172,12 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const bosProductName = `BOS Kit (${capacity || '3 kW'} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`;
 
     if (existingBosIndex >= 0) {
-      if (items[existingBosIndex].ordered_qty < totalKits) {
+      if (items[existingBosIndex].ordered_qty !== totalKits) {
         items[existingBosIndex].ordered_qty = totalKits;
         items[existingBosIndex].pending_qty = Math.max(0, totalKits - (items[existingBosIndex].received_qty || 0));
+      }
+      if (!items[existingBosIndex].product_name?.includes(capacity)) {
+        items[existingBosIndex].product_name = bosProductName;
       }
     } else if (order.kit_preparation_status !== 'not_required') {
       items.push({
@@ -939,6 +1202,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     });
     setInwardInputs(initialInputs);
     setInwardRemarks('');
+    setSupplierInvoiceNo(order.supplier_invoice_no || `INV-DO-${order.order_number || Date.now().toString().slice(-4)}`);
+    setInvoiceDate(new Date().toISOString().split('T')[0]);
+    setDefaultStorageRack(order.default_storage_rack || 'BAY-A1-01');
+    setQcPassed(true);
+    setDamageNotes('');
     setInwardType(order.inward_type || 'warehouse');
     setInwardExecutionMode('manual');
     setPickupLocationDetails(order.pickup_location_details || {
@@ -1054,6 +1322,16 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       return;
     }
 
+    if (!qcPassed && (!damageNotes || !damageNotes.trim())) {
+      dispatch(setAlert({
+        message: 'Please enter Damage / Shortage Notes explaining discrepancies found during physical inspection.',
+        type: 'warning'
+      }));
+      return;
+    }
+
+    const finalRemarks = inwardRemarks || (!qcPassed ? damageNotes : 'Physical Gate Challan Verified - Packaging Intact');
+
     try {
       setSubmittingInward(true);
       if (hasDiscrepancy) {
@@ -1069,7 +1347,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           } else if (itm.qty > 0) {
             await inwardDeliveryOrder(selectedOrderForInward._id, {
               items: [{ sku: itm.sku, qty: itm.qty, rack_location: itm.rack_location }],
-              remarks: inwardRemarks,
+              remarks: finalRemarks, supplier_invoice_no: supplierInvoiceNo, invoice_date: invoiceDate, default_rack: defaultStorageRack, qc_passed: qcPassed, damage_notes: damageNotes,
               inward_type: inwardType,
               inward_mode: inwardExecutionMode,
               scanned_serials: scannedSerials,
@@ -1084,7 +1362,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       } else {
         const res = await inwardDeliveryOrder(selectedOrderForInward._id, {
           items: itemsToInward,
-          remarks: inwardRemarks,
+          remarks: finalRemarks, supplier_invoice_no: supplierInvoiceNo, invoice_date: invoiceDate, default_rack: defaultStorageRack, qc_passed: qcPassed, damage_notes: damageNotes,
           inward_type: inwardType,
           inward_mode: inwardExecutionMode,
           scanned_serials: scannedSerials,
@@ -1371,15 +1649,27 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
             />
           </form>
 
-          {/* Quick Refresh */}
-          <button
-            onClick={fetchOrders}
-            disabled={loading}
-            className="self-end md:self-auto px-3 py-2 rounded-xl bg-surface-hover border border-border text-text-secondary hover:text-text-primary hover:border-primary text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <HiOutlineRefresh className={`text-sm ${loading ? 'animate-spin text-primary' : ''}`} />
-            <span>Refresh</span>
-          </button>
+          {/* Quick Actions: Request Materials & Refresh */}
+          <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleOpenProcureModal(orders[0] || null)}
+              className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 text-xs font-black flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+              title="Send BOS Kit raw material procurement requisition to Account Manager"
+            >
+              <FaPaperPlane className="text-xs" />
+              <span>⚡ Request BOS Kit Materials from Accounts</span>
+            </button>
+
+            <button
+              onClick={fetchOrders}
+              disabled={loading}
+              className="px-3 py-2 rounded-xl bg-surface-hover border border-border text-text-secondary hover:text-text-primary hover:border-primary text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <HiOutlineRefresh className={`text-sm ${loading ? 'animate-spin text-primary' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Dropdowns Grid */}
@@ -1554,12 +1844,19 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                     <span className="px-2.5 py-1 rounded-lg font-mono text-xs font-bold bg-primary/15 text-primary border border-primary/30 shadow-2xs">
                       {ord.delivery_order_id}
                     </span>
-                    {/* Multi-EPC Consignment Numbering Badge */}
-                    <span className="px-2.5 py-1 rounded-lg font-mono text-xs font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1.5 shadow-2xs">
-                      <FaLayerGroup className="text-[10px]" />
-                      {ord.order_group_id ? `Consignment: ${ord.order_group_id} • ` : ''}
-                      {(ord.epcs?.length || 1)} {(ord.epcs?.length || 1) === 1 ? 'EPC' : 'EPCs'} Included
-                    </span>
+                    {/* 1 Truck = 1 Card Consolidated Shipment Badge */}
+                    {ord.epcs && ord.epcs.length > 1 ? (
+                      <span className="px-3 py-1 rounded-lg font-mono text-xs font-black bg-gradient-to-r from-purple-600/20 to-indigo-600/20 text-purple-300 border border-purple-500/40 flex items-center gap-1.5 shadow-xs">
+                        <FaTruck className="text-xs text-purple-400" />
+                        <span>🚚 Consolidated Truck Shipment ({ord.epcs.length} EPC Orders)</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg font-mono text-xs font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1.5 shadow-2xs">
+                        <FaLayerGroup className="text-[10px]" />
+                        {ord.order_group_id ? `Consignment: ${ord.order_group_id} • ` : ''}
+                        {(ord.epcs?.length || 1)} {(ord.epcs?.length || 1) === 1 ? 'EPC' : 'EPCs'} Included
+                      </span>
+                    )}
                     {ord.delivery_number && ord.delivery_number !== ord.delivery_order_id && (
                       <span className="px-2.5 py-1 rounded-lg font-mono text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1.5">
                         <FaTruck className="text-[10px]" /> DEL: {ord.delivery_number}
@@ -1608,29 +1905,33 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                 {/* ── SECTION 2: Customer / Destination / Logistics Info Strip ── */}
                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-text-secondary bg-surface-hover/30 px-3.5 py-2.5 rounded-xl border border-border/40">
                   {ord.epcs && ord.epcs.length > 1 ? (
-                    /* Multi-EPC Consolidated Consignment (No single company name shown per boss rule) */
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-400 font-black text-xs uppercase tracking-wider flex items-center gap-1.5 border border-purple-500/30">
-                        <FaLayerGroup className="text-xs" /> Consolidated Consignment ({ord.epcs.length} EPCs):
-                      </span>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {ord.epcs.map((epc, i) => (
-                          <span key={epc.epc_id || i} className="px-2.5 py-1 rounded-lg bg-surface border border-border text-text-primary font-bold text-xs flex items-center gap-1.5 shadow-2xs">
-                            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
-                            <span>{epc.epc_name || `EPC #${i+1}`}</span>
-                            <span className="text-[11px] font-mono text-purple-400 font-bold">
-                              ({epc.system_capacity || (epc.share_percentage ? `${epc.share_percentage}% Share` : 'SolarKit')})
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                      {(ord.destination?.city || ord.destination?.district || ord.destination?.state) && (
-                        <span className="flex items-center gap-1 text-text-muted font-medium ml-1">
-                          <HiOutlineLocationMarker className="text-xs text-primary" />
-                          <span className="text-[11px] text-text-muted font-bold">Delivery Site:</span>
-                          <strong className="text-text-primary text-xs">{ord.destination?.city || ord.destination?.district || ''}{ord.destination?.state ? `, ${ord.destination.state}` : ''}</strong>
+                    /* Multi-EPC Consolidated Consignment (User Rule: Zero EPC names shown when > 1 EPC, only show numbers / counts) */
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 w-full">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="px-3 py-1.5 rounded-xl bg-purple-500/15 text-purple-300 font-black text-xs uppercase tracking-wider flex items-center gap-1.5 border border-purple-500/30 shadow-2xs">
+                          <FaLayerGroup className="text-xs text-purple-400" />
+                          <span>🚚 Consolidated Truck: {ord.epcs.length} EPC Orders Bundled</span>
                         </span>
-                      )}
+                        <span className="px-2.5 py-1 rounded-lg bg-surface border border-purple-500/25 text-purple-300 text-xs font-bold font-mono">
+                          📦 {ord.epcs.length} Client Consignments in 1 Truck
+                        </span>
+                        <span className="text-[11px] text-text-muted italic">
+                          (Individual allocations confidential — click View Details to inspect)
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 text-xs text-text-muted font-medium">
+                        <span className="flex items-center gap-1">
+                          <FaWarehouse className="text-xs text-primary" />
+                          <span>Origin: <strong className="text-text-primary font-bold">Central Factory / Suppliers</strong></span>
+                        </span>
+                        {(ord.destination?.city || ord.destination?.district || ord.destination?.state) && (
+                          <span className="flex items-center gap-1">
+                            <HiOutlineLocationMarker className="text-xs text-rose-500" />
+                            <span>Consolidated Route: <strong className="text-text-primary font-bold">{ord.destination?.city || ord.destination?.district || ''}{ord.destination?.state ? `, ${ord.destination.state}` : ''}</strong></span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     /* Single EPC Order (Show the EPC Contractor clearly labeled) */
@@ -1718,6 +2019,19 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       <HiOutlineClipboardCheck className={`text-base ${totalPendingItems === 0 || isReadyForDispatch ? 'text-emerald-400' : 'text-white'}`} />
                       <span>{totalPendingItems === 0 || isReadyForDispatch ? 'View / Adjust Inward' : 'Inward Material'}</span>
                     </button>
+
+                    {/* Requisition Button: When items or BOS kits are pending */}
+                    {totalPendingItems > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProcureModal(ord)}
+                        className="h-9 px-3 rounded-xl text-xs font-bold bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Send BOS Kit raw material procurement requisition to Account Manager"
+                      >
+                        <FaPaperPlane className="text-xs text-purple-400" />
+                        <span>Request Materials</span>
+                      </button>
+                    )}
 
                     {/* 3. Send for Delivery (Enabled ONLY when 100% Inwarded) */}
                     {(() => {
@@ -1904,6 +2218,326 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
             </div>
           </div>
 
+          {/* ── Active Warehouse Buffer Assembly Workstation (Line #1) ── */}
+          {activeBufferJob ? (
+            <div className="card p-6 rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-r from-emerald-950/40 via-surface to-teal-950/30 shadow-lg shadow-emerald-500/10 space-y-5">
+              {/* Job Header */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border/80">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                      <FaTools className="text-emerald-400" />
+                      Active Buffer Job: #{activeBufferJob.job_id}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      {activeBufferJob.model_name} ({activeBufferJob.capacity})
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono">
+                      Target: {activeBufferJob.qty} Kit(s)
+                    </span>
+                  </div>
+                  <div className="text-xs text-text-muted flex items-center gap-4 flex-wrap">
+                    <span><strong>Lead:</strong> {activeBufferJob.technician}</span>
+                    <span><strong>Destination Storage:</strong> <code className="text-emerald-400 font-bold">{activeBufferJob.target_rack}</code></span>
+                    <span><strong>Started:</strong> {new Date(activeBufferJob.started_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleAbortBufferJob}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-surface-hover hover:bg-rose-500/20 border border-border hover:border-rose-500/40 text-text-secondary hover:text-rose-400 transition-all cursor-pointer"
+                  >
+                    ✕ Cancel Job
+                  </button>
+                </div>
+              </div>
+
+              {/* 5-Stage Stepper Bar */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-text-primary">
+                    Stage {activeBufferJob.current_stage} of 5: Sequential Assembly Progression
+                  </span>
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    {Math.round((activeBufferJob.current_stage / 5) * 100)}% Complete
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center text-xs">
+                  {[
+                    { num: 1, title: '1. Picking', subtitle: 'Raw Materials Picking', icon: FaBoxes },
+                    { num: 2, title: '2. Wiring', subtitle: 'Wiring & Enclosure', icon: FaWrench },
+                    { num: 3, title: '3. QC Check', subtitle: 'Electrical QC Test', icon: FaClipboardCheck },
+                    { num: 4, title: '4. Packaging', subtitle: 'Box & Batch Label', icon: FaBarcode },
+                    { num: 5, title: '5. Buffer Stock', subtitle: 'Store in WH Rack', icon: FaCheckDouble }
+                  ].map((st) => {
+                    const isDone = activeBufferJob.current_stage > st.num;
+                    const isActive = activeBufferJob.current_stage === st.num;
+                    const StepIcon = st.icon;
+
+                    return (
+                      <div
+                        key={st.num}
+                        onClick={() => {
+                          if (isDone) handleAdvanceBufferStage(st.num);
+                        }}
+                        className={`p-3 rounded-2xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                          isDone
+                            ? 'bg-emerald-500/10 border-2 border-emerald-500/40 text-emerald-400 font-bold shadow-xs cursor-pointer hover:border-emerald-400'
+                            : isActive
+                            ? 'bg-gradient-to-b from-emerald-500/15 via-teal-500/10 to-transparent border-2 border-emerald-500 text-emerald-300 font-black shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-500/30 scale-[1.02]'
+                            : 'bg-surface-hover/30 border-border/60 text-text-muted opacity-50 cursor-not-allowed select-none'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${
+                            isDone ? 'bg-emerald-500 text-white' : isActive ? 'bg-emerald-500 text-white animate-pulse' : 'bg-surface border border-border text-text-muted'
+                          }`}>
+                            {isDone ? '✓' : st.num}
+                          </span>
+                          <StepIcon className={`text-sm ${isActive ? 'text-emerald-400' : isDone ? 'text-emerald-500' : 'text-text-muted'}`} />
+                        </div>
+                        <div className="text-left">
+                          <div className={`text-xs font-black leading-tight ${isActive ? 'text-emerald-300' : isDone ? 'text-text-primary' : 'text-text-muted'}`}>
+                            {st.title}
+                          </div>
+                          <div className="text-[10px] text-text-muted mt-0.5 leading-tight">{st.subtitle}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Stage Workspace */}
+              <div className="p-4 rounded-xl bg-surface border border-border/80 space-y-4">
+                {activeBufferJob.current_stage === 1 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                          Stage 1: Raw Component Picking from Warehouse Inward Bins
+                        </h4>
+                        <p className="text-[11px] text-text-secondary">
+                          Pick all required BOM materials from warehouse inward bins and stage on trolley.
+                        </p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        {activeBufferJob.bom_components?.length || 0} Components
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto scrollbar-thin text-xs">
+                      {(activeBufferJob.bom_components || []).map((c, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-surface-hover/60 border border-border/70">
+                          <div className="flex items-center gap-1.5 truncate pr-2">
+                            <span className="text-emerald-400 font-bold">✓</span>
+                            <span className="truncate text-text-secondary">{c.name}</span>
+                          </div>
+                          <span className="font-mono font-bold text-primary whitespace-nowrap bg-surface px-1.5 py-0.5 rounded border border-border/50 text-[10px]">
+                            {c.qty * activeBufferJob.qty} {c.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAdvanceBufferStage(2)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                      >
+                        <span>✓ Confirm Components Picked → Proceed to Wiring (Stage 2)</span>
+                        <FaArrowRight className="text-xs" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeBufferJob.current_stage === 2 && (
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                        Stage 2: Wiring Harness & Enclosure Assembly
+                      </h4>
+                      <p className="text-[11px] text-text-secondary">
+                        DCDB box assembly, wire crimping, MC4 connector termination, ferrule numbering & gland sealing.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {[
+                        'DCDB / AJB Box Internal Wiring & Fuse Holder Installation',
+                        'Solar DC Cable 4 sq. mm Crimping & MC4 Termination (IP68)',
+                        'Earth Cable 2.5 sq. mm Lug Crimping with Copper Ferrules',
+                        'Enclosure Cable Glands Tightened & IP65 Gasket Verification'
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-hover/60 border border-border text-text-secondary">
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold">✓</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAdvanceBufferStage(3)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                      >
+                        <span>✓ Wiring Assembly Complete → Proceed to Electrical QC (Stage 3)</span>
+                        <FaArrowRight className="text-xs" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeBufferJob.current_stage === 3 && (
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                        Stage 3: Electrical QC & Insulation Test
+                      </h4>
+                      <p className="text-[11px] text-text-secondary">
+                        Physical inspection, megger insulation resistance test & continuity check.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 rounded-xl bg-surface-hover border border-border">
+                        <div className="text-[10px] text-text-muted font-bold uppercase">Insulation Resistance (1000V Megger)</div>
+                        <div className="text-base font-black text-emerald-400 mt-1">32.4 MΩ</div>
+                        <div className="text-[10px] text-emerald-500 font-bold mt-0.5">✓ PASS (Min 10 MΩ req)</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-surface-hover border border-border">
+                        <div className="text-[10px] text-text-muted font-bold uppercase">Earth Continuity Resistance</div>
+                        <div className="text-base font-black text-emerald-400 mt-1">0.06 Ω</div>
+                        <div className="text-[10px] text-emerald-500 font-bold mt-0.5">✓ PASS (Max 0.2 Ω allowed)</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-surface-hover border border-border">
+                        <div className="text-[10px] text-text-muted font-bold uppercase">DC/AC Polarity Verification</div>
+                        <div className="text-base font-black text-emerald-400 mt-1">Verified</div>
+                        <div className="text-[10px] text-emerald-500 font-bold mt-0.5">✓ PASS (Correct +/-)</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAdvanceBufferStage(4)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                      >
+                        <span>✓ Electrical QC Passed → Proceed to Packaging (Stage 4)</span>
+                        <FaArrowRight className="text-xs" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeBufferJob.current_stage === 4 && (
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                        Stage 4: Packaging & Warehouse Buffer Stock Batch Labeling
+                      </h4>
+                      <p className="text-[11px] text-text-secondary">
+                        Carton boxing with protective foam padding. Buffer batch codes generated for warehouse ready inventory (No customer dispatch QR required).
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-surface-hover border border-border space-y-2">
+                      <div className="text-[11px] font-bold text-text-secondary">
+                        Generated Warehouse Buffer Batch Codes:
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(activeBufferJob.batches || []).map((b, i) => (
+                          <span key={i} className="px-2.5 py-1 rounded-lg font-mono text-xs font-bold bg-surface border border-emerald-500/40 text-emerald-400 shadow-xs">
+                            🏷️ {b}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAdvanceBufferStage(5)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                      >
+                        <span>✓ Packaging Complete → Proceed to Storage Placement (Stage 5)</span>
+                        <FaArrowRight className="text-xs" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeBufferJob.current_stage === 5 && (
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                        Stage 5: Deposit to Warehouse Buffer Storage Rack
+                      </h4>
+                      <p className="text-[11px] text-text-secondary">
+                        Place the assembled BOS Kit in designated warehouse bay/rack. Kit is now ready for zero-delay order allocation!
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-emerald-400">Assigned Buffer Storage Location:</div>
+                        <div className="text-base font-black text-text-primary mt-0.5 font-mono">
+                          📍 {activeBufferJob.target_rack}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-text-muted">Quantity to Credit:</div>
+                        <div className="text-base font-black text-emerald-400">+{activeBufferJob.qty} Ready Kits</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleFinalizeBufferStock}
+                        className="px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/30 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                      >
+                        <FaCheckCircle className="text-sm" />
+                        <span>🎉 Finalize & Credit {activeBufferJob.qty} Kit(s) to Warehouse Ready Stock</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="card p-4 rounded-2xl border border-dashed border-border bg-surface/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mb-2">
+              <div className="flex items-center gap-2.5 text-text-secondary">
+                <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center text-text-muted font-bold">
+                  🏭
+                </div>
+                <div>
+                  <div className="font-bold text-text-primary">Buffer Assembly Line Idle</div>
+                  <div className="text-[11px] text-text-muted">No active batch job. Click '+ Pre-Assemble New Kits for Stock' to start a 5-stage build job.</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStockModelId(preassembledStock[0]?.id || '1kw-dcr');
+                  setStockAssembleQty(1);
+                  setStockAssemblyRack(preassembledStock[0]?.storage_location || 'Bay 1 / Pallet A-01');
+                  setStockAssemblyModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-surface-hover hover:bg-emerald-600 hover:text-white border border-border hover:border-emerald-500 text-text-primary flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              >
+                <FaPlus className="text-xs" />
+                <span>+ Start 5-Stage Buffer Assembly Job</span>
+              </button>
+            </div>
+          )}
+
           {/* Standard Catalog Grid */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -1985,6 +2619,17 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   </div>
 
                   <div className="space-y-1.5">
+                    {(model.batch_codes || []).length > 3 && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetModelStock(model.id)}
+                        className="w-full py-1.5 px-3 rounded-lg text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        title="Reset model stock to 3 clean kits and clear dummy batch codes"
+                      >
+                        <HiOutlineRefresh className="text-xs" />
+                        <span>↺ Reset Stock to 3 Kits (Clear Test Batches)</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -2031,6 +2676,28 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
               <span className="text-xs text-text-muted">Bulk inventory inwarded at warehouse dock</span>
             </div>
 
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-[11px] text-text-muted font-mono">{warehouseRawStock.length} Inwarded Items in Stock</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate(`${prefix}/material-inward`)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-surface-hover hover:bg-surface text-primary border border-primary/30 flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <FaWarehouse className="text-xs" />
+                  <span>Go to Material Inward Tab →</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickInwardRawStock(preassembledStock[0]?.id || '1kw-dcr', 5)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <FaPlus className="text-xs" />
+                  <span>+ Inward Stock All Items</span>
+                </button>
+              </div>
+            </div>
+
             <div className="border border-border rounded-xl overflow-hidden bg-surface">
               <table className="w-full text-left text-xs">
                 <thead className="bg-surface-hover/80 border-b border-border text-[10px] font-black uppercase text-text-muted">
@@ -2043,32 +2710,33 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {[
-                    { name: 'Aluminium Mounting Rails (4.2m)', sku: 'BOS-RAIL-4.2M-AL', category: 'Structures', rack: 'Bay 1 / Rack A-01', qty: 120, unit: 'Pcs', status: 'Sufficient' },
-                    { name: 'SS304 Mid Clamps (35mm)', sku: 'BOS-CLAMP-MID-35MM', category: 'Fasteners', rack: 'Bay 1 / Bin 12', qty: 250, unit: 'Pcs', status: 'Sufficient' },
-                    { name: 'SS304 End Clamps (35mm)', sku: 'BOS-CLAMP-END-35MM', category: 'Fasteners', rack: 'Bay 1 / Bin 14', qty: 90, unit: 'Pcs', status: 'Sufficient' },
-                    { name: '4 sq mm Solar DC Cable (100m Roll)', sku: 'BOS-DC-CABLE-4SQMM-100M', category: 'Cables', rack: 'Bay 2 / Cable Rack', qty: 18, unit: 'Rolls', status: 'Sufficient' },
-                    { name: '2-In 2-Out DCDB / AJB Box', sku: 'BOS-AJB-DCDB-4IN-4OUT', category: 'Switchgear', rack: 'Bay 2 / Shelves', qty: 14, unit: 'Boxes', status: 'Sufficient' },
-                    { name: 'Copper Bonded Earth Rod (2m)', sku: 'BOS-EARTH-ROD-COPPER-2M', category: 'Earthing', rack: 'Yard / Pallet 4', qty: 32, unit: 'Pcs', status: 'Sufficient' },
-                    { name: 'MC4 Connectors 1000V', sku: 'BOS-MC4-CONN-1000V', category: 'Connectors', rack: 'Bay 1 / Bin 05', qty: 160, unit: 'Pairs', status: 'Sufficient' }
-                  ].map((raw, idx) => (
-                    <tr key={idx} className="hover:bg-surface-hover/30">
-                      <td className="p-3">
-                        <div className="font-bold text-text-primary">{raw.name}</div>
-                        <div className="text-[10px] font-mono text-primary">{raw.sku}</div>
-                      </td>
-                      <td className="p-3 text-text-secondary">{raw.category}</td>
-                      <td className="p-3 font-mono text-text-muted">{raw.rack}</td>
-                      <td className="p-3 text-center font-bold text-emerald-400 font-mono">
-                        {raw.qty} {raw.unit}
-                      </td>
-                      <td className="p-3 text-right">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          ✓ Ready for Assembly
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {warehouseRawStock.map((raw, idx) => {
+                    const isAvailable = raw.qty > 0;
+                    return (
+                      <tr key={idx} className="hover:bg-surface-hover/30">
+                        <td className="p-3">
+                          <div className="font-bold text-text-primary">{raw.name}</div>
+                          <div className="text-[10px] font-mono text-primary">{raw.sku}</div>
+                        </td>
+                        <td className="p-3 text-text-secondary">{raw.category}</td>
+                        <td className="p-3 font-mono text-text-muted">{raw.rack}</td>
+                        <td className="p-3 text-center font-bold font-mono">
+                          <span className={isAvailable ? 'text-emerald-400' : 'text-amber-400'}>
+                            {raw.qty} {raw.unit}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                            isAvailable
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          }`}>
+                            {isAvailable ? '✓ Inwarded & Ready' : '⚠️ Shortage / Inward Req'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -2193,30 +2861,27 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
 
             <div className="card p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Ready / Staged</span>
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Completed & Ready</span>
                 <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-sm font-bold">
                   <FaCheckCircle />
                 </div>
               </div>
               <div className="text-3xl font-black text-emerald-400 mt-2">
-                {orders.filter(o => o.kit_preparation_status === 'kit_ready' && !(o.items || []).some(it => isBosKitItem(it) && (it.pending_qty || 0) > 0)).length}
+                {orders.filter(o => o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed').length}
               </div>
-              <div className="text-[11px] text-text-muted mt-1">Ready for packaging & dispatch</div>
+              <div className="text-[11px] text-text-muted mt-1">Assembled & staged for New Orders inward</div>
             </div>
           </div>
 
           {/* BOS Kit Filter Tabs */}
           {(() => {
             const isOrderKitFullyDone = (o) => {
-              const isMarkedReady = o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed';
-              const hasPendingBos = (o.items || []).some(it => isBosKitItem(it) && (it.pending_qty || 0) > 0);
-              return isMarkedReady && !hasPendingBos;
+              return o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed';
             };
 
             const allPendingCount = orders.filter(o => o.kit_preparation_status && o.kit_preparation_status !== 'not_required' && !isOrderKitFullyDone(o)).length;
             const awaitingCount = orders.filter(o => o.kit_preparation_status === 'awaiting_components' && !isOrderKitFullyDone(o)).length;
             const inAssemblyCount = orders.filter(o => o.kit_preparation_status === 'in_assembly' && !isOrderKitFullyDone(o)).length;
-            const kitReadyCount = orders.filter(o => o.kit_preparation_status && o.kit_preparation_status !== 'not_required' && isOrderKitFullyDone(o)).length;
 
             return (
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
@@ -2224,7 +2889,6 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   { id: 'all', label: 'Pending Assembly Queue', count: allPendingCount },
                   { id: 'awaiting_components', label: 'Awaiting Components', count: awaitingCount, color: 'text-amber-400' },
                   { id: 'in_assembly', label: 'In Assembly Station', count: inAssemblyCount, color: 'text-purple-400' },
-                  { id: 'kit_ready', label: 'Kit Ready / Staged', count: kitReadyCount, color: 'text-emerald-400' },
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -2248,26 +2912,44 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           {/* BOS Kit Cards */}
           {(() => {
             const isOrderKitFullyDone = (o) => {
-              const isMarkedReady = o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed';
-              const hasPendingBos = (o.items || []).some(it => isBosKitItem(it) && (it.pending_qty || 0) > 0);
-              return isMarkedReady && !hasPendingBos;
+              return o.kit_preparation_status === 'kit_ready' || o.kit_assembly_details?.assembly_status === 'completed';
             };
 
             const kitOrders = orders
               .filter(o => o.kit_preparation_status && o.kit_preparation_status !== 'not_required')
+              .filter(o => !isOrderKitFullyDone(o))
               .filter(o => {
-                const isDone = isOrderKitFullyDone(o);
-                if (boskitStageFilter === 'all') return !isDone;
-                if (boskitStageFilter === 'kit_ready') return isDone;
-                return o.kit_preparation_status === boskitStageFilter && !isDone;
+                if (boskitStageFilter === 'all') return true;
+                return o.kit_preparation_status === boskitStageFilter;
               });
 
             if (kitOrders.length === 0) {
               return (
-                <div className="card p-12 text-center text-text-muted space-y-3 bg-surface border border-border rounded-2xl">
-                  <FaTools className="text-4xl text-text-muted opacity-30 mx-auto" />
-                  <div className="text-base font-bold text-text-primary">No BOS Kits in this Stage</div>
-                  <div className="text-xs">Select another stage tab or check all kits.</div>
+                <div className="card p-12 text-center space-y-4 bg-gradient-to-br from-emerald-500/10 via-surface to-teal-500/5 border-2 border-emerald-500/30 rounded-3xl shadow-sm">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl mx-auto shadow-inner">
+                    <FaCheckCircle />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-lg font-black text-text-primary">All BOS Kit Assembly Jobs Completed!</div>
+                    <div className="text-xs text-text-secondary max-w-md mx-auto">
+                      Specific order BOS kits are assembled, QC passed & staged. They are ready to be allocated and inwarded in <strong>New Orders</strong>.
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      onClick={() => {
+                        if (standaloneBoskit || location.pathname.includes('bos-kit-assembly')) {
+                          navigate(`${prefix}/new-orders`);
+                        } else {
+                          setMainSectionTab('orders');
+                        }
+                      }}
+                      className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-primary hover:bg-primary-hover text-white cursor-pointer shadow-md transition-all inline-flex items-center gap-2"
+                    >
+                      <span>Go to New Orders Queue</span>
+                      <FaArrowRight className="text-xs" />
+                    </button>
+                  </div>
                 </div>
               );
             }
@@ -2302,9 +2984,9 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   }
 
                   const matchedModel = preassembledStock.find(m =>
-                    (ord.system_capacity && m.name.toLowerCase().includes(ord.system_capacity.toLowerCase())) ||
-                    m.id === '1kw-dcr' || m.id === '2kw-dcr'
-                  ) || preassembledStock[0];
+                    (capacity && (m.name?.toLowerCase().includes(capacity.toLowerCase()) || m.capacity?.toLowerCase().includes(capacity.toLowerCase()))) ||
+                    (modelName && m.name?.toLowerCase().includes(modelName.toLowerCase()))
+                  ) || preassembledStock.find(m => m.name?.toLowerCase().includes('3 kw')) || preassembledStock[0];
 
                   const stockAvailable = matchedModel?.ready_stock || 0;
                   const canAllocateStock = Math.min(pendingKits, stockAvailable);
@@ -2374,23 +3056,19 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                           <div className="flex items-center gap-2 shrink-0 flex-wrap">
                             <button
                               type="button"
-                              onClick={() => handleSendForDelivery(ord)}
-                              disabled={sendingOrderId === ord._id}
+                              onClick={() => {
+                                if (standaloneBoskit || location.pathname.includes('bos-kit-assembly')) {
+                                  navigate(`${prefix}/new-orders`);
+                                } else {
+                                  setMainSectionTab('orders');
+                                }
+                              }}
                               className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-md flex items-center gap-2 transition-all active:scale-95"
-                              title="Click to send order directly to Out for Delivery Station"
+                              title="Kits are assembled! Open New Orders to allocate and inward."
                             >
-                              {sendingOrderId === ord._id ? (
-                                <>
-                                  <FaSpinner className="animate-spin text-xs" />
-                                  <span>Sending to Delivery...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <FaTruck className="text-xs" />
-                                  <span>Send for Delivery</span>
-                                  <FaArrowRight className="text-[10px]" />
-                                </>
-                              )}
+                              <FaBoxes className="text-xs" />
+                              <span>Allocate in New Orders</span>
+                              <FaArrowRight className="text-[10px]" />
                             </button>
                             <button
                               type="button"
@@ -2742,60 +3420,271 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     </div>
   )}
 
-      {/* ── Order-Specific Material Inward Modal ── */}
+      {/* ── Order-Specific Material Inward Modal (Physical Gate Challan & Scanner Verification) ── */}
       <Dialog
         isOpen={inwardModalOpen}
         onClose={() => setInwardModalOpen(false)}
         title={`Material Inward Entry: ${selectedOrderForInward?.delivery_order_id || ''}`}
         size="xl"
       >
-        {selectedOrderForInward && (
+        {selectedOrderForInward && (() => {
+          const totalExpectedQty = (modalInwardItems || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+          const totalScannedCount = scannedSerials.length;
+
+          return (
           <div className="space-y-4 p-1">
-            {/* Order Brief Header */}
-            <div className="p-4 bg-slate-100 rounded-2xl border-2 border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+            {/* ── Mode Selector Tabs (Image 1 Style: Online Scanner Gun vs Offline Physical Gate Challan) ── */}
+            <div className="flex bg-slate-200 border-2 border-slate-300 p-1.5 rounded-2xl gap-2 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setInwardExecutionMode('scanner')}
+                className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  inwardExecutionMode === 'scanner'
+                    ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30'
+                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                }`}
+              >
+                <FaBarcode className="text-base" />
+                <span>Online Inward (Scanner Gun & QR Code Feed)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInwardExecutionMode('manual')}
+                className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  inwardExecutionMode === 'manual'
+                    ? 'bg-primary text-white shadow-sm ring-2 ring-primary/30'
+                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                }`}
+              >
+                <FaClipboardCheck className="text-base" />
+                <span>Offline Inward (Physical Gate Challan & Invoice)</span>
+              </button>
+            </div>
+
+            {/* ── PI / Consignment & Logistics Summary Card (Image 1 Style 4-Column Strip) ── */}
+            <div className="bg-slate-100 border-2 border-slate-300 rounded-2xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs shadow-xs">
               <div>
-                <div className="font-black text-slate-900 text-sm flex items-center gap-2">
-                  <span className="text-base text-primary font-black">{selectedOrderForInward.customer_name}</span>
-                  {selectedOrderForInward.customer_phone && (
-                    <span className="text-xs font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-md border border-slate-300">
-                      📞 {selectedOrderForInward.customer_phone}
-                    </span>
-                  )}
-                </div>
-                <div className="text-slate-700 font-semibold mt-1 flex items-center gap-1.5">
-                  <FaMapMarkerAlt className="text-rose-600 shrink-0 text-xs" />
-                  <span>
-                    Destination: <strong className="text-slate-900">{selectedOrderForInward.destination?.address}, {selectedOrderForInward.destination?.district}, {selectedOrderForInward.destination?.state} - {selectedOrderForInward.destination?.pincode}</strong>
-                  </span>
-                </div>
+                <span className="text-[10px] font-black text-slate-600 uppercase block">PI / Order Consignment No</span>
+                <span className="font-mono font-black text-primary text-sm">{selectedOrderForInward.delivery_order_id}</span>
+                <span className="text-[10px] text-slate-600 font-bold block">Order #{selectedOrderForInward.order_number}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setActiveInwardTab('inward')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    activeInwardTab === 'inward'
-                      ? 'bg-primary text-white shadow-sm ring-2 ring-primary/30'
-                      : 'bg-white text-slate-700 hover:text-slate-900 border-2 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  📦 Record Inward
-                </button>
-                <button
-                  onClick={() => setActiveInwardTab('history')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    activeInwardTab === 'history'
-                      ? 'bg-primary text-white shadow-sm ring-2 ring-primary/30'
-                      : 'bg-white text-slate-700 hover:text-slate-900 border-2 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  📋 Inward History ({(selectedOrderForInward.inward_history || []).length})
-                </button>
+              <div>
+                <span className="text-[10px] font-black text-slate-600 uppercase block">Supplier / Origin</span>
+                <span className="font-bold text-slate-900 block truncate">Central Factory / Approved Vendors</span>
+                <span className="text-[10px] text-slate-600 font-semibold">SolarKits Manufacturing Unit</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-600 uppercase block">Delivery Method & Vehicle</span>
+                <span className="font-bold text-slate-900 block">{selectedOrderForInward.incoming_truck_group?.transporter_name || selectedOrderForInward.transport_details?.transporter_name || 'Central Freight Logistics'}</span>
+                <span className="text-[11px] font-mono text-primary font-bold">
+                  {selectedOrderForInward.incoming_truck_group?.vehicle_number || selectedOrderForInward.transport_details?.vehicle_number || 'Truck Assigned'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-600 uppercase block">Destination Hub</span>
+                <span className="font-bold text-slate-900 block">{selectedOrderForInward.warehouse_code || 'Central Hub WH-IND-GJ-001'}</span>
+                <span className="text-[10px] text-slate-600 font-bold">Total: {totalExpectedQty} units expected</span>
+              </div>
+            </div>
+
+            {/* ── Consignment Dossier & EPC Allocation Header (Boss Requirement: Show all EPCs with names, contacts, destinations & exact material breakdowns) ── */}
+            {(() => {
+              const epcList = (selectedOrderForInward.epcs && selectedOrderForInward.epcs.length > 0)
+                ? selectedOrderForInward.epcs
+                : [{
+                    epc_id: selectedOrderForInward.customer_id || 'EPC-PRIMARY',
+                    epc_name: selectedOrderForInward.customer_name,
+                    phone: selectedOrderForInward.customer_phone,
+                    destination: selectedOrderForInward.destination,
+                    solarkit_model: selectedOrderForInward.solarkit_model,
+                    system_capacity: selectedOrderForInward.system_capacity,
+                    panels_qty: (selectedOrderForInward.items?.find(i => (i.product_name || '').toLowerCase().includes('panel'))?.ordered_qty || (9 * (selectedOrderForInward.num_kits || 1))) + ' Pcs',
+                    inverter_qty: (selectedOrderForInward.items?.find(i => (i.product_name || '').toLowerCase().includes('inverter'))?.ordered_qty || (selectedOrderForInward.num_kits || 1)) + ' Pcs',
+                    boskit_qty: (selectedOrderForInward.num_kits || 1) + ' Pcs',
+                    structure_qty: (selectedOrderForInward.num_kits || 1) + ' Sets',
+                    items: selectedOrderForInward.items
+                  }];
+
+              return (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 via-white to-indigo-50 border-2 border-purple-300 space-y-3 shadow-xs">
+                  {/* Top Bar: Consignment Summary & Inward Actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-purple-200 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-base shadow-xs shrink-0">
+                        <FaLayerGroup />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-wider text-purple-950 flex items-center gap-2">
+                          <span>Consignment EPC Recipients & Material Allocation</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-200 text-purple-900 border border-purple-300">
+                            {epcList.length} EPC{epcList.length > 1 ? 's' : ''} in this Truck Consignment
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-purple-900 font-semibold mt-0.5">
+                          Har EPC ka physical maal & delivery details niche card me verify karein.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setActiveInwardTab('inward')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                          activeInwardTab === 'inward'
+                            ? 'bg-purple-700 text-white shadow-sm ring-2 ring-purple-400'
+                            : 'bg-white text-slate-700 hover:text-slate-900 border-2 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        📦 Record Inward
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveInwardTab('history')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                          activeInwardTab === 'history'
+                            ? 'bg-purple-700 text-white shadow-sm ring-2 ring-purple-400'
+                            : 'bg-white text-slate-700 hover:text-slate-900 border-2 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        📋 Inward History ({(selectedOrderForInward.inward_history || []).length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* EPC Cards Grid: Complete Details & Exact Material Allocations */}
+                  <div className={`grid grid-cols-1 ${epcList.length > 1 ? 'md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-3`}>
+                    {epcList.map((epc, eIdx) => {
+                      const panelsCount = epc.panels_qty || (selectedOrderForInward.items?.find(i => (i.product_name || '').toLowerCase().includes('panel'))?.ordered_qty || 9) + ' Pcs';
+                      const inverterCount = epc.inverter_qty || (selectedOrderForInward.items?.find(i => (i.product_name || '').toLowerCase().includes('inverter'))?.ordered_qty || 1) + ' Pcs';
+                      const boskitCount = epc.boskit_qty || (selectedOrderForInward.num_kits || 1) + ' Pcs';
+                      const structCount = epc.structure_qty || (selectedOrderForInward.num_kits || 1) + ' Sets';
+
+                      return (
+                        <div
+                          key={epc.epc_id || eIdx}
+                          className="p-3.5 rounded-xl bg-white border-2 border-purple-200 shadow-2xs hover:border-purple-400 transition-all space-y-2.5"
+                        >
+                          {/* Card Header: EPC Name & Badge */}
+                          <div className="flex items-start justify-between gap-2 border-b border-purple-100 pb-2">
+                            <div>
+                              <div className="font-black text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                                <span className="text-purple-700 font-mono text-xs">#{eIdx + 1}</span>
+                                <span>{epc.epc_name || selectedOrderForInward.customer_name}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 font-bold mt-0.5 flex items-center gap-1.5">
+                                <span>📞 {epc.phone || selectedOrderForInward.customer_phone || 'N/A'}</span>
+                                {epc.system_capacity && (
+                                  <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-900 text-[10px] font-bold">
+                                    ⚡ {epc.system_capacity}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-purple-100 text-purple-900 border border-purple-300 shrink-0">
+                              {epc.solarkit_model || selectedOrderForInward.solarkit_model || 'SolarKit'}
+                            </span>
+                          </div>
+
+                          {/* Destination Address */}
+                          <div className="text-[11px] text-slate-700 font-medium flex items-start gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                            <FaMapMarkerAlt className="text-rose-600 shrink-0 text-xs mt-0.5" />
+                            <span className="line-clamp-2">
+                              <strong>Destination: </strong>
+                              {epc.destination?.address || selectedOrderForInward.destination?.address}, {epc.destination?.district || selectedOrderForInward.destination?.district}, {epc.destination?.state || selectedOrderForInward.destination?.state} - {epc.destination?.pincode || selectedOrderForInward.destination?.pincode}
+                            </span>
+                          </div>
+
+                          {/* EXACT MATERIAL ALLOCATION FOR THIS EPC */}
+                          <div className="space-y-1">
+                            <div className="text-[10px] font-black uppercase tracking-wider text-purple-950 flex items-center justify-between">
+                              <span>Allocated Materials for this EPC:</span>
+                              <span className="text-slate-500 font-mono text-[9px]">Truck Share</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-bold">
+                              <div className="bg-amber-50 text-amber-950 p-1.5 rounded-lg border border-amber-200 flex items-center justify-between">
+                                <span className="flex items-center gap-1">☀️ Panels</span>
+                                <strong className="font-mono text-amber-900">{panelsCount}</strong>
+                              </div>
+                              <div className="bg-blue-50 text-blue-950 p-1.5 rounded-lg border border-blue-200 flex items-center justify-between">
+                                <span className="flex items-center gap-1">⚡ Inverters</span>
+                                <strong className="font-mono text-blue-900">{inverterCount}</strong>
+                              </div>
+                              <div className="bg-purple-50 text-purple-950 p-1.5 rounded-lg border border-purple-200 flex items-center justify-between">
+                                <span className="flex items-center gap-1">🛠️ BOS Kits</span>
+                                <strong className="font-mono text-purple-900">{boskitCount}</strong>
+                              </div>
+                              <div className="bg-emerald-50 text-emerald-950 p-1.5 rounded-lg border border-emerald-200 flex items-center justify-between">
+                                <span className="flex items-center gap-1">🏗️ Structure</span>
+                                <strong className="font-mono text-emerald-900">{structCount}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Top Invoice, Date and Default Storage Rack Fields (Image 1 Style) ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-100 border-2 border-slate-300 rounded-2xl p-3.5 shadow-xs">
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-800 block mb-1">
+                  Supplier Tax Invoice / Gate Pass No *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={supplierInvoiceNo}
+                  onChange={(e) => setSupplierInvoiceNo(e.target.value)}
+                  placeholder="e.g. INV-DO-2026-0001 or GP-881"
+                  className="w-full p-2.5 text-xs font-mono font-black bg-white border-2 border-slate-400 rounded-xl text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary/20 shadow-2xs"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-800 block mb-1">
+                  Invoice Date *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  className="w-full p-2.5 text-xs font-mono font-black bg-white border-2 border-slate-400 rounded-xl text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary/20 shadow-2xs"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-800 block mb-1">
+                  Default Storage Rack / Bay
+                </label>
+                <input
+                  type="text"
+                  value={defaultStorageRack}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDefaultStorageRack(val);
+                    // Also update empty rack_location entries
+                    setInwardInputs(prev => {
+                      const updated = { ...prev };
+                      Object.keys(updated).forEach(k => {
+                        if (!updated[k]?.rack_location) {
+                          updated[k] = { ...updated[k], rack_location: val };
+                        }
+                      });
+                      return updated;
+                    });
+                  }}
+                  placeholder="e.g. BAY-A1-01"
+                  className="w-full p-2.5 text-xs font-mono font-black bg-white border-2 border-slate-400 rounded-xl text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary/20 shadow-2xs"
+                />
               </div>
             </div>
 
             {activeInwardTab === 'inward' ? (
               <form onSubmit={handleSubmitInward} className="space-y-4">
-                {/* ── Boss Requirement 3A: Inward Destination Type (Warehouse Inward vs Direct Pickup From Site/Supplier) ── */}
+                {/* ── Inward Destination Type (Warehouse Inward vs Direct Pickup From Site/Supplier) ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-100 border-2 border-slate-300">
                   <div
                     onClick={() => setInwardType('warehouse')}
@@ -2883,55 +3772,43 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   </div>
                 )}
 
-                {/* ── Boss Requirement 3B: Inward Verification Mode (Manual Entry vs Barcode/QR Scanner Gun) ── */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-slate-200 pb-2.5 pt-1">
-                  <div className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block"></span>
-                    <span>Inward Verification Method</span>
-                  </div>
-                  <div className="flex bg-slate-200/90 border-2 border-slate-300 p-1 rounded-xl gap-1.5 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setInwardExecutionMode('manual')}
-                      className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                        inwardExecutionMode === 'manual'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
-                      }`}
-                    >
-                      <FaClipboardCheck className="text-xs" />
-                      <span>Manual Checklist</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInwardExecutionMode('scanner')}
-                      className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                        inwardExecutionMode === 'scanner'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
-                      }`}
-                    >
-                      <FaBarcode className="text-xs" />
-                      <span>🔫 Online Barcode / QR Scanner Gun</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* ── Online Scanner Gun Input & Real-Time Outward Validation Matching ── */}
+                {/* ── MODE A: ONLINE SCANNER GUN VIEW ── */}
                 {inwardExecutionMode === 'scanner' && (
-                  <div className="p-4 rounded-xl bg-emerald-50/80 border-2 border-emerald-400 space-y-3">
+                  <div className="p-4 rounded-2xl bg-emerald-50/80 border-2 border-emerald-400 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="space-y-0.5">
                         <div className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
                           <FaBarcode className="text-sm text-emerald-700" /> Live Barcode / QR Scanner Gun Feed
                         </div>
                         <div className="text-[11px] text-slate-700 font-semibold">
-                          Aim your handheld scanner gun at the product QR/barcode or type & press Enter. Serials scanned here are validated during Outward dispatch.
+                          Point laser scanner gun at product cartons or scan QR serial tags. Scans match live with order items.
                         </div>
                       </div>
-                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 font-mono font-black text-xs border-2 border-emerald-400 shrink-0">
-                        {scannedSerials.length} Serials Scanned
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 font-mono font-black text-xs border-2 border-emerald-400 shrink-0">
+                          {scannedSerials.length} Serials Scanned
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = { ...inwardInputs };
+                            modalInwardItems.forEach(it => {
+                              updated[it.sku] = {
+                                ...(updated[it.sku] || {}),
+                                qty: it.pending_qty,
+                                damaged_qty: 0,
+                                missing_qty: 0,
+                                rack_location: defaultStorageRack || 'BAY-A1-01'
+                              };
+                            });
+                            setInwardInputs(updated);
+                            dispatch(setAlert({ message: `Auto-filled remaining quantities for all items.`, type: 'info' }));
+                          }}
+                          className="px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-warning/15 text-warning-700 border border-warning/40 hover:bg-warning/25 transition-all cursor-pointer shadow-2xs"
+                        >
+                          ⚡ Auto-Fill Remaining
+                        </button>
+                      </div>
                     </div>
 
                     {/* Scanner Input Bar */}
@@ -2959,7 +3836,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       </div>
                     </div>
 
-                    {/* Scanned Serials Registry Table (Validates Outward Dispatch) */}
+                    {/* Scanned Serials Registry Table */}
                     {scannedSerials.length > 0 && (
                       <div className="space-y-1.5">
                         <div className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex justify-between">
@@ -2991,85 +3868,390 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                  <span className="font-bold text-slate-800">Scan each item with barcode gun or enter quantities. Items automatically receive a green checkmark once scanned.</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...inwardInputs };
-                      modalInwardItems.forEach(it => {
-                        const isBos = isBosKitItem(it);
-                        const matchedModel = preassembledStock.find(m =>
-                          (selectedOrderForInward?.system_capacity && m.name.toLowerCase().includes(selectedOrderForInward.system_capacity.toLowerCase())) ||
-                          m.id === '1kw-dcr' || m.id === '2kw-dcr'
-                        );
-                        const stockAvailable = matchedModel?.ready_stock || 0;
-                        const fillQty = isBos ? Math.min(it.pending_qty, stockAvailable) : it.pending_qty;
+                {/* ── MODE B: OFFLINE PHYSICAL GATE CHALLAN & ITEMS VERIFICATION VIEW (Image 1 Style) ── */}
+                <div className="space-y-3 bg-white border-2 border-slate-300 rounded-2xl p-4 shadow-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-slate-200 pb-2.5">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                        <FaBoxes className="text-primary text-base" />
+                        <span>Physical Gate Challan Verification & Quantity Counting</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-700 font-semibold mt-0.5">
+                        Verify unloaded cartons against supplier physical gate pass and assign warehouse rack locations.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isKitAssembledForThisOrder = selectedOrderForInward?.kit_preparation_status === 'kit_ready' || selectedOrderForInward?.kit_assembly_details?.assembly_status === 'completed';
+                        const updated = { ...inwardInputs };
+                        modalInwardItems.forEach(it => {
+                          const isBos = isBosKitItem(it);
+                          const orderMetrics = getOrderKitMetrics(selectedOrderForInward);
+                          const orderCap = orderMetrics.capacity || '';
+                          const matchedModel = preassembledStock.find(m =>
+                            (orderCap && (m.name?.toLowerCase().includes(orderCap.toLowerCase()) || m.capacity?.toLowerCase().includes(orderCap.toLowerCase()))) ||
+                            (orderMetrics.modelName && m.name?.toLowerCase().includes(orderMetrics.modelName.toLowerCase()))
+                          ) || preassembledStock.find(m => m.name?.toLowerCase().includes('3 kw')) || preassembledStock[0];
+                          const stockAvailable = matchedModel?.ready_stock || 0;
+                          const fillQty = isBos ? (isKitAssembledForThisOrder ? it.pending_qty : Math.min(it.pending_qty, stockAvailable)) : it.pending_qty;
 
-                        updated[it.sku] = {
-                          ...(updated[it.sku] || {}),
-                          qty: fillQty,
-                          damaged_qty: 0,
-                          missing_qty: 0,
-                          rack_location: updated[it.sku]?.rack_location || it.rack_location || (isBos ? 'BAY-BOS-STOCK' : '')
-                        };
-                      });
-                      setInwardInputs(updated);
-                    }}
-                    className="px-4 py-2 rounded-xl text-xs font-black bg-primary hover:bg-primary-hover text-white transition-all shadow-sm cursor-pointer shrink-0 self-start sm:self-auto active:scale-95 flex items-center gap-1.5"
-                  >
-                    <FaCheckDouble className="text-xs" />
-                    <span>Fill All Pending</span>
-                  </button>
-                </div>
+                          updated[it.sku] = {
+                            ...(updated[it.sku] || {}),
+                            qty: fillQty,
+                            damaged_qty: 0,
+                            missing_qty: 0,
+                            rack_location: defaultStorageRack || (isBos ? 'BAY-BOS-STAGING' : 'BAY-A1-01')
+                          };
+                        });
+                        setInwardInputs(updated);
+                        setQcPassed(true);
+                        dispatch(setAlert({ message: '⚡ Accepted full expected quantities for all items.', type: 'info' }));
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-primary hover:bg-primary-hover text-white transition-all shadow-sm cursor-pointer shrink-0 self-start sm:self-auto active:scale-95 flex items-center gap-1.5"
+                    >
+                      <FaCheckDouble className="text-xs" />
+                      <span>⚡ Accept Full Quantities</span>
+                    </button>
+                  </div>
 
-                {/* Items Input Table */}
-                <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[460px] overflow-y-auto shadow-xs">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-200 border-b-2 border-slate-300 z-10 shadow-2xs">
-                      <tr className="text-[12px] font-black uppercase tracking-wider text-slate-950">
-                        <th className="p-3 text-slate-950 font-black">Product / SKU</th>
-                        <th className="p-3 text-center w-20 text-slate-950 font-black">Ordered</th>
-                        <th className="p-3 text-center w-24 text-slate-950 font-black">Inwarded</th>
-                        <th className="p-3 text-center min-w-[110px] text-slate-950 font-black">Pending</th>
-                        <th className="p-3 text-center w-28 text-slate-950 font-black">Inward (OK)</th>
-                        <th className="p-3 text-center w-24 text-slate-950 font-black">Damaged</th>
-                        <th className="p-3 text-center w-24 text-slate-950 font-black">Missing</th>
-                        <th className="p-3 text-center w-40 text-slate-950 font-black">Rack / Location</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y-2 divide-slate-200">
-                      {modalInwardItems.map((it) => {
-                        const input = inwardInputs[it.sku] || { qty: 0, damaged_qty: 0, missing_qty: 0, rack_location: '' };
-                        const isDone = (it.pending_qty || 0) === 0;
-                        const itemScans = scannedSerials.filter(s => s.sku === it.sku);
-                        const isFullyScanned = itemScans.length >= it.pending_qty && it.pending_qty > 0;
-                        const isBos = isBosKitItem(it);
+                  {/* Items Input Table */}
+                  <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[460px] overflow-y-auto shadow-xs">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-slate-200 border-b-2 border-slate-300 z-10 shadow-2xs">
+                        <tr className="text-[12px] font-black uppercase tracking-wider text-slate-950">
+                          <th className="p-3 text-slate-950 font-black">#</th>
+                          <th className="p-3 text-slate-950 font-black">SKU & Item Details</th>
+                          <th className="p-3 text-center w-20 text-slate-950 font-black">Ordered</th>
+                          <th className="p-3 text-center w-24 text-slate-950 font-black">Inwarded</th>
+                          <th className="p-3 text-center min-w-[110px] text-slate-950 font-black">Pending</th>
+                          <th className="p-3 text-center w-28 text-slate-950 font-black">Inward (OK)</th>
+                          <th className="p-3 text-center w-24 text-slate-950 font-black">Damaged</th>
+                          <th className="p-3 text-center w-24 text-slate-950 font-black">Missing</th>
+                          <th className="p-3 text-center w-40 text-slate-950 font-black">Rack Location</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y-2 divide-slate-200">
+                        {modalInwardItems.map((it, idx) => {
+                          const input = inwardInputs[it.sku] || { qty: 0, damaged_qty: 0, missing_qty: 0, rack_location: defaultStorageRack || '' };
+                          const isDone = (it.pending_qty || 0) === 0;
+                          const itemScans = scannedSerials.filter(s => s.sku === it.sku);
+                          const isFullyScanned = itemScans.length >= it.pending_qty && it.pending_qty > 0;
+                          const isBos = isBosKitItem(it);
 
-                        if (isBos) {
-                          return (
-                            <tr
-                              key={it.sku}
-                              className={`border-l-4 transition-all ${
-                                isDone
-                                  ? 'bg-purple-50/70 border-l-emerald-600'
-                                  : 'bg-purple-50/90 border-l-purple-700 hover:bg-purple-100/80'
-                              }`}
-                            >
-                              <td className="p-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="font-black text-slate-950 text-sm flex items-center gap-1.5">
-                                    <FaTools className="text-purple-700 text-sm shrink-0" />
-                                    <span>{it.product_name}</span>
+                          if (isBos) {
+                            return (
+                              <tr
+                                key={it.sku}
+                                className={`border-l-4 transition-all ${
+                                  isDone
+                                    ? 'bg-purple-50/70 border-l-emerald-600'
+                                    : 'bg-purple-50/90 border-l-purple-700 hover:bg-purple-100/80'
+                                }`}
+                              >
+                                <td className="p-3 text-slate-500 font-bold">{idx + 1}</td>
+                                <td className="p-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="font-black text-slate-950 text-sm flex items-center gap-1.5">
+                                      <FaTools className="text-purple-700 text-sm shrink-0" />
+                                      <span>{it.product_name}</span>
+                                    </div>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-xs shrink-0">
+                                      ⚡ SolarKit BOS Package
+                                    </span>
                                   </div>
-                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-xs shrink-0">
-                                    ⚡ SolarKit BOS Package
+                                  <div className="text-[11px] font-mono text-purple-950 font-black mt-0.5 flex flex-wrap items-center gap-2">
+                                    <span>{it.sku}</span>
+                                    <span className="text-slate-800 font-bold">• In-house Pre-assembled Enclosure (ACDB / DCDB / Cables)</span>
+                                  </div>
+
+                                  {/* Live Scanned QR & Serial Tags Display */}
+                                  {itemScans.length > 0 && (
+                                    <div className="mt-1.5 space-y-1">
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        {itemScans.map((sn, sIdx) => (
+                                          <span
+                                            key={sIdx}
+                                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-black bg-emerald-100 text-emerald-900 border border-emerald-400"
+                                            title={`Scanned at: ${new Date(sn.scanned_at).toLocaleTimeString()}`}
+                                          >
+                                            <FaCheckCircle className="text-[10px] text-emerald-700" /> {sn.serial_code}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      {isFullyScanned && (
+                                        <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white shadow-xs">
+                                          ✓ Inward Done (QR Scanned)
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Action controls directly on the BOS Kit row */}
+                                  <div className="mt-2.5 pt-2 border-t-2 border-purple-200">
+                                    {(() => {
+                                      const orderMetrics = getOrderKitMetrics(selectedOrderForInward);
+                                      const orderCap = orderMetrics.capacity || '';
+                                      const matchedModel = preassembledStock.find(m =>
+                                        (orderCap && (m.name?.toLowerCase().includes(orderCap.toLowerCase()) || m.capacity?.toLowerCase().includes(orderCap.toLowerCase()))) ||
+                                        (orderMetrics.modelName && m.name?.toLowerCase().includes(orderMetrics.modelName.toLowerCase()))
+                                      ) || preassembledStock.find(m => m.name?.toLowerCase().includes('3 kw')) || preassembledStock[0];
+                                      const stockAvailable = matchedModel?.ready_stock || 0;
+                                      const currentQty = parseInt(input.qty) || 0;
+                                      const isKitAssembledForThisOrder = selectedOrderForInward?.kit_preparation_status === 'kit_ready' || selectedOrderForInward?.kit_assembly_details?.assembly_status === 'completed';
+                                      const canAllocate = Math.min(it.pending_qty, stockAvailable);
+                                      const remainingToAssemble = Math.max(0, it.pending_qty - currentQty);
+
+                                      return (
+                                        <div className="space-y-2">
+                                          <div className="w-full flex flex-wrap items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              {isDone ? (
+                                                <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center gap-1.5 shadow-xs">
+                                                  <FaCheck className="text-xs text-emerald-700" />
+                                                  <span>✓ All {it.ordered_qty} Kits Ready & Inwarded</span>
+                                                </span>
+                                              ) : isKitAssembledForThisOrder ? (
+                                                currentQty >= it.pending_qty ? (
+                                                  <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center gap-1.5 shadow-xs">
+                                                    <FaCheck className="text-xs text-emerald-700" />
+                                                    <span>✓ All {it.pending_qty} Kits Assembled Ready for this Order</span>
+                                                  </span>
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setInwardInputs(prev => ({
+                                                        ...prev,
+                                                        [it.sku]: {
+                                                          ...prev[it.sku],
+                                                          qty: it.pending_qty,
+                                                          rack_location: prev[it.sku]?.rack_location || 'BAY-BOS-STAGING'
+                                                        }
+                                                      }));
+                                                      dispatch(setAlert({
+                                                        message: `⚡ Allocated ${it.pending_qty} assembled kit(s) ready for Order #${selectedOrderForInward.order_number}!`,
+                                                        type: 'success'
+                                                      }));
+                                                    }}
+                                                    className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/25 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 animate-pulse"
+                                                  >
+                                                    <FaCheckCircle className="text-xs" />
+                                                    <span>⚡ Allocate {it.pending_qty} Kits Assembled Ready for this Order</span>
+                                                  </button>
+                                                )
+                                              ) : (
+                                                <>
+                                                  {stockAvailable > 0 && (
+                                                    currentQty > 0 ? (
+                                                      <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center gap-1.5 shadow-xs">
+                                                        <FaCheck className="text-xs text-emerald-700" />
+                                                        <span>{currentQty} Allocated from Buffer Stock</span>
+                                                      </span>
+                                                    ) : (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          setInwardInputs(prev => ({
+                                                            ...prev,
+                                                            [it.sku]: {
+                                                              ...prev[it.sku],
+                                                              qty: canAllocate,
+                                                              rack_location: prev[it.sku]?.rack_location || 'BAY-BOS-STOCK'
+                                                            }
+                                                          }));
+                                                          dispatch(setAlert({
+                                                            message: `Allocated ${canAllocate} kit(s) from warehouse stock to inward input.`,
+                                                            type: 'info'
+                                                          }));
+                                                        }}
+                                                        className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-700 hover:bg-purple-800 text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                                                      >
+                                                        <FaTools className="text-xs" />
+                                                        <span>⚡ Allocate {canAllocate} from Stock ({stockAvailable} Ready in WH)</span>
+                                                      </button>
+                                                    )
+                                                  )}
+
+                                                  {stockAvailable === 0 && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-400 flex items-center gap-1 shadow-xs">
+                                                        <span>⚠️ 0 Kits in Buffer Stock</span>
+                                                      </span>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleOpenProcureModal(selectedOrderForInward, it)}
+                                                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-purple-900 border border-purple-300 hover:bg-purple-50 shadow-xs flex items-center gap-1 cursor-pointer transition-all"
+                                                      >
+                                                        <FaPaperPlane className="text-[10px]" />
+                                                        <span>⚡ Request from Accounts</span>
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </>
+                                              )}
+                                            </div>
+
+                                            {!isKitAssembledForThisOrder && remainingToAssemble > 0 && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setInwardModalOpen(false);
+                                                  handleOpenAssemblyModal(selectedOrderForInward);
+                                                }}
+                                                className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-white hover:bg-purple-100 text-purple-900 border-2 border-purple-500 shadow-xs flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ml-auto"
+                                              >
+                                                <span>🛠️ Assemble {remainingToAssemble} Kits on Workstation →</span>
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {/* Mini BOM Recipe Preview */}
+                                          <div className="pt-2 border-t border-purple-200">
+                                            <div className="text-[11px] font-black uppercase tracking-wider text-purple-950 mb-1 flex items-center justify-between">
+                                              <span>Included BOM Materials ({matchedModel?.name || 'Standard 3 kW Kit'})</span>
+                                              <span className="text-[10px] text-purple-800 font-bold">Dynamically allocated upon assembly</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                              {(matchedModel?.bom_components || [
+                                                { name: 'ACDB Box', qty: 1, unit: 'Box' },
+                                                { name: 'DCDB Box', qty: 1, unit: 'Box' },
+                                                { name: 'DC Cable (4 sq mm)', qty: 1, unit: 'Roll' },
+                                                { name: 'Earthing Rod', qty: 2, unit: 'Pcs' }
+                                              ]).slice(0, 4).map((comp, cIdx) => (
+                                                <div key={cIdx} className="p-1.5 rounded-lg bg-white/90 border border-purple-200 text-[10px] flex items-center justify-between shadow-2xs">
+                                                  <span className="font-semibold text-slate-800 truncate" title={comp.name}>{comp.name}</span>
+                                                  <span className="font-mono font-bold text-purple-700 shrink-0 ml-1">
+                                                    {comp.qty * (it.ordered_qty || 1)} {comp.unit || 'Pcs'}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-black text-slate-950 text-base">
+                                  {it.ordered_qty}
+                                </td>
+                                <td className="p-3 text-center font-black text-emerald-800 text-base">
+                                  {it.received_qty}
+                                </td>
+                                <td className="p-3 text-center whitespace-nowrap">
+                                  <span className={`inline-flex items-center justify-center min-w-[75px] px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs ${
+                                    isDone
+                                      ? 'bg-emerald-100 text-emerald-950 border-2 border-emerald-500'
+                                      : 'bg-amber-100 text-amber-950 border-2 border-amber-500'
+                                  }`}>
+                                    {it.pending_qty} Pcs
                                   </span>
-                                </div>
-                                <div className="text-[11px] font-mono text-purple-950 font-black mt-0.5 flex flex-wrap items-center gap-2">
-                                  <span>{it.sku}</span>
-                                  <span className="text-slate-800 font-bold">• In-house Pre-assembled Enclosure (ACDB / DCDB / Cables)</span>
-                                </div>
+                                </td>
+                                <td className="p-3 text-center">
+                                  {isDone ? (
+                                    <span className="text-xs font-black text-emerald-800 inline-flex items-center gap-1.5 bg-emerald-100 px-3 py-1.5 rounded-xl border-2 border-emerald-400">
+                                      <FaCheck className="text-xs text-emerald-700" /> Inwarded
+                                    </span>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={it.pending_qty}
+                                      value={input.qty}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setInwardInputs(prev => ({
+                                          ...prev,
+                                          [it.sku]: {
+                                            ...prev[it.sku],
+                                            qty: val === '' ? '' : parseInt(val) || 0
+                                          }
+                                        }));
+                                      }}
+                                      className={`w-22 text-center py-2 px-2 rounded-xl text-xs font-black border-2 transition-all ${
+                                        parseInt(input.qty) > it.pending_qty
+                                          ? 'border-danger bg-danger/10 text-danger'
+                                          : 'border-purple-500 bg-white text-slate-950 focus:border-purple-700 focus:ring-2 focus:ring-purple-200 shadow-xs'
+                                      }`}
+                                    />
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={it.pending_qty}
+                                    disabled={isDone}
+                                    value={input.damaged_qty || ''}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const numVal = parseInt(val) || 0;
+                                      setInwardInputs(prev => ({
+                                        ...prev,
+                                        [it.sku]: {
+                                          ...prev[it.sku],
+                                          damaged_qty: val === '' ? '' : numVal
+                                        }
+                                      }));
+                                      if (numVal > 0) setQcPassed(false);
+                                    }}
+                                    className="w-20 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-rose-400 bg-rose-50 text-rose-950 focus:border-rose-600 shadow-xs disabled:opacity-40"
+                                  />
+                                </td>
+                                <td className="p-3 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={it.pending_qty}
+                                    disabled={isDone}
+                                    value={input.missing_qty || ''}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const numVal = parseInt(val) || 0;
+                                      setInwardInputs(prev => ({
+                                        ...prev,
+                                        [it.sku]: {
+                                          ...prev[it.sku],
+                                          missing_qty: val === '' ? '' : numVal
+                                        }
+                                      }));
+                                      if (numVal > 0) setQcPassed(false);
+                                    }}
+                                    className="w-20 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-amber-400 bg-amber-50 text-amber-950 focus:border-amber-600 shadow-xs disabled:opacity-40"
+                                  />
+                                </td>
+                                <td className="p-3 text-center">
+                                  <input
+                                    type="text"
+                                    placeholder={defaultStorageRack || 'BAY-BOS-STOCK'}
+                                    value={input.rack_location || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setInwardInputs(prev => ({
+                                        ...prev,
+                                        [it.sku]: {
+                                          ...prev[it.sku],
+                                          rack_location: val
+                                        }
+                                      }));
+                                    }}
+                                    className="w-36 py-2 px-2 text-center rounded-xl text-xs font-black border-2 border-purple-500 bg-white text-slate-950 focus:border-purple-700 placeholder:text-slate-400 shadow-xs"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return (
+                            <tr key={it.sku} className={isDone ? 'bg-slate-50' : 'bg-white hover:bg-slate-50/80 transition-colors'}>
+                              <td className="p-3 text-slate-500 font-bold">{idx + 1}</td>
+                              <td className="p-3">
+                                <div className="font-mono font-black text-primary text-xs">{it.sku}</div>
+                                <div className="font-black text-slate-950 text-xs mt-0.5">{it.product_name}</div>
+                                <div className="text-[10px] text-slate-600 font-bold mt-0.5">{it.category || 'Component'}</div>
 
                                 {/* Live Scanned QR & Serial Tags Display */}
                                 {itemScans.length > 0 && (
@@ -3092,126 +4274,6 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                     )}
                                   </div>
                                 )}
-
-                                {/* Action controls directly on the BOS Kit row */}
-                                <div className="mt-2.5 pt-2 border-t-2 border-purple-200">
-                                  {(() => {
-                                    const matchedModel = preassembledStock.find(m =>
-                                      (selectedOrderForInward?.system_capacity && m.name.toLowerCase().includes(selectedOrderForInward.system_capacity.toLowerCase())) ||
-                                      m.id === '1kw-dcr' || m.id === '2kw-dcr'
-                                    );
-                                    const stockAvailable = matchedModel?.ready_stock || 0;
-                                    const currentQty = parseInt(input.qty) || 0;
-                                    const canAllocate = Math.min(it.pending_qty, stockAvailable);
-                                    const remainingToAssemble = Math.max(0, it.pending_qty - currentQty);
-
-                                    return (
-                                      <div className="space-y-2">
-                                        <div className="w-full flex flex-wrap items-center justify-between gap-2">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            {isDone ? (
-                                              <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center gap-1.5 shadow-xs">
-                                                <FaCheck className="text-xs text-emerald-700" />
-                                                <span>✓ All {it.ordered_qty} Kits Ready & Inwarded</span>
-                                              </span>
-                                            ) : (
-                                              <>
-                                                {stockAvailable > 0 && (
-                                                  currentQty > 0 ? (
-                                                    <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center gap-1.5 shadow-xs">
-                                                      <FaCheck className="text-xs text-emerald-700" />
-                                                      <span>✓ {currentQty} Allocated from Buffer Stock</span>
-                                                    </span>
-                                                  ) : (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setInwardInputs(prev => ({
-                                                          ...prev,
-                                                          [it.sku]: {
-                                                            ...(prev[it.sku] || {}),
-                                                            qty: canAllocate,
-                                                            damaged_qty: 0,
-                                                            missing_qty: 0,
-                                                            rack_location: prev[it.sku]?.rack_location || 'BAY-BOS-STOCK'
-                                                          }
-                                                        }));
-                                                        dispatch(setAlert({
-                                                          message: `⚡ Allocated ${canAllocate} ready BOS Kit(s) from warehouse buffer stock! Remaining: ${it.pending_qty - canAllocate} Kits to assemble.`,
-                                                          type: 'success'
-                                                        }));
-                                                      }}
-                                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
-                                                      title="Allocate available ready kits from warehouse stock"
-                                                    >
-                                                      <FaCheck className="text-xs" />
-                                                      <span>⚡ Allocate from Buffer Stock ({stockAvailable} Ready in WH)</span>
-                                                    </button>
-                                                  )
-                                                )}
-
-                                                {remainingToAssemble > 0 && (
-                                                  <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-400 flex items-center gap-1.5 shadow-xs">
-                                                    <FaTools className="text-xs text-amber-700" />
-                                                    <span>🔨 {remainingToAssemble} Kits Assembly Pending</span>
-                                                  </span>
-                                                )}
-                                              </>
-                                            )}
-                                          </div>
-
-                                          {!isDone && remainingToAssemble > 0 && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setInwardModalOpen(false);
-                                                if (onNavigateToBosKit) {
-                                                  onNavigateToBosKit(selectedOrderForInward);
-                                                } else {
-                                                  navigate(`${prefix}/bos-kit-assembly?orderId=${selectedOrderForInward._id || selectedOrderForInward.order_number}`);
-                                                  setMainSectionTab('boskit_station');
-                                                  setSelectedOrderForAssembly(selectedOrderForInward);
-                                                }
-                                                dispatch(setAlert({
-                                                  message: `Opening BOS Kit Assembly Workstation for ${selectedOrderForInward.delivery_order_id}. You can begin kit assembly for remaining ${remainingToAssemble} kit(s).`,
-                                                  type: 'info'
-                                                }));
-                                              }}
-                                              className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-700 hover:bg-purple-800 text-white border border-purple-800 flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
-                                              title="Open BOS Kit Assembly tab to build remaining kits"
-                                            >
-                                              <FaTools className="text-xs" />
-                                              <span>🔨 Assemble {remainingToAssemble} Kits in Workstation →</span>
-                                            </button>
-                                          )}
-                                        </div>
-
-                                        {/* Expandable BOS Kit Raw Materials Checklist */}
-                                        <div className="pt-2 border-t border-purple-200/80">
-                                          <div className="text-[11px] font-black uppercase tracking-wider text-purple-900 flex items-center justify-between">
-                                            <span className="flex items-center gap-1.5">
-                                              <FaBoxes className="text-purple-700" />
-                                              <span>BOS Kit Incoming Components & Raw Materials (BOM)</span>
-                                            </span>
-                                            <span className="text-[10px] text-purple-700 font-bold">
-                                              Raw materials arrived & verified for {it.ordered_qty} Kits
-                                            </span>
-                                          </div>
-                                          <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                                            {(matchedModel?.bom_components || []).slice(0, 8).map((comp, cIdx) => (
-                                              <div key={cIdx} className="p-1.5 rounded-lg bg-white/90 border border-purple-200 text-[10px] flex items-center justify-between shadow-2xs">
-                                                <span className="font-semibold text-slate-800 truncate" title={comp.name}>{comp.name}</span>
-                                                <span className="font-mono font-bold text-purple-700 shrink-0 ml-1">
-                                                  {comp.qty * (it.ordered_qty || 1)} {comp.unit || 'Pcs'}
-                                                </span>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
                               </td>
                               <td className="p-3 text-center font-black text-slate-950 text-base">
                                 {it.ordered_qty}
@@ -3252,7 +4314,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                     className={`w-22 text-center py-2 px-2 rounded-xl text-xs font-black border-2 transition-all ${
                                       parseInt(input.qty) > it.pending_qty
                                         ? 'border-danger bg-danger/10 text-danger'
-                                        : 'border-purple-500 bg-white text-slate-950 focus:border-purple-700 focus:ring-2 focus:ring-purple-200 shadow-xs'
+                                        : 'border-slate-400 bg-white text-slate-950 focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs'
                                     }`}
                                   />
                                 )}
@@ -3263,16 +4325,19 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                   min="0"
                                   max={it.pending_qty}
                                   disabled={isDone}
-                                  value={input.damaged_qty || 0}
+                                  value={input.damaged_qty || ''}
+                                  placeholder="0"
                                   onChange={(e) => {
                                     const val = e.target.value;
+                                    const numVal = parseInt(val) || 0;
                                     setInwardInputs(prev => ({
                                       ...prev,
                                       [it.sku]: {
                                         ...prev[it.sku],
-                                        damaged_qty: val === '' ? '' : parseInt(val) || 0
+                                        damaged_qty: val === '' ? '' : numVal
                                       }
                                     }));
+                                    if (numVal > 0) setQcPassed(false);
                                   }}
                                   className="w-20 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-rose-400 bg-rose-50 text-rose-950 focus:border-rose-600 shadow-xs disabled:opacity-40"
                                 />
@@ -3283,16 +4348,19 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                   min="0"
                                   max={it.pending_qty}
                                   disabled={isDone}
-                                  value={input.missing_qty || 0}
+                                  value={input.missing_qty || ''}
+                                  placeholder="0"
                                   onChange={(e) => {
                                     const val = e.target.value;
+                                    const numVal = parseInt(val) || 0;
                                     setInwardInputs(prev => ({
                                       ...prev,
                                       [it.sku]: {
                                         ...prev[it.sku],
-                                        missing_qty: val === '' ? '' : parseInt(val) || 0
+                                        missing_qty: val === '' ? '' : numVal
                                       }
                                     }));
+                                    if (numVal > 0) setQcPassed(false);
                                   }}
                                   className="w-20 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-amber-400 bg-amber-50 text-amber-950 focus:border-amber-600 shadow-xs disabled:opacity-40"
                                 />
@@ -3300,8 +4368,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               <td className="p-3 text-center">
                                 <input
                                   type="text"
-                                  placeholder="e.g. BAY-BOS-STOCK"
-                                  value={input.rack_location}
+                                  placeholder={defaultStorageRack || 'BAY-A1-01'}
+                                  value={input.rack_location || ''}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setInwardInputs(prev => ({
@@ -3312,161 +4380,80 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                       }
                                     }));
                                   }}
-                                  className="w-36 py-2 px-2 text-center rounded-xl text-xs font-black border-2 border-purple-500 bg-white text-slate-950 focus:border-purple-700 placeholder:text-slate-400 shadow-xs"
+                                  className="w-36 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-slate-400 bg-white text-slate-950 focus:border-primary placeholder:text-slate-400 shadow-xs"
                                 />
                               </td>
                             </tr>
                           );
-                        }
-
-                        return (
-                          <tr key={it.sku} className={isDone ? 'bg-slate-50' : 'bg-white hover:bg-slate-50/80 transition-colors'}>
-                            <td className="p-3">
-                              <div className="font-black text-slate-950 text-xs">{it.product_name}</div>
-                              <div className="text-[11px] font-mono font-black text-blue-900 mt-0.5">{it.sku}</div>
-
-                              {/* Live Scanned QR & Serial Tags Display */}
-                              {itemScans.length > 0 && (
-                                <div className="mt-1.5 space-y-1">
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    {itemScans.map((sn, sIdx) => (
-                                      <span
-                                        key={sIdx}
-                                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-black bg-emerald-100 text-emerald-900 border border-emerald-400"
-                                        title={`Scanned at: ${new Date(sn.scanned_at).toLocaleTimeString()}`}
-                                      >
-                                        <FaCheckCircle className="text-[10px] text-emerald-700" /> {sn.serial_code}
-                                      </span>
-                                    ))}
-                                  </div>
-                                  {isFullyScanned && (
-                                    <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white shadow-xs">
-                                      ✓ Inward Done (QR Scanned)
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="p-3 text-center font-black text-slate-950 text-base">
-                              {it.ordered_qty}
-                            </td>
-                            <td className="p-3 text-center font-black text-emerald-800 text-base">
-                              {it.received_qty}
-                            </td>
-                            <td className="p-3 text-center whitespace-nowrap">
-                              <span className={`inline-flex items-center justify-center min-w-[75px] px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs ${
-                                isDone
-                                  ? 'bg-emerald-100 text-emerald-950 border-2 border-emerald-500'
-                                  : 'bg-amber-100 text-amber-950 border-2 border-amber-500'
-                              }`}>
-                                {it.pending_qty} Pcs
-                              </span>
-                            </td>
-                            <td className="p-3 text-center">
-                              {isDone ? (
-                                <span className="text-xs font-black text-emerald-800 inline-flex items-center gap-1.5 bg-emerald-100 px-3 py-1.5 rounded-xl border-2 border-emerald-400">
-                                  <FaCheck className="text-xs text-emerald-700" /> Inwarded
-                                </span>
-                              ) : (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={it.pending_qty}
-                                  value={input.qty}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setInwardInputs(prev => ({
-                                      ...prev,
-                                      [it.sku]: {
-                                        ...prev[it.sku],
-                                        qty: val === '' ? '' : parseInt(val) || 0
-                                      }
-                                    }));
-                                  }}
-                                  className={`w-22 text-center py-2 px-2 rounded-xl text-xs font-black border-2 transition-all ${
-                                    parseInt(input.qty) > it.pending_qty
-                                      ? 'border-danger bg-danger/10 text-danger'
-                                      : 'border-slate-400 bg-white text-slate-950 focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs'
-                                  }`}
-                                />
-                              )}
-                            </td>
-                            <td className="p-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max={it.pending_qty}
-                                disabled={isDone}
-                                value={input.damaged_qty || 0}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setInwardInputs(prev => ({
-                                    ...prev,
-                                    [it.sku]: {
-                                      ...prev[it.sku],
-                                      damaged_qty: val === '' ? '' : parseInt(val) || 0
-                                    }
-                                  }));
-                                }}
-                                className="w-20 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-rose-400 bg-rose-50 text-rose-950 focus:border-rose-600 shadow-xs disabled:opacity-40"
-                              />
-                            </td>
-                            <td className="p-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max={it.pending_qty}
-                                disabled={isDone}
-                                value={input.missing_qty || 0}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setInwardInputs(prev => ({
-                                    ...prev,
-                                    [it.sku]: {
-                                      ...prev[it.sku],
-                                      missing_qty: val === '' ? '' : parseInt(val) || 0
-                                    }
-                                  }));
-                                }}
-                                className="w-20 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-amber-400 bg-amber-50 text-amber-950 focus:border-amber-600 shadow-xs disabled:opacity-40"
-                              />
-                            </td>
-                            <td className="p-3 text-center">
-                              <input
-                                type="text"
-                                placeholder="e.g. Rack-A1-02"
-                                value={input.rack_location}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setInwardInputs(prev => ({
-                                    ...prev,
-                                    [it.sku]: {
-                                      ...prev[it.sku],
-                                      rack_location: val
-                                    }
-                                  }));
-                                }}
-                                className="w-36 text-center py-2 px-2 rounded-xl text-xs font-black border-2 border-slate-400 bg-white text-slate-950 focus:border-primary placeholder:text-slate-400 shadow-xs"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                {/* Discrepancy Note banner if any damaged or missing */}
-                {Object.values(inwardInputs).some(inp => (parseInt(inp?.damaged_qty) || 0) > 0 || (parseInt(inp?.missing_qty) || 0) > 0) && (
-                  <div className="p-3.5 rounded-xl bg-rose-100 border-2 border-rose-400 text-rose-950 text-xs font-bold flex items-center gap-2.5 shadow-xs">
-                    <FaExclamationTriangle className="text-base text-rose-600 shrink-0" />
-                    <span>
-                      <strong className="font-black text-rose-950">Discrepancy Detected:</strong> Damaged items will be physically isolated in warehouse quarantine. Accounts will be automatically notified to initiate supplier debit notes / insurance claims.
-                    </span>
+                {/* ── Quality Control (QC) & Physical Condition Inspection (Image 1 Style) ── */}
+                <div className="bg-slate-100 border-2 border-slate-300 rounded-2xl p-4 space-y-3 shadow-xs">
+                  <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
+                    Quality Control (QC) & Physical Condition Inspection *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQcPassed(true);
+                        setDamageNotes('');
+                      }}
+                      className={`p-3.5 rounded-xl border-2 font-black text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        qcPassed
+                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-500/30'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-500'
+                      }`}
+                    >
+                      <FaCheckCircle className="text-base" />
+                      <span>✓ QC Passed (Zero Damage / Packaging Intact)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQcPassed(false)}
+                      className={`p-3.5 rounded-xl border-2 font-black text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        !qcPassed
+                          ? 'bg-rose-600 text-white border-rose-700 shadow-sm ring-2 ring-rose-500/30'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-rose-500'
+                      }`}
+                    >
+                      <FaExclamationTriangle className="text-base" />
+                      <span>⚠ Discrepancy / Damaged Goods Found (Debit Note Generated)</span>
+                    </button>
                   </div>
-                )}
 
-                {/* Inward Remarks */}
+                  {!qcPassed && (
+                    <div className="space-y-1.5 pt-1">
+                      <label className="text-[11px] font-black uppercase text-rose-950 block">
+                        Damage / Shortage Notes * (Mandatory for generating Accounts Debit Note)
+                      </label>
+                      <input
+                        type="text"
+                        required={!qcPassed}
+                        value={damageNotes}
+                        onChange={(e) => setDamageNotes(e.target.value)}
+                        placeholder="e.g. 2 solar panels broken in transit; packaging crushed on pallet 3."
+                        className="w-full p-2.5 text-xs font-bold bg-rose-50 border-2 border-rose-400 rounded-xl text-rose-950 placeholder:text-rose-400 focus:border-rose-600 focus:outline-none shadow-2xs"
+                      />
+                    </div>
+                  )}
+
+                  {/* Discrepancy Alert Banner */}
+                  {(!qcPassed || Object.values(inwardInputs).some(inp => (parseInt(inp?.damaged_qty) || 0) > 0 || (parseInt(inp?.missing_qty) || 0) > 0)) && (
+                    <div className="p-3.5 rounded-xl bg-rose-100 border-2 border-rose-400 text-rose-950 text-xs font-bold flex items-center gap-2.5 shadow-xs">
+                      <FaExclamationTriangle className="text-base text-rose-600 shrink-0" />
+                      <span>
+                        <strong className="font-black text-rose-950">Discrepancy Detected:</strong> Damaged items will be physically isolated in warehouse quarantine. Accounts will be automatically notified to initiate supplier debit notes / insurance claims.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Inward Verification Remarks */}
                 <div>
                   <label className="text-xs font-black text-slate-900 block mb-1.5">
                     Inward Verification Remarks & Notes
@@ -3501,8 +4488,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       </>
                     ) : (
                       <>
-                        <HiOutlineCheckCircle className="text-base" />
-                        <span>Confirm & Save Inward</span>
+                        <FaCheck className="text-sm" />
+                        <span>Complete Inward & Update Warehouse Inventory</span>
                       </>
                     )}
                   </button>
@@ -3549,7 +4536,8 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
               </div>
             )}
           </div>
-        )}
+        );
+      })()}
       </Dialog>
 
       {/* ── Select BOS Kit Stock / Reserve Inventory Modal ── */}
@@ -3844,7 +4832,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   { step: '2. Assembly', label: 'Assembly Station', isDone: isAssembledDone, isCurrent: isStep2Active },
                   { step: '3. QC Check', label: 'Quality Inspection', isDone: isQcDone, isCurrent: isStep3Active },
                   { step: '4. Packaging', label: 'Pack & Label Barcode', isDone: isPackedDone, isCurrent: isStep4Active },
-                  { step: '5. Kit Ready', label: 'Dispatch Staging', isDone: isReadyDone, isCurrent: isReadyDone || isStep5Active }
+                  { step: '5. Kit Ready', label: 'Ready for Order', isDone: isReadyDone, isCurrent: isReadyDone || isStep5Active }
                 ];
 
                 return (
@@ -4031,19 +5019,38 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       type="button"
                       disabled={submittingAssembly || hasShortage}
                       onClick={() => handleAdvanceAssembly('kit_ready')}
-                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
                       {submittingAssembly ? <FaSpinner className="animate-spin" /> : <FaCheckDouble />}
-                      <span>Step 5: Mark Kit Ready for Dispatch</span>
+                      <span>Step 5: Mark {pendingKits} Kits Assembled & Ready for this Order</span>
                     </button>
                   )}
 
-                  {/* Complete status banner */}
+                  {/* Complete status banner with 1-click Inward action */}
                   {kitStatus === 'kit_ready' && (
-                    <span className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                      <FaCheckCircle className="text-sm" />
-                      <span>BOS Kit 100% Ready</span>
-                    </span>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 w-full">
+                      <div className="flex items-center gap-2.5">
+                        <FaCheckCircle className="text-xl text-emerald-400 shrink-0" />
+                        <div>
+                          <div className="text-xs font-black uppercase tracking-wider">
+                            ✓ All {pendingKits} BOS Kits Are Ready for this Order!
+                          </div>
+                          <div className="text-[11px] text-emerald-300 font-semibold">
+                            Order #{ord.order_number} ({ord.customer_name}) • Ready to be Inwarded in New Orders Queue
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssemblyModalOpen(false);
+                          handleOpenInwardModal(ord);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs cursor-pointer shadow-md transition-all whitespace-nowrap active:scale-95"
+                      >
+                        📦 Inward Assembled Kits Now →
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -4122,10 +5129,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   {ord.epcs && ord.epcs.length > 1 ? (
                     <div className="text-sm font-bold text-text-primary mt-1 flex items-center gap-2 flex-wrap">
                       <span className="px-2.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 font-black text-xs uppercase tracking-wider border border-purple-500/30">
-                        Consolidated Multi-EPC Order ({ord.epcs.length} EPCs)
+                        Consolidated Multi-EPC Order ({ord.epcs.length} EPC Orders Bundled)
                       </span>
                       <span className="text-xs text-text-secondary font-medium">
-                        {ord.epcs.map(e => e.epc_name).join(' • ')}
+                        📦 {ord.epcs.length} Consolidated Customer Packages Loaded in Single Vehicle
                       </span>
                     </div>
                   ) : (
@@ -4778,7 +5785,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
         subtitle="Build standard kits from inwarded bulk materials to keep in warehouse inventory"
         size="lg"
       >
-        <form onSubmit={handleConfirmAssembleForStock} className="space-y-4 p-1">
+        <form onSubmit={handleStartBufferAssemblyJob} className="space-y-4 p-1">
           {/* Kit Model Selector */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-text-primary uppercase tracking-wider block">
@@ -4860,63 +5867,136 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
             </div>
           </div>
 
-          {/* Dynamic BOM Requirements Preview */}
+          {/* Dynamic BOM Requirements & Inward Stock Check Preview */}
           {(() => {
             const selectedModel = preassembledStock.find(m => m.id === selectedStockModelId);
             if (!selectedModel) return null;
             const qty = parseInt(stockAssembleQty) || 1;
+            const { hasShortage, items } = checkRawMaterialStock(selectedModel, qty);
 
             return (
-              <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-border space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-black text-text-primary uppercase tracking-wider">
-                    Raw Material Consumption for {qty} Kit(s):
+              <div className="space-y-3">
+                {/* Shortage Warning Banner */}
+                {hasShortage ? (
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-300 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase">
+                      <FaExclamationTriangle className="text-amber-400 text-sm" />
+                      <span>⚠️ Raw Materials Not Inwarded in Warehouse Stock!</span>
+                    </div>
+                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                      Warehouse buffer stock me BOS Kit assemble karne ke liye pehle required raw material ko <strong>Material Inward</strong> tab me jakar inward karein. Inward hone ke baad hi assembly start karne ko milega!
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStockAssemblyModalOpen(false);
+                          navigate(`${prefix}/material-inward`);
+                        }}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-amber-500 hover:bg-amber-400 text-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                      >
+                        <FaWarehouse className="text-xs" />
+                        <span>📦 Go to Material Inward Tab to Inward Materials →</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickInwardRawStock(selectedModel.id, qty)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-surface hover:bg-surface-hover border border-amber-500/40 text-amber-300 flex items-center gap-1.5 transition-all cursor-pointer"
+                        title="Simulate inwarding missing components into warehouse stock"
+                      >
+                        <FaPlus className="text-xs" />
+                        <span>📥 Inward Missing Materials into WH (Testing Shortcut)</span>
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-text-muted">Will be consumed from bulk inward inventory</span>
+                ) : (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <FaCheckCircle className="text-sm" />
+                      <span>✓ All Raw Materials Inwarded & Available in WH Stock for {qty} Kit(s)!</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSimulateShortage(selectedModel.id)}
+                      className="text-[10px] text-text-muted hover:text-amber-300 underline cursor-pointer"
+                    >
+                      (Test Shortage Warning)
+                    </button>
+                  </div>
+                )}
+
+                <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-border space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-black text-text-primary uppercase tracking-wider">
+                      Raw Material Consumption for {qty} Kit(s):
+                    </div>
+                    <span className="text-[10px] text-text-muted font-mono">BOM Components Check</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto scrollbar-thin text-xs">
+                    {items.map((it, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center justify-between p-2 rounded-lg border ${
+                          it.isShort
+                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                            : 'bg-surface border-border/70 text-text-secondary'
+                        }`}
+                      >
+                        <span className="truncate pr-2 font-medium">{it.name}</span>
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold whitespace-nowrap text-primary">
+                            {it.required} {it.unit}
+                          </span>
+                          <span className={`block text-[9px] font-bold ${it.isShort ? 'text-amber-400 font-mono' : 'text-emerald-400 font-mono'}`}>
+                            {it.isShort ? `Shortage (Inward: ${it.available})` : `✓ Inwarded: ${it.available}`}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto scrollbar-thin text-xs">
-                  {selectedModel.bom_components.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border/70">
-                      <span className="truncate pr-2 text-text-secondary">{c.name}</span>
-                      <span className="font-mono font-bold text-primary whitespace-nowrap">
-                        {c.qty * qty} {c.unit}
-                      </span>
-                    </div>
-                  ))}
+                {/* Modal Actions */}
+                <div className="flex justify-between items-center pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setStockAssemblyModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-surface-hover border border-border text-text-secondary cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={submittingStockAssembly || hasShortage}
+                    className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${
+                      hasShortage
+                        ? 'bg-gray-700/60 text-gray-400 border border-gray-600/50 cursor-not-allowed shadow-none'
+                        : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/25 cursor-pointer active:scale-95'
+                    }`}
+                  >
+                    {submittingStockAssembly ? (
+                      <>
+                        <FaSpinner className="animate-spin text-xs" />
+                        <span>Starting Assembly...</span>
+                      </>
+                    ) : hasShortage ? (
+                      <>
+                        <FaLock className="text-xs" />
+                        <span>🔒 Assembly Locked (Inward Materials First)</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaTools className="text-xs" />
+                        <span>🚀 Start 5-Stage Buffer Assembly Job ({stockAssembleQty} Kit) →</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             );
           })()}
-
-          {/* Modal Actions */}
-          <div className="flex justify-between items-center pt-3 border-t border-border">
-            <button
-              type="button"
-              onClick={() => setStockAssemblyModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-surface-hover border border-border text-text-secondary cursor-pointer"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={submittingStockAssembly}
-              className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/25 flex items-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
-            >
-              {submittingStockAssembly ? (
-                <>
-                  <FaSpinner className="animate-spin text-xs" />
-                  <span>Recording Assembly...</span>
-                </>
-              ) : (
-                <>
-                  <FaPlus className="text-xs" />
-                  <span>Assemble & Add {stockAssembleQty} Kit(s) to WH Stock</span>
-                </>
-              )}
-            </button>
-          </div>
         </form>
       </Dialog>
     </div>

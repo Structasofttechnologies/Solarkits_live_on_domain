@@ -11,6 +11,7 @@ const {
 } = require('../models/company_warehouse_db');
 const { company_warehouse_db } = require('../config/databases');
 const { delete_uploaded_files } = require('../utils/upload.files');
+const { sendAdminNotification } = require('../../admin-panel/services/admin.notification.service');
 
 const extractCloudinaryUrls = (value) => {
   if (!value) return [];
@@ -924,6 +925,15 @@ const create_po_request = async (req, res) => {
     });
 
     await newRequest.save();
+
+    sendAdminNotification({
+      title: `📋 Buffer Stock PO Requisition: ${request_number}`,
+      message: `Warehouse Manager requested PO for ${items.length} buffer raw materials / BOS Kit components (${items.map(i => `${i.sku_code || 'ITEM'} x${i.qty}`).join(', ').slice(0, 150)}).`,
+      category: 'inventory',
+      priority: 'high',
+      action_url: '/account-panel/procurement',
+      metadata: { request_number, items_count: items.length, event: 'po_request_created' }
+    }).catch(err => console.warn('[PO Request Notification Error]:', err.message));
 
     return res.status(201).json({
       status: "success",

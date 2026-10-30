@@ -159,6 +159,8 @@ const schema = new mongoose.Schema({
       'confirmed_procurement',
       'new_order',
       'partially_inwarded',
+      'inward_completed',
+      'inward_done',
       'ready_for_dispatch',
       'awaiting_eway_bill',
       'ready_to_initiate',

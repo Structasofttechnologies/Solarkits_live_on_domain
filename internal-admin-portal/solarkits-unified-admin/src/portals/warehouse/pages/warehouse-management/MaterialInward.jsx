@@ -9,7 +9,7 @@ import {
   HiOutlineHashtag, HiOutlineQrcode, HiOutlineDownload,
   HiOutlineSearch, HiOutlinePlus, HiOutlineTrash, HiDuplicate
 } from 'react-icons/hi';
-import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers, FaLock, FaCheckDouble, FaPhoneAlt, FaTools, FaCheck, FaTruck, FaWarehouse, FaShieldAlt, FaExclamationTriangle } from "react-icons/fa";
+import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers, FaLock, FaCheckDouble, FaPhoneAlt, FaTools, FaCheck, FaTruck, FaWarehouse, FaShieldAlt, FaExclamationTriangle, FaPaperPlane } from "react-icons/fa";
 import { HiOutlineClock, HiOutlineEye, HiOutlineClipboardCheck, HiOutlineTruck, HiOutlineLocationMarker, HiOutlineExclamation } from "react-icons/hi";
 import { getInwardActiveSkus, saveInward, getInwardLogs, getInwardStockStatus, getWarehousePurchaseOrders, markPurchaseOrderDelivered, uploadTaxInvoice, createPoRequest, getPoRequests, getOrderInwardFulfillment } from "../../api/inward";
 import { getDeliveryOrders, inwardDeliveryOrder, recordInwardDiscrepancy } from "../../api/deliveryOrders";
@@ -1011,15 +1011,20 @@ export default function MaterialInward() {
 
   const [activeTab, setActiveTab] = useState(() => {
     const saved = sessionStorage.getItem("inwardActiveTab");
-    return (saved === "inventory" || saved === "stock_pos" || saved === "procurement") ? saved : "procurement";
+    if (saved === "procurement") {
+      sessionStorage.setItem("inwardActiveTab", "stock_pos");
+      return "stock_pos";
+    }
+    return (saved === "inventory" || saved === "stock_pos") ? saved : "stock_pos";
   });
 
   const [indentsPage, setIndentsPage] = useState(1);
   const indentsPageSize = 5;
 
   const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
-    sessionStorage.setItem("inwardActiveTab", tabId);
+    const sanitizedTab = tabId === "procurement" ? "stock_pos" : tabId;
+    setActiveTab(sanitizedTab);
+    sessionStorage.setItem("inwardActiveTab", sanitizedTab);
     setLogsPage(1);
     setPosPage(1);
     setStockPage(1);
@@ -1028,10 +1033,55 @@ export default function MaterialInward() {
   };
 
   const tabs = useMemo(() => [
-    { id: "procurement", label: "🏭 Accounts Procurement Inward" },
-    { id: "stock_pos", label: "📦 Warehouse Stock POs" },
+    { id: "stock_pos", label: "📦 Warehouse Buffer Stock POs & GRN" },
     { id: "inventory", label: "📊 Live Stock & Inward Logs" }
   ], []);
+
+  // ─── Warehouse Stock & Raw Materials PO Requisition to Account Manager ───
+  const [generalPoModalOpen, setGeneralPoModalOpen] = useState(false);
+  const [generalPoItemName, setGeneralPoItemName] = useState('BOS Kit Assembly Raw Materials (ACDB, DCDB, MC4, Cables)');
+  const [generalPoQty, setGeneralPoQty] = useState(10);
+  const [generalPoNotes, setGeneralPoNotes] = useState('');
+  const [generalPoCategory, setGeneralPoCategory] = useState('BOS Kit Components');
+  const [submittingGeneralPo, setSubmittingGeneralPo] = useState(false);
+
+  const handleOpenGeneralPoRequestModal = () => {
+    setGeneralPoItemName('BOS Kit Assembly Raw Materials (ACDB, DCDB, MC4, Cables)');
+    setGeneralPoQty(10);
+    setGeneralPoNotes('');
+    setGeneralPoCategory('BOS Kit Components');
+    setGeneralPoModalOpen(true);
+  };
+
+  const handleSubmitGeneralPoRequest = async (e) => {
+    e.preventDefault();
+    if (generalPoQty <= 0) return;
+    try {
+      setSubmittingGeneralPo(true);
+      const payload = [{
+        sku_id: '672000000000000000000001',
+        sku_code: generalPoCategory === 'BOS Kit Components' ? 'BOS-RAW-MAT-PKG' : 'WH-STOCK-BUFFER',
+        qty: Number(generalPoQty)
+      }];
+      const res = await createPoRequest(payload);
+      if (res && res.status === 'success') {
+        dispatch(setAlert({
+          message: `⚡ Procurement requisition for ${generalPoQty} units submitted successfully to Account Manager!`,
+          type: 'success'
+        }));
+        setGeneralPoModalOpen(false);
+        fetchPOs();
+      }
+    } catch (err) {
+      console.error('Error submitting PO request:', err);
+      dispatch(setAlert({
+        message: err.response?.data?.message || 'Failed to submit procurement request.',
+        type: 'error'
+      }));
+    } finally {
+      setSubmittingGeneralPo(false);
+    }
+  };
 
   // ─── Accounts Procurement Inward State (Warehouse Inventory Stocking) ───
   const [purchaseIndents, setPurchaseIndents] = useState([]);
@@ -2489,34 +2539,45 @@ export default function MaterialInward() {
           </div>
           <div>
             <div className="font-extrabold text-sm text-text-primary flex items-center gap-2">
-              <span>Warehouse Inventory Stocking & GRN Station</span>
+              <span>Warehouse Stock Buffer & Raw Materials GRN Station</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-primary/20 text-primary uppercase">
-                Bulk Inward
+                Stock Only
               </span>
             </div>
             <p className="text-xs text-text-secondary mt-0.5">
-              This station solely handles incoming bulk procurement shipments from Accounts to replenish warehouse stock. For customer sales order kit assembly and dispatch, use the New Orders Queue.
+              This station solely handles warehouse buffer stock & raw materials for assembling BOS kits. Customer order consignments from Accounts are inwarded in the New Orders Queue.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const prefix = location.pathname.startsWith("/warehouse-management-panel")
-              ? "/warehouse-management-panel"
-              : location.pathname.startsWith("/warehouse")
-              ? "/warehouse"
-              : "/warehouse-management-panel";
-            navigate(`${prefix}/new-orders`);
-          }}
-          className="px-3.5 py-2 rounded-xl bg-surface hover:bg-surface-hover text-text-primary border border-border text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-xs cursor-pointer hover:border-primary"
-        >
-          <span>Go to Customer Orders Queue</span>
-          <span className="text-primary font-black">→</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleOpenGeneralPoRequestModal}
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 text-xs font-black flex items-center gap-2 transition-all whitespace-nowrap shadow-xs cursor-pointer active:scale-95"
+            title="Send BOS Kit raw material procurement requisition to Account Manager"
+          >
+            <FaPaperPlane className="text-xs" />
+            <span>⚡ Request BOS Kit Stock from Account Manager</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const prefix = location.pathname.startsWith("/warehouse-management-panel")
+                ? "/warehouse-management-panel"
+                : location.pathname.startsWith("/warehouse")
+                ? "/warehouse"
+                : "/warehouse-management-panel";
+              navigate(`${prefix}/new-orders`);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-surface hover:bg-surface-hover text-text-primary border border-border text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-xs cursor-pointer hover:border-primary"
+          >
+            <span>Go to Customer Orders Queue</span>
+            <span className="text-primary font-black">→</span>
+          </button>
+        </div>
       </div>
 
-      {/* Premium Tab Navigation: 3 tabs */}
+      {/* Premium Tab Navigation: 2 tabs (Buffer Stock POs & Live Stock) */}
       <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-2xl shadow-inner relative overflow-hidden backdrop-blur-md overflow-x-auto">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab.id;
@@ -2530,7 +2591,6 @@ export default function MaterialInward() {
                   : "text-text-secondary hover:bg-surface-hover hover:text-primary"
                 }`}
             >
-              {tab.id === 'procurement' && <FaBuilding className="text-base" />}
               {tab.id === 'stock_pos' && <HiCube className="text-base" />}
               {tab.id === 'inventory' && <FaWarehouse className="text-base" />}
               {tab.label}
@@ -2555,357 +2615,6 @@ export default function MaterialInward() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="w-full"
         >
-          {activeTab === "procurement" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
-              {/* Header Stats & Filter Controls */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface p-4 rounded-2xl border border-border shadow-xs">
-                {/* Status KPI Chips */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[
-                    { id: 'all', label: 'All Indents', count: indentCounts.total },
-                    { id: 'in_transit', label: 'In Transit / Sourced', count: indentCounts.inTransit },
-                    { id: 'completed', label: 'Inward Completed', count: indentCounts.completed },
-                  ].map(f => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => { setIndentsFilter(f.id); setIndentsPage(1); }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                        indentsFilter === f.id
-                          ? 'bg-primary text-white border-primary shadow-xs'
-                          : 'bg-surface-hover hover:bg-surface border-border text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      <span>{f.label}</span>
-                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${indentsFilter === f.id ? 'bg-white/20 text-white' : 'bg-surface text-text-primary'}`}>
-                        {f.count}
-                      </span>
-                    </button>
-                  ))}
-
-                  <div className="h-5 w-px bg-border mx-1 hidden sm:block" />
-
-                  {/* Transport Filter */}
-                  {[
-                    { id: 'all', label: 'All Transport' },
-                    { id: 'Supplier Delivery', label: '🚚 Supplier Delivery' },
-                    { id: 'Company Pickup', label: '🏢 Company Pickup' },
-                  ].map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => { setIndentsTransportFilter(t.id); setIndentsPage(1); }}
-                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border cursor-pointer ${
-                        indentsTransportFilter === t.id
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                          : 'bg-surface-hover hover:bg-surface border-border text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Search Box */}
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 sm:w-72">
-                    <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm" />
-                    <input
-                      type="text"
-                      placeholder="Search PI#, Order#, Transporter, Vehicle, SKU..."
-                      value={indentsSearch}
-                      onChange={(e) => { setIndentsSearch(e.target.value); setIndentsPage(1); }}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-surface-hover border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
-                    />
-                    {indentsSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setIndentsSearch("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary text-xs"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                  <Button
-                    onClick={fetchPurchaseIndents}
-                    variant="secondary"
-                    size="sm"
-                    loading={loadingIndents}
-                    leftIcon={<HiOutlineClock className="text-xs" />}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-              </div>
-
-              {/* Purchase Indents Cards List */}
-              {loadingIndents ? (
-                <div className="p-12 text-center text-xs text-text-muted bg-surface rounded-2xl border border-dashed border-border flex items-center justify-center gap-2">
-                  <FaSpinner className="animate-spin text-primary" /> Loading procurement indents...
-                </div>
-              ) : filteredPurchaseIndents.length === 0 ? (
-                <div className="p-12 text-center text-xs text-text-muted bg-surface rounded-2xl border border-dashed border-border space-y-2">
-                  <FaWarehouse className="text-3xl text-text-muted mx-auto opacity-40 mb-2" />
-                  <div className="font-bold text-text-primary text-sm">No Procurement Shipments Found</div>
-                  <p className="max-w-md mx-auto text-text-secondary">
-                    No supplier shipments match the current filters. Procurement indents approved by Accounts for warehouse inventory restocking will appear here.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {paginatedPurchaseIndents.map((pi) => {
-                    const supplyStatus = pi.fulfilment?.supply_status || 'Pending';
-                    const isCompleted = supplyStatus === 'Inward Completed' || pi.pi_status === 'Completed';
-                    const totalQty = (pi.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
-                    const isSupplierDelivery = (pi.fulfilment?.method || '').toLowerCase().includes('supplier');
-
-                    return (
-                      <div
-                        key={pi._id}
-                        className={`bg-surface border rounded-2xl p-4 sm:p-5 transition-all duration-200 shadow-xs space-y-4 ${
-                          isCompleted
-                            ? 'border-emerald-500/30 bg-emerald-500/[0.02]'
-                            : 'border-border hover:border-primary/40'
-                        }`}
-                      >
-                        {/* Top Card Header */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono font-black text-sm px-2.5 py-1 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                              {pi.pi_number}
-                            </span>
-                            <span className="font-bold text-xs text-text-secondary bg-surface-hover px-2 py-1 rounded-lg border border-border">
-                              Ref: {pi.customer_order_number || 'WH-STOCK-PROCUREMENT'}
-                            </span>
-                            {pi.order_group_id && (
-                              <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                                {pi.order_group_id}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
-                              isCompleted
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                : supplyStatus === 'In Transit'
-                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 animate-pulse'
-                                : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'
-                            }`}>
-                              {isCompleted ? <FaCheckCircle /> : <FaShippingFast />}
-                              <span>{isCompleted ? 'Inward Completed' : supplyStatus}</span>
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Supplier & Destination Strip */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-surface-hover/50 p-3 rounded-xl border border-border/50">
-                          <div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase block">Supplier Name</span>
-                            <span className="font-extrabold text-text-primary block truncate">{pi.supplier_name}</span>
-                            {pi.supplier_brand && (
-                              <span className="text-[10px] text-text-secondary font-medium">Brand: {pi.supplier_brand}</span>
-                            )}
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase block">Supplier GST</span>
-                            <span className="font-mono text-text-secondary font-bold text-[11px] block">
-                              {pi.supplier_gst || 'N/A'}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase block">Destination Hub</span>
-                            <span className="font-bold text-text-primary block truncate">
-                              {pi.destination_warehouse_name || 'Central Master Warehouse'}
-                            </span>
-                            {pi.destination_warehouse_code && (
-                              <span className="text-[10px] font-mono text-primary font-bold">{pi.destination_warehouse_code}</span>
-                            )}
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase block">Shipment Quantity</span>
-                            <span className="font-black text-text-primary text-sm block">
-                              {totalQty.toLocaleString()} units
-                            </span>
-                            <span className="text-[10px] text-text-muted">{(pi.items || []).length} SKU types</span>
-                          </div>
-                        </div>
-
-                        {/* Transport Logistics Ribbon */}
-                        <div className="bg-surface-hover/70 border border-border/80 rounded-xl p-3.5 space-y-2.5">
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
-                                isSupplierDelivery
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
-                              }`}>
-                                <FaTruck className="text-xs" />
-                                <span>{pi.fulfilment?.method || 'Supplier Delivery'}</span>
-                              </span>
-                              <span className="text-[10px] text-text-muted font-bold">
-                                Responsibility: {pi.fulfilment?.transport_responsibility || 'Supplier'}
-                              </span>
-                            </div>
-                            <div className="text-[11px] font-mono font-bold text-text-secondary flex items-center gap-1.5">
-                              <span className="text-text-muted font-normal text-[10px] uppercase">LR / Gate Ref:</span>
-                              <span className="text-primary font-black bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-                                {pi.fulfilment?.tracking_reference || pi.fulfilment?.dispatch_reference || 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                            <div>
-                              <span className="text-[10px] font-bold text-text-muted uppercase block">Transporter / Carrier</span>
-                              <span className="font-extrabold text-text-primary truncate block" title={pi.fulfilment?.carrier_name}>
-                                {pi.fulfilment?.carrier_name || 'Direct Transport'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-bold text-text-muted uppercase block">Vehicle Number</span>
-                              <span className="font-mono font-black text-text-primary bg-surface border border-border/80 px-1.5 py-0.5 rounded inline-block">
-                                {pi.fulfilment?.vehicle_details?.vehicle_number || 'Pending'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-bold text-text-muted uppercase block">Driver Details</span>
-                              {pi.fulfilment?.vehicle_details?.driver_name ? (
-                                <div className="text-text-primary">
-                                  <span className="font-bold">{pi.fulfilment.vehicle_details.driver_name}</span>
-                                  {pi.fulfilment.vehicle_details.driver_phone && (
-                                    <a
-                                      href={`tel:${pi.fulfilment.vehicle_details.driver_phone}`}
-                                      className="text-[10px] text-primary font-bold hover:underline block flex items-center gap-1"
-                                    >
-                                      <FaPhoneAlt size={8} /> {pi.fulfilment.vehicle_details.driver_phone}
-                                    </a>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-text-muted italic text-[11px]">Not provided</span>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-bold text-text-muted uppercase block">Dispatch / Expected</span>
-                              <span className="font-semibold text-text-primary block text-[11px]">
-                                {pi.fulfilment?.actual_dispatch_date ? new Date(pi.fulfilment.actual_dispatch_date).toLocaleDateString('en-IN') : 'Dispatched'}
-                                <span className="text-text-muted"> → </span>
-                                <span className="text-primary font-bold">
-                                  {pi.fulfilment?.expected_inward_date ? new Date(pi.fulfilment.expected_inward_date).toLocaleDateString('en-IN') : 'Today'}
-                                </span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Materials Sent by Account Manager Table */}
-                        <div className="border border-border/70 rounded-xl overflow-hidden bg-surface">
-                          <div className="bg-surface-hover/80 px-3.5 py-2 border-b border-border/60 flex justify-between items-center">
-                            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted flex items-center gap-1.5">
-                              <FaBoxes className="text-primary" />
-                              <span>Materials Sent by Account Manager to Inward ({pi.items?.length || 0} Components)</span>
-                            </div>
-                            <div className="text-[10px] text-text-secondary font-bold">
-                              Total Inward Quantity: <span className="text-primary font-black">{totalQty.toLocaleString()} pcs</span>
-                            </div>
-                          </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs text-left">
-                              <thead className="bg-surface border-b border-border/50 text-[10px] font-black uppercase text-text-muted">
-                                <tr>
-                                  <th className="px-3.5 py-2">#</th>
-                                  <th className="px-3.5 py-2">SKU Code</th>
-                                  <th className="px-3.5 py-2">Component / Product Name</th>
-                                  <th className="px-3.5 py-2">Category</th>
-                                  <th className="px-3.5 py-2 text-right">Qty to Inward</th>
-                                  <th className="px-3.5 py-2 text-right">Unit Rate</th>
-                                  <th className="px-3.5 py-2 text-right">Total (excl tax)</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border/40">
-                                {(pi.items || []).map((it, idx) => (
-                                  <tr key={idx} className="hover:bg-surface-hover/30 transition-colors">
-                                    <td className="px-3.5 py-2 text-text-muted">{idx + 1}</td>
-                                    <td className="px-3.5 py-2 font-mono font-extrabold text-primary">{it.sku_code}</td>
-                                    <td className="px-3.5 py-2 font-semibold text-text-primary">{it.product_name || it.sku_code}</td>
-                                    <td className="px-3.5 py-2 text-text-secondary text-[11px]">{it.component_type || '-'}</td>
-                                    <td className="px-3.5 py-2 text-right font-black text-text-primary">
-                                      <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
-                                        {it.quantity?.toLocaleString()} pcs
-                                      </span>
-                                    </td>
-                                    <td className="px-3.5 py-2 text-right font-mono text-text-secondary">₹{Number(it.unit_rate || 0).toLocaleString()}</td>
-                                    <td className="px-3.5 py-2 text-right font-black text-text-primary">₹{(Number(it.quantity || 0) * Number(it.unit_rate || 0)).toLocaleString()}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-
-                        {/* Card Footer: Totals and Inward Actions */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/60">
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <span className="text-[10px] font-bold text-text-muted uppercase block">Total Shipment Value</span>
-                              <span className="text-base font-black text-primary">₹{Number(pi.total_pi_value || 0).toLocaleString()}</span>
-                            </div>
-                            <div className="h-6 w-px bg-border/80 hidden sm:block" />
-                            <div className="text-[11px] text-text-secondary">
-                              <span>Payment Status: </span>
-                              <span className={`font-bold ${pi.payment?.payment_status === 'Paid' ? 'text-success' : 'text-warning'}`}>
-                                {pi.payment?.payment_status || 'Pending'}
-                              </span>
-                              {pi.payment?.advance_percentage > 0 && ` (${pi.payment.advance_percentage}% Adv)`}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {isCompleted ? (
-                              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-black uppercase tracking-wider">
-                                <FaCheckCircle className="text-sm" />
-                                <span>Inward Completed & GRN Generated</span>
-                              </div>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenPiInwardModal(pi, 'online')}
-                                  className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-surface-hover hover:bg-surface text-primary border border-primary/30 hover:border-primary shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  <HiOutlineQrcode className="text-base text-primary" />
-                                  <span>⚡ Online Inward (QR/Scanner)</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenPiInwardModal(pi, 'offline')}
-                                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider gradient-primary text-white shadow-sm hover:opacity-95 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  <HiOutlineClipboardCheck className="text-base" />
-                                  <span>📋 Offline Inward (Gate Challan)</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <Pagination
-                    currentPage={indentsPage}
-                    totalPages={Math.ceil(filteredPurchaseIndents.length / indentsPageSize)}
-                    onPageChange={setIndentsPage}
-                    totalItems={filteredPurchaseIndents.length}
-                    pageSize={indentsPageSize}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
           {activeTab === "stock_pos" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
               {/* Warehouse Stock Purchase Orders */}
@@ -3016,26 +2725,20 @@ export default function MaterialInward() {
                         {/* PO & PI Documents */}
                         <td className="p-3">
                           <div className="flex flex-col gap-1.5 max-w-[120px]">
-                            {po.purchase_order_pdf ? (
-                              <button
-                                onClick={() => { setProformaPO(po); setProformaModalDefaultTab("po"); setProformaModalOpen(true); }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold uppercase tracking-wide hover:bg-primary/20 transition-all justify-center w-full"
-                              >
-                                <FaFilePdf size={9} /> PO PDF
-                              </button>
-                            ) : (
-                              <span className="text-[9px] text-text-muted italic text-center">No PO PDF</span>
-                            )}
-                            {po.proforma_invoice_pdf ? (
-                              <button
-                                onClick={() => { setProformaPO(po); setProformaModalDefaultTab("pi"); setProformaModalOpen(true); }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-info/10 text-info border border-info/20 text-[9px] font-bold uppercase tracking-wide hover:bg-info/20 transition-all justify-center w-full"
-                              >
-                                <FaFilePdf size={9} /> PI PDF
-                              </button>
-                            ) : (
-                              <span className="text-[9px] text-text-muted italic text-center">No PI PDF</span>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => { setProformaPO(po); setProformaModalDefaultTab("po"); setProformaModalOpen(true); }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold uppercase tracking-wide hover:bg-primary/20 transition-all justify-center w-full cursor-pointer shadow-xs"
+                            >
+                              <FaFilePdf size={10} /> 📄 View PO PDF
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setProformaPO(po); setProformaModalDefaultTab("pi"); setProformaModalOpen(true); }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-info/10 text-info border border-info/20 text-[9px] font-bold uppercase tracking-wide hover:bg-info/20 transition-all justify-center w-full cursor-pointer shadow-xs"
+                            >
+                              <FaFilePdf size={10} /> 📑 View Proforma (PI)
+                            </button>
                           </div>
                         </td>
                         {/* Supplier Tax Invoice */}
@@ -4380,6 +4083,81 @@ export default function MaterialInward() {
         onConfirmInward={handleConfirmPiInward}
         loading={isDelivering}
       />
+      {/* BOS Kit Stock / Buffer Requisition Modal */}
+      <Dialog
+        isOpen={generalPoModalOpen}
+        onClose={() => setGeneralPoModalOpen(false)}
+        title="⚡ Request BOS Kit Assembly Stock from Account Manager"
+        size="md"
+      >
+        <form onSubmit={handleSubmitGeneralPoRequest} className="space-y-4 p-1">
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 text-xs text-text-secondary leading-relaxed">
+            Submit a direct procurement requisition to the Account Manager for assembling BOS kits (ACDB, DCDB, MC4, Cables, etc.) or warehouse buffer stock.
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-primary mb-1">Stock Category</label>
+            <select
+              value={generalPoCategory}
+              onChange={(e) => setGeneralPoCategory(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-surface text-text-primary focus:outline-none focus:border-primary"
+            >
+              <option value="BOS Kit Components">BOS Kit Assembly Raw Materials (ACDB, DCDB, MC4, Cables)</option>
+              <option value="Warehouse Buffer Stock">General Warehouse Buffer Stock</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-primary mb-1">Item Description</label>
+            <CustomInput
+              value={generalPoItemName}
+              onChange={(e) => setGeneralPoItemName(e.target.value)}
+              placeholder="Items required for BOS kits"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-primary mb-1">Required Quantity (Units/Sets)</label>
+            <CustomInput
+              type="number"
+              min="1"
+              value={generalPoQty}
+              onChange={(e) => setGeneralPoQty(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-primary mb-1">Notes / Specifications (Optional)</label>
+            <textarea
+              value={generalPoNotes}
+              onChange={(e) => setGeneralPoNotes(e.target.value)}
+              placeholder="e.g. 5kW & 10kW BOS kit components needed immediately for upcoming installations"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-border bg-surface text-text-primary focus:outline-none focus:border-primary"
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submittingGeneralPo}
+              onClick={() => setGeneralPoModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={submittingGeneralPo}
+              loading={submittingGeneralPo}
+              leftIcon={<FaPaperPlane className="text-xs" />}
+            >
+              Send Request to Account Manager
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
       {renderSkuInfoModal()}
     </div>
   );
