@@ -61,13 +61,13 @@ async function logAudit({
   entity_type,
   entity_id,
   before_snapshot = null,
-  after_snapshot  = null,
-  reason          = null,
-  metadata        = null,
-  req             = null,
+  after_snapshot = null,
+  reason = null,
+  metadata = null,
+  req = null,
 }) {
   try {
-    const ip_address = req ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null) : null;
+    const ip_address = req ? (req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || null) : null;
     const user_agent = req ? (req.headers['user-agent'] || null) : null;
 
     const logEntry = await AuditLog.create({
@@ -77,8 +77,8 @@ async function logAudit({
       entity_type,
       entity_id,
       before_snapshot: sanitizeSnapshot(before_snapshot),
-      after_snapshot:  sanitizeSnapshot(after_snapshot),
-      reason:   reason   ? String(reason).trim().substring(0, 2000) : null,
+      after_snapshot: sanitizeSnapshot(after_snapshot),
+      reason: reason ? String(reason).trim().substring(0, 2000) : null,
       metadata: metadata ? sanitizeSnapshot(metadata) : null,
       ip_address,
       user_agent,

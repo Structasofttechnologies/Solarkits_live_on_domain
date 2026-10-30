@@ -32,6 +32,7 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
   // Modals
   const [kycModalOpen, setKycModalOpen] = useState(false);
   const [territoryModalOpen, setTerritoryModalOpen] = useState(false);
+  const [selectedTerritoryForModal, setSelectedTerritoryForModal] = useState(null);
   const [goalModalOpen, setGoalModalOpen] = useState(false);
   const [resetLoginModalOpen, setResetLoginModalOpen] = useState(false);
 
@@ -71,6 +72,16 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     }
   };
 
+  const handleRemoveTerritory = async (assignmentId) => {
+    if (!window.confirm('Are you sure you want to remove this assigned state from this BDE?')) return;
+    try {
+      await bdeApi.removeTerritory(id, assignmentId, moduleUniqueId);
+      fetchBdeDetail(true);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to remove territory');
+    }
+  };
+
   if (loading) return <Loader text="Loading BDE Profile..." />;
   if (error || !bde) {
     return (
@@ -88,6 +99,9 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
 
   const kyc = bde.kyc || {};
   const territory = bde.territory || {};
+  const territories = Array.isArray(bde.territories) && bde.territories.length > 0
+    ? bde.territories
+    : (bde.territory && bde.territory.state_name ? [bde.territory] : []);
   const plans = bde.plans || {};
   const goal = bde.goal || {};
   const activities = bde.recent_activities || [];
@@ -131,34 +145,32 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
               {bde.email} • <span className="font-mono text-slate-700">{bde.mobile_number}</span>
             </p>
             <div className="flex items-center gap-2 pt-1 flex-wrap">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                bde.status === 'active'
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${bde.status === 'active'
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                   : bde.status === 'suspended'
-                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                  : bde.status === 'inactive'
-                  ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                  : bde.status === 'kyc_verified'
-                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                  : 'bg-amber-100 text-amber-900 border border-amber-300'
-              }`}>
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                    : bde.status === 'inactive'
+                      ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                      : bde.status === 'kyc_verified'
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                }`}>
                 Account: {bde.status === 'active'
                   ? 'Active'
                   : bde.status === 'suspended'
-                  ? 'Suspended'
-                  : bde.status === 'inactive'
-                  ? 'Inactive'
-                  : bde.status === 'kyc_verified'
-                  ? 'Ready to Activate'
-                  : 'Pending Activation'}
+                    ? 'Suspended'
+                    : bde.status === 'inactive'
+                      ? 'Inactive'
+                      : bde.status === 'kyc_verified'
+                        ? 'Ready to Activate'
+                        : 'Pending Activation'}
               </span>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                kyc?.kyc_status === 'verified'
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${kyc?.kyc_status === 'verified'
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                   : kyc?.kyc_status === 'rejected'
-                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                  : 'bg-amber-100 text-amber-900 border border-amber-300'
-              }`}>
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                    : 'bg-amber-100 text-amber-900 border border-amber-300'
+                }`}>
                 KYC: {kyc?.kyc_status === 'verified' ? 'Verified' : kyc?.kyc_status === 'rejected' ? 'Rejected' : 'Pending'}
               </span>
             </div>
@@ -310,54 +322,92 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
           </div>
         </div>
 
-        {/* Assigned Territory Card */}
-        <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4">
+        {/* Assigned Territories Card (Supports Multiple States) */}
+        <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4 col-span-1 md:col-span-2">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <FaMapMarkedAlt className="text-indigo-600" /> Assigned Territory & Districts
-            </h2>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <FaMapMarkedAlt className="text-indigo-600" /> Assigned States & Territories ({territories.length})
+              </h2>
+              <p className="text-[11px] text-slate-500 font-medium">BDE is authorized to manage EPC prospects and Franchisees in these states</p>
+            </div>
             <button
-              onClick={() => setTerritoryModalOpen(true)}
-              className="text-xs text-[#0575B8] font-bold hover:underline cursor-pointer"
+              onClick={() => {
+                setSelectedTerritoryForModal(null);
+                setTerritoryModalOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-[#0575B8] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              Reassign
+              + Assign Another State
             </button>
           </div>
 
-          {territory && territory.state_name ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Assigned State:</span>
-                <span className="font-bold text-slate-900 text-sm">{territory.state_name}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Priority Level:</span>
-                <span className="font-bold uppercase text-[#0575B8]">{territory.priority || 'medium'}</span>
-              </div>
-              <div className="space-y-1.5 pt-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase">
-                  Districts ({territory.district_names?.length || 0})
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {territory.district_names?.map((dName, i) => (
-                    <span
-                      key={i}
-                      className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-xs border border-indigo-100"
-                    >
-                      {dName}
+          {territories && territories.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {territories.map((t, idx) => (
+                <div key={t._id || idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Assigned State</span>
+                      <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                        {t.state_name}
+                        <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {t.priority || 'medium'}
+                        </span>
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedTerritoryForModal(t);
+                          setTerritoryModalOpen(true);
+                        }}
+                        className="text-xs text-[#0575B8] font-bold hover:underline cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleRemoveTerritory(t._id || t.id)}
+                        className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase">
+                      Districts ({t.district_names?.length || 0})
                     </span>
-                  ))}
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                      {t.district_names && t.district_names.length > 0 ? (
+                        t.district_names.map((dName, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 bg-white text-indigo-700 font-medium rounded-lg text-[11px] border border-slate-200"
+                          >
+                            {dName}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-slate-400 italic text-xs">All / No specific districts selected</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           ) : (
             <div className="py-6 text-center text-xs text-slate-500 space-y-2 font-medium">
-              <p>No territory assigned yet.</p>
+              <p>No territories assigned yet.</p>
               <button
-                onClick={() => setTerritoryModalOpen(true)}
+                onClick={() => {
+                  setSelectedTerritoryForModal(null);
+                  setTerritoryModalOpen(true);
+                }}
                 className="px-4 py-2 bg-[#0575B8] text-white rounded-xl text-xs font-bold cursor-pointer"
               >
-                Assign Now
+                Assign State Now
               </button>
             </div>
           )}
@@ -570,8 +620,12 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
 
       <TerritoryModal
         isOpen={territoryModalOpen}
-        onClose={() => setTerritoryModalOpen(false)}
+        onClose={() => {
+          setTerritoryModalOpen(false);
+          setSelectedTerritoryForModal(null);
+        }}
         bde={bde}
+        existingTerritory={selectedTerritoryForModal}
         onSuccess={fetchBdeDetail}
       />
 

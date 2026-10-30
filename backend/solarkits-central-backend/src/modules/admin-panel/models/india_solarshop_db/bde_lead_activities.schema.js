@@ -33,7 +33,7 @@ const schema = new mongoose.Schema({
     ],
     default: 'note',
   },
-  title: { type: String, required: true, trim: true },
+  title: { type: String, default: 'Activity Log', trim: true },
   notes: { type: String, default: '', trim: true },
   previous_stage: { type: String, default: null },
   new_stage: { type: String, default: null },

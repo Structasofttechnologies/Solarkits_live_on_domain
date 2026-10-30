@@ -433,7 +433,7 @@ export default function BdeEpcQuoteDetail() {
             </div>
 
             <div className="flex justify-between text-slate-600">
-              <span>GST ({quote.gst_rate || 13.8}%):</span>
+              <span>GST ({quote.gst_rate != null ? quote.gst_rate : 5}%):</span>
               <span className="font-mono font-bold">{formatINR(quote.gst_amount_paise)}</span>
             </div>
 
@@ -450,22 +450,20 @@ export default function BdeEpcQuoteDetail() {
         <div className="flex items-center gap-2 border-b border-slate-200 px-6 pt-3">
           <button
             onClick={() => setActiveTab('followups')}
-            className={`pb-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              activeTab === 'followups'
+            className={`pb-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${activeTab === 'followups'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Calendar className="w-3.5 h-3.5" /> Follow-up History ({followups.length})
           </button>
 
           <button
             onClick={() => setActiveTab('activity')}
-            className={`pb-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              activeTab === 'activity'
+            className={`pb-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${activeTab === 'activity'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Clock className="w-3.5 h-3.5" /> Activity Audit Trail ({activities.length})
           </button>
@@ -541,18 +539,16 @@ export default function BdeEpcQuoteDetail() {
                 <button
                   type="button"
                   onClick={() => setShareMethod('email')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
-                    shareMethod === 'email' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${shareMethod === 'email' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'
+                    }`}
                 >
                   <Mail className="w-4 h-4" /> Email PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => setShareMethod('whatsapp')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
-                    shareMethod === 'whatsapp' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
-                  }`}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${shareMethod === 'whatsapp' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
+                    }`}
                 >
                   <Send className="w-4 h-4" /> WhatsApp
                 </button>
@@ -731,9 +727,8 @@ export default function BdeEpcQuoteDetail() {
                   <button
                     type="button"
                     onClick={() => setOrderType('epc_order')}
-                    className={`p-3 rounded-xl border text-xs font-bold text-left ${
-                      orderType === 'epc_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
-                    }`}
+                    className={`p-3 rounded-xl border text-xs font-bold text-left ${orderType === 'epc_order' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'
+                      }`}
                   >
                     EPC Direct Order
                   </button>
@@ -741,13 +736,12 @@ export default function BdeEpcQuoteDetail() {
                     type="button"
                     disabled={!quote.franchisee_id}
                     onClick={() => quote.franchisee_id && setOrderType('fpo_order')}
-                    className={`p-3 rounded-xl border text-xs font-bold text-left ${
-                      !quote.franchisee_id
+                    className={`p-3 rounded-xl border text-xs font-bold text-left ${!quote.franchisee_id
                         ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
                         : orderType === 'fpo_order'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                        : 'border-slate-200 text-slate-600'
-                    }`}
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 text-slate-600'
+                      }`}
                     title={!quote.franchisee_id ? 'Franchisee PO requires franchisee attribution' : ''}
                   >
                     Franchisee PO {!quote.franchisee_id && '(Partner only)'}

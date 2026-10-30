@@ -18,8 +18,6 @@ import {
   CheckCircle2,
   Package,
   ChevronDown,
-  Plus,
-  Minus,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -89,7 +87,7 @@ export default function BdeCreateEpcQuote() {
     warranty_charges_paise: 0,
     delivery_charges_paise: 0,
     taxable_amount_paise: 0,
-    gst_rate: 13.8,
+    gst_rate: 5,
     gst_amount_paise: 0,
     total_amount_paise: 0,
   });
@@ -103,10 +101,10 @@ export default function BdeCreateEpcQuote() {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.epcs)
-          ? raw.epcs
-          : Array.isArray(res.data?.epcs)
-          ? res.data.epcs
-          : [];
+            ? raw.epcs
+            : Array.isArray(res.data?.epcs)
+              ? res.data.epcs
+              : [];
         setEpcList(list);
       } else {
         setEpcList([]);
@@ -125,10 +123,10 @@ export default function BdeCreateEpcQuote() {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.franchisees)
-          ? raw.franchisees
-          : Array.isArray(res.data?.franchisees)
-          ? res.data.franchisees
-          : [];
+            ? raw.franchisees
+            : Array.isArray(res.data?.franchisees)
+              ? res.data.franchisees
+              : [];
         setFranchisees(list);
       } else {
         setFranchisees([]);
@@ -164,10 +162,10 @@ export default function BdeCreateEpcQuote() {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.kits)
-          ? raw.kits
-          : Array.isArray(res.data?.kits)
-          ? res.data.kits
-          : [];
+            ? raw.kits
+            : Array.isArray(res.data?.kits)
+              ? res.data.kits
+              : [];
         setKitList(list);
       } else {
         setKitList([]);
@@ -190,10 +188,10 @@ export default function BdeCreateEpcQuote() {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.warranties)
-          ? raw.warranties
-          : Array.isArray(res.data?.warranties)
-          ? res.data.warranties
-          : [];
+            ? raw.warranties
+            : Array.isArray(res.data?.warranties)
+              ? res.data.warranties
+              : [];
         setWarrantyList(list);
       } else {
         setWarrantyList([]);
@@ -229,7 +227,7 @@ export default function BdeCreateEpcQuote() {
 
     const deliveryPaise = deliveryType === 'franchisee_warehouse' ? 0 : 250000 * quantity;
     const taxablePaise = subtotalPaise + warrantyPaise + deliveryPaise;
-    const gstRate = Number(selectedKit?.gst_rate ?? selectedKit?.tax_pct ?? selectedKit?.gst_pct ?? 13.8);
+    const gstRate = Number(selectedKit?.gst_rate ?? selectedKit?.tax_pct ?? selectedKit?.gst_pct ?? 5);
     const gstPaise = Math.round((taxablePaise * gstRate) / 100);
     const totalPaise = taxablePaise + gstPaise;
 
@@ -722,22 +720,20 @@ export default function BdeCreateEpcQuote() {
             return (
               <div
                 key={s.num}
-                className={`flex flex-col items-center text-center p-2 rounded-xl transition ${
-                  isCurr
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : isDone
+                className={`flex flex-col items-center text-center p-2 rounded-xl transition ${isCurr
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : isDone
                     ? 'text-emerald-600'
                     : 'text-slate-400 opacity-60'
-                }`}
+                  }`}
               >
                 <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs mb-1.5 transition ${
-                    isCurr
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : isDone
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs mb-1.5 transition ${isCurr
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : isDone
                       ? 'bg-emerald-600 text-white'
                       : 'bg-slate-100 text-slate-500'
-                  }`}
+                    }`}
                 >
                   {isDone ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
                 </div>
@@ -786,11 +782,10 @@ export default function BdeCreateEpcQuote() {
                     <div
                       key={epc._id}
                       onClick={() => handleSelectEpc(epc)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition text-left flex flex-col justify-between ${
-                        isSel
-                          ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition text-left flex flex-col justify-between ${isSel
+                        ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300'
+                        }`}
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2">
@@ -839,11 +834,10 @@ export default function BdeCreateEpcQuote() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                 <div
                   onClick={() => setSelectedFranchisee(null)}
-                  className={`p-3 rounded-xl border-2 cursor-pointer transition ${
-                    selectedFranchisee === null
-                      ? 'border-indigo-600 bg-indigo-50/40 font-bold'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
+                  className={`p-3 rounded-xl border-2 cursor-pointer transition ${selectedFranchisee === null
+                    ? 'border-indigo-600 bg-indigo-50/40 font-bold'
+                    : 'border-slate-200 hover:border-slate-300'
+                    }`}
                 >
                   <div className="text-xs font-bold text-slate-900">BDE Direct Deal</div>
                   <div className="text-[10px] text-slate-400">SolarKits central quotation</div>
@@ -855,11 +849,10 @@ export default function BdeCreateEpcQuote() {
                     <div
                       key={f._id}
                       onClick={() => setSelectedFranchisee(f)}
-                      className={`p-3 rounded-xl border-2 cursor-pointer transition ${
-                        isSel
-                          ? 'border-indigo-600 bg-indigo-50/40 font-bold'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition ${isSel
+                        ? 'border-indigo-600 bg-indigo-50/40 font-bold'
+                        : 'border-slate-200 hover:border-slate-300'
+                        }`}
                     >
                       <div className="text-xs font-bold text-slate-900 line-clamp-1">{f.business_name || f.name}</div>
                       <div className="text-[10px] text-slate-400">Store Partner • {f.district || 'Territory'}</div>
@@ -879,19 +872,17 @@ export default function BdeCreateEpcQuote() {
               <p className="text-xs text-slate-500">Configure logistics destination and delivery contact person</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               {[
                 { id: 'epc_location', title: 'EPC Registered Address', desc: 'Dispatch directly to EPC registered office / godown' },
-                { id: 'franchisee_warehouse', title: 'Franchisee Store Pickup', desc: 'Self-fulfillment via territory franchisee warehouse' },
               ].map((mode) => {
                 const isSel = deliveryType === mode.id;
                 return (
                   <div
                     key={mode.id}
                     onClick={() => handleDeliveryModeSelect(mode.id)}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition ${
-                      isSel ? 'border-indigo-600 bg-indigo-50/40 shadow-sm' : 'border-slate-200 hover:border-slate-300'
-                    }`}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition ${isSel ? 'border-indigo-600 bg-indigo-50/40 shadow-sm' : 'border-slate-200 hover:border-slate-300'
+                      }`}
                   >
                     <div className="font-bold text-sm text-slate-900">{mode.title}</div>
                     <p className="text-xs text-slate-500 mt-1">{mode.desc}</p>
@@ -904,9 +895,7 @@ export default function BdeCreateEpcQuote() {
             <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-xs text-indigo-800 flex items-center gap-2">
               <Truck className="w-4 h-4 shrink-0 text-indigo-600" />
               <span>
-                {deliveryType === 'franchisee_warehouse'
-                  ? 'Franchisee Store Pickup: Goods will be routed for collection to franchisee depot (₹0 freight).'
-                  : 'EPC Registered Address: Auto-fetched from verified EPC registration & GST records.'}
+                EPC Registered Address: Auto-fetched from verified EPC registration & GST records.
               </span>
             </div>
 
@@ -1182,16 +1171,23 @@ export default function BdeCreateEpcQuote() {
                 {filteredKits.map((kit) => {
                   const isSel = selectedKit?._id === kit._id;
                   const pricePaise = kit.price_paise || kit.mrp_paise || (kit.selling_price_cached ? kit.selling_price_cached * 100 : 0);
+                  const looseQtys = (Array.isArray(kit.loose_order_quantities) && kit.loose_order_quantities.length > 0)
+                    ? kit.loose_order_quantities
+                    : [5, 10, 25, 50];
 
                   return (
                     <div
                       key={kit._id}
-                      onClick={() => setSelectedKit(kit)}
-                      className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between hover:shadow-md ${
-                        isSel
-                          ? 'border-indigo-600 bg-indigo-50/40 shadow-md ring-2 ring-indigo-500/20'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
+                      onClick={() => {
+                        setSelectedKit(kit);
+                        if (!selectedKit || selectedKit._id !== kit._id) {
+                          setQuantity(Number(looseQtys[0]) || 1);
+                        }
+                      }}
+                      className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between hover:shadow-md ${isSel
+                        ? 'border-indigo-600 bg-indigo-50/40 shadow-md ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
                     >
                       <div>
                         {/* Tags: Industry Type & Project Type badges */}
@@ -1236,7 +1232,46 @@ export default function BdeCreateEpcQuote() {
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      {/* Loose Order Quantities (Strictly loose quantities, PO quantities excluded) */}
+                      <div className="mt-3.5 pt-3 border-t border-slate-100">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-sky-700 flex items-center gap-1">
+                            <Package className="w-3 h-3 text-sky-600" /> Loose Qty:
+                          </span>
+                          {isSel && (
+                            <span className="text-[10px] font-bold text-indigo-600">
+                              Selected: {quantity} {quantity === 1 ? 'Kit' : 'Kits'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {looseQtys.map((q) => {
+                            const isQtyActive = isSel && Number(quantity) === Number(q);
+                            return (
+                              <button
+                                key={q}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedKit(kit);
+                                  setQuantity(Number(q));
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${isQtyActive
+                                  ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/30 border border-indigo-700'
+                                  : 'bg-sky-500/10 text-sky-700 border border-sky-500/25 hover:bg-sky-600 hover:text-white'
+                                  }`}
+                                title={`Select ${q} Kits`}
+                              >
+                                {isQtyActive && <Check className="w-3 h-3 stroke-[3]" />}
+                                <span>{q} Kits</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Pricing and Selected Qty Controls */}
+                      <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between">
                         <div>
                           <span className="text-[10px] text-slate-400 block font-medium">Unit Price (excl. GST)</span>
                           <div className="flex items-baseline gap-1.5 flex-wrap">
@@ -1249,60 +1284,11 @@ export default function BdeCreateEpcQuote() {
                           </div>
                         </div>
 
-                        {isSel ? (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center bg-indigo-600 text-white rounded-xl shadow-sm p-0.5 border border-indigo-700/20"
-                          >
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setQuantity((prev) => Math.max(1, Number(prev) - 1));
-                              }}
-                              disabled={quantity <= 1}
-                              className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${
-                                quantity <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700 active:scale-90 cursor-pointer'
-                              }`}
-                              title="Decrease quantity"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-
-                            <div className="flex flex-col items-center justify-center px-2 min-w-[36px]">
-                              <span className="text-xs font-black leading-none text-center">
-                                {quantity}
-                              </span>
-                              <span className="text-[9px] font-bold opacity-90 leading-none mt-0.5">
-                                {quantity === 1 ? 'Kit' : 'Kits'}
-                              </span>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setQuantity((prev) => Number(prev) + 1);
-                              }}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-indigo-700 active:scale-90 transition cursor-pointer"
-                              title="Increase quantity"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedKit(kit);
-                              if (quantity < 1) setQuantity(1);
-                            }}
-                            className="text-xs font-bold px-3.5 py-1.5 rounded-xl border border-indigo-500/30 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white transition flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Select Kit</span>
-                          </button>
+                        {isSel && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold text-xs">
+                            <Check className="w-3.5 h-3.5 text-indigo-600 stroke-[2.5]" />
+                            <span>{quantity} Kits Selected</span>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1350,9 +1336,8 @@ export default function BdeCreateEpcQuote() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div
                   onClick={() => setSelectedWarranty(null)}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition ${
-                    selectedWarranty === null ? 'border-indigo-600 bg-indigo-50/40' : 'border-slate-200 bg-white'
-                  }`}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition ${selectedWarranty === null ? 'border-indigo-600 bg-indigo-50/40' : 'border-slate-200 bg-white'
+                    }`}
                 >
                   <div className="font-bold text-xs text-slate-900">Standard OEM Warranty</div>
                   <p className="text-[11px] text-slate-400 mt-1">25 yrs panel output, 5 yrs inverter. Free.</p>
@@ -1370,9 +1355,8 @@ export default function BdeCreateEpcQuote() {
                     <div
                       key={war._id}
                       onClick={() => setSelectedWarranty(war)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition ${
-                        isSel ? 'border-indigo-600 bg-indigo-50/40' : 'border-slate-200 bg-white'
-                      }`}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition ${isSel ? 'border-indigo-600 bg-indigo-50/40' : 'border-slate-200 bg-white'
+                        }`}
                     >
                       <div className="font-bold text-xs text-slate-900">{war.name}</div>
                       <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{war.terms || war.covered_products}</p>

@@ -76,26 +76,44 @@ const { sendWhatsAppOTP: sendWhatsApp } = require('../utils/whatsapp');
 function _actorFromReq(req) {
   if (req.reseller) {
     return {
-      id:   req.reseller._id,
+      id: req.reseller._id,
       role: 'reseller',
       name: req.reseller.business_name || req.reseller.email,
     };
   }
   if (req.bde) {
     return {
-      id:   req.bde._id,
+      id: req.bde._id,
       role: 'bde',
       name: req.bde.full_name || req.bde.email,
     };
   }
   if (req.user) {
+    if (req.user.account_id) {
+      return {
+        id: req.user.account_id,
+        role: 'epc',
+        name: req.user.name || 'EPC Buyer',
+      };
+    }
     return {
-      id:   req.user.id || req.user._id,
+      id: req.user.id || req.user._id,
       role: 'admin',
       name: req.user.email || 'Admin',
     };
   }
   return { id: null, role: 'system', name: 'system' };
+}
+
+/** Check if actor matches EPC account or team user's parent EPC account */
+async function _isEpcAccountMatch(actorId, quoteEpcId) {
+  if (!actorId || !quoteEpcId) return false;
+  if (actorId.toString() === quoteEpcId.toString()) return true;
+  try {
+    const acc = await EpcAccount.findOne({ _id: actorId, deleted_at: null }).select('parent_account_id').lean();
+    if (acc?.parent_account_id && acc.parent_account_id.toString() === quoteEpcId.toString()) return true;
+  } catch (e) { }
+  return false;
 }
 
 /** Format paise → INR string e.g. 12345678 → Rs. 1,23,456.78 */
@@ -126,12 +144,12 @@ function _followUpDateRange(filter) {
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
 
   switch (filter) {
-    case 'today':    return { $gte: today, $lt: tomorrow };
+    case 'today': return { $gte: today, $lt: tomorrow };
     case 'tomorrow': return { $gte: tomorrow, $lt: dayAfterTomorrow };
     case 'this_week': return { $gte: today, $lt: weekEnd };
-    case 'overdue':  return { $lt: today };
-    case 'future':   return { $gte: weekEnd };
-    default:         return undefined;
+    case 'overdue': return { $lt: today };
+    case 'future': return { $gte: weekEnd };
+    default: return undefined;
   }
 }
 
@@ -302,14 +320,14 @@ exports.get_eligible_epcs = async (req, res) => {
 
     const searchFilter = search
       ? {
-          $or: [
-            { name: { $regex: search, $options: 'i' } },
-            { email: { $regex: search, $options: 'i' } },
-            { whatsapp: { $regex: search, $options: 'i' } },
-            { gstin: { $regex: search, $options: 'i' } },
-            { district_name: { $regex: search, $options: 'i' } },
-          ],
-        }
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { whatsapp: { $regex: search, $options: 'i' } },
+          { gstin: { $regex: search, $options: 'i' } },
+          { district_name: { $regex: search, $options: 'i' } },
+        ],
+      }
       : {};
 
     const [epcs, total] = await Promise.all([
@@ -332,7 +350,7 @@ exports.get_eligible_epcs = async (req, res) => {
             district_name: loc.district_name,
             pincode: loc.pincode,
           }
-        }).exec().catch(() => {});
+        }).exec().catch(() => { });
       }
       return {
         ...e,
@@ -714,6 +732,20 @@ exports.get_eligible_kits = async (req, res) => {
     const brands = await Brand.find({ _id: { $in: brandIds } }).lean();
     const brandMap = new Map(brands.map(b => [b._id.toString(), b]));
 
+    const rawKitIds = rawKits.map(k => k._id);
+    const companyMargins = await CompanyMargin.find({
+      combo_kit_id: { $in: rawKitIds },
+      deleted_at: null,
+      is_active: true,
+    }).lean();
+    const marginMap = new Map();
+    companyMargins.forEach(m => {
+      const kId = String(m.combo_kit_id);
+      if (!marginMap.has(kId) || (warehouse_id && String(m.warehouse_id) === String(warehouse_id))) {
+        marginMap.set(kId, m);
+      }
+    });
+
     let normalizedKits = rawKits.map(k => {
       const def = defMap.get(k.solar_kit_id?.toString());
       const cat = def ? catMap.get(def.category_id?.toString()) : null;
@@ -773,10 +805,15 @@ exports.get_eligible_kits = async (req, res) => {
         description: k.description,
         base_components: k.base_components || [],
         bos_kits: k.bos_kits || [],
+        loose_order_quantities: Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
+          ? k.loose_order_quantities.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)
+          : [5, 10, 25, 50],
         price_paise: pricePaise,
         base_price_cached: k.base_price_cached,
         selling_price_cached: k.selling_price_cached,
-        gst_rate: k.gst_rate != null ? Number(k.gst_rate) : (k.tax_pct != null ? Number(k.tax_pct) : 13.8),
+        gst_rate: (marginMap.get(String(k._id))?.gst_rate != null)
+          ? Number(marginMap.get(String(k._id)).gst_rate)
+          : (k.gst_rate != null ? Number(k.gst_rate) : (k.tax_pct != null ? Number(k.tax_pct) : 5)),
         is_authorized: true,
         source: 'plan_default',
       };
@@ -917,12 +954,22 @@ async function _calculatePrice({ kit_id, warehouse_id, quantity, warranty_id, de
     basePrice = 16500000;
   }
 
-  const marginDoc = await CompanyMargin.findOne({
-    combo_kit_id: kit_id,
-    warehouse_id,
-    deleted_at: null,
-    is_active: true,
-  }).lean();
+  let marginDoc = null;
+  if (warehouse_id) {
+    marginDoc = await CompanyMargin.findOne({
+      combo_kit_id: kit_id,
+      warehouse_id,
+      deleted_at: null,
+      is_active: true,
+    }).lean();
+  }
+  if (!marginDoc) {
+    marginDoc = await CompanyMargin.findOne({
+      combo_kit_id: kit_id,
+      deleted_at: null,
+      is_active: true,
+    }).lean();
+  }
 
   if (marginDoc && marginDoc.standard_margin) {
     price_per_kit_paise = Math.round(basePrice * (1 + marginDoc.standard_margin / 100));
@@ -991,7 +1038,7 @@ async function _calculatePrice({ kit_id, warehouse_id, quantity, warranty_id, de
     }
   }
   if (gst_rate == null) {
-    gst_rate = 13.8;
+    gst_rate = 5;
   }
   gst_rate = Number(gst_rate);
 
@@ -1123,7 +1170,7 @@ exports.create_draft = async (req, res) => {
     // Determine quote_source
     let quote_source = 'franchisee_generated';
     if (actor.role === 'bde' && !franchisee_id) quote_source = 'bde_direct';
-    if (actor.role === 'bde' && franchisee_id)  quote_source = 'bde_for_franchisee';
+    if (actor.role === 'bde' && franchisee_id) quote_source = 'bde_for_franchisee';
 
     let industry_type_id = body.industry_type_id || null;
     let industry_type_snapshot = body.industry_type_snapshot || null;
@@ -1258,7 +1305,7 @@ exports.update_draft = async (req, res) => {
 
     // Ownership check
     const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     if (req.body.combo_kit_id && req.body.combo_kit_id !== quote.combo_kit_id?.toString()) {
@@ -1278,9 +1325,9 @@ exports.update_draft = async (req, res) => {
     }
 
     const allowed = ['delivery_type', 'delivery_address_snapshot', 'warehouse_id', 'warehouse_snapshot',
-                     'industry_type_id', 'industry_type_snapshot', 'project_type_id', 'project_type_snapshot',
-                     'combo_kit_id', 'combo_kit_snapshot', 'kit_capacity_kw', 'quantity', 'warranty_id',
-                     'warranty_snapshot', 'territory'];
+      'industry_type_id', 'industry_type_snapshot', 'project_type_id', 'project_type_snapshot',
+      'combo_kit_id', 'combo_kit_snapshot', 'kit_capacity_kw', 'quantity', 'warranty_id',
+      'warranty_snapshot', 'territory'];
     allowed.forEach(f => { if (req.body[f] !== undefined) quote[f] = req.body[f]; });
     if (req.body.kit_capacity_kw || req.body.quantity) {
       quote.total_kw = (quote.kit_capacity_kw || 0) * (quote.quantity || 1);
@@ -1309,7 +1356,7 @@ exports.generate_quote = async (req, res) => {
 
     // Ownership check
     const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     // Validate required fields
@@ -1388,9 +1435,11 @@ exports.get_quote = async (req, res) => {
     const quote = await EpcQuote.findOne({ _id: id, deleted_at: null }).lean();
     if (!quote) return res.status(404).json({ status: 'error', message: 'Quote not found' });
 
-    // Ownership check — Franchisee sees own, BDE sees own + territory
-    const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && (quote.bde_id?.toString() === actor.id.toString() || (quote.franchisee_id && (await _getBdeFranchisees(actor.id)).some(fid => fid.toString() === quote.franchisee_id?.toString()))));
+    // Ownership check — Admin sees all, Franchisee sees own, BDE sees own + territory, EPC sees own
+    const isOwner = (actor.role === 'admin') ||
+      (actor.role === 'epc' && (quote.epc_id?.toString() === actor.id.toString() || (await _isEpcAccountMatch(actor.id, quote.epc_id)))) ||
+      (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
+      (actor.role === 'bde' && (quote.bde_id?.toString() === actor.id.toString() || (quote.franchisee_id && (await _getBdeFranchisees(actor.id)).some(fid => fid.toString() === quote.franchisee_id?.toString()))));
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     // Update viewed status if generated+
@@ -1422,11 +1471,18 @@ exports.list_quotes = async (req, res) => {
     const filter = { deleted_at: null };
 
     // Scope by actor
-    if (actor.role === 'reseller') filter.franchisee_id = actor.id;
-    else if (actor.role === 'bde') filter.$or = [
-      { bde_id: actor.id },
-      { franchisee_id: { $in: await _getBdeFranchisees(actor.id) } },
-    ];
+    if (actor.role === 'reseller') {
+      filter.franchisee_id = actor.id;
+    } else if (actor.role === 'bde') {
+      filter.$or = [
+        { bde_id: actor.id },
+        { franchisee_id: { $in: await _getBdeFranchisees(actor.id) } },
+      ];
+    } else if (actor.role === 'epc') {
+      const callerAccount = await EpcAccount.findOne({ _id: actor.id, deleted_at: null }).select('parent_account_id').lean();
+      const rootEpcId = callerAccount?.parent_account_id || actor.id;
+      filter.epc_id = new mongoose.Types.ObjectId(rootEpcId);
+    }
 
     if (status) filter.status = { $in: status.split(',') };
     if (epc_id) filter.epc_id = new mongoose.Types.ObjectId(epc_id);
@@ -1439,7 +1495,7 @@ exports.list_quotes = async (req, res) => {
     if (date_from || date_to) {
       filter.created_at = {};
       if (date_from) filter.created_at.$gte = new Date(date_from);
-      if (date_to)   filter.created_at.$lte = new Date(date_to);
+      if (date_to) filter.created_at.$lte = new Date(date_to);
     }
     if (search) {
       filter.$or = [
@@ -1486,6 +1542,10 @@ exports.get_dashboard = async (req, res) => {
         { bde_id: new mongoose.Types.ObjectId(actor.id) },
         { franchisee_id: { $in: bdeFranchisees } },
       ];
+    } else if (actor.role === 'epc') {
+      const callerAccount = await EpcAccount.findOne({ _id: actor.id, deleted_at: null }).select('parent_account_id').lean();
+      const rootEpcId = callerAccount?.parent_account_id || actor.id;
+      filter.epc_id = new mongoose.Types.ObjectId(rootEpcId);
     }
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1494,7 +1554,9 @@ exports.get_dashboard = async (req, res) => {
     const followupFilter = {
       ...(actor.role === 'reseller'
         ? { franchisee_id: new mongoose.Types.ObjectId(actor.id) }
-        : {
+        : actor.role === 'epc'
+          ? { epc_id: filter.epc_id }
+          : {
             $or: [
               { bde_id: new mongoose.Types.ObjectId(actor.id) },
               { franchisee_id: { $in: (await _getBdeFranchisees(actor.id)).map(id => new mongoose.Types.ObjectId(id)) } },
@@ -1645,7 +1707,7 @@ exports.revise_quote = async (req, res) => {
     }
 
     const isOwner = (actor.role === 'reseller' && original.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && original.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'bde' && original.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     const revision_number = (original.revision_number || 0) + 1;
@@ -1679,7 +1741,7 @@ exports.revise_quote = async (req, res) => {
 
     // Apply any changes from body
     const editable = ['quantity', 'warranty_id', 'warranty_snapshot', 'delivery_type',
-                      'delivery_address_snapshot', 'warehouse_id', 'combo_kit_snapshot'];
+      'delivery_address_snapshot', 'warehouse_id', 'combo_kit_snapshot'];
     editable.forEach(f => { if (req.body[f] !== undefined) newQuote[f] = req.body[f]; });
 
     await newQuote.save();
@@ -1722,11 +1784,11 @@ exports.get_pdf = async (req, res) => {
 
     const quote = await EpcQuote.findOne({ _id: id, deleted_at: null }).lean();
     if (!quote) return res.status(404).json({ status: 'error', message: 'Quote not found' });
-    if (quote.status === 'draft') return res.status(400).json({ status: 'error', message: 'Generate the quote first before downloading PDF' });
 
     const isOwner = (actor.role === 'admin') ||
-                    (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'epc' && (quote.epc_id?.toString() === actor.id.toString() || (await _isEpcAccountMatch(actor.id, quote.epc_id)))) ||
+      (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
+      (actor.role === 'bde' && (quote.bde_id?.toString() === actor.id.toString() || (quote.franchisee_id && (await _getBdeFranchisees(actor.id)).some(fid => fid.toString() === quote.franchisee_id?.toString()))));
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     // Robust Price Fallbacks (ensures prices NEVER display as 0 or '0.00)
@@ -1751,7 +1813,7 @@ exports.get_pdf = async (req, res) => {
       ? quote.taxable_amount_paise
       : (productSubtotalPaise + warrantyChargesPaise + deliveryChargesPaise - discountPaise);
 
-    const gstRate = quote.gst_rate || 13.8;
+    const gstRate = quote.gst_rate != null ? quote.gst_rate : 5;
     const gstAmountPaise = (quote.gst_amount_paise && quote.gst_amount_paise > 0)
       ? quote.gst_amount_paise
       : Math.round(taxableAmountPaise * (gstRate / 100));
@@ -1760,18 +1822,21 @@ exports.get_pdf = async (req, res) => {
       ? quote.total_amount_paise
       : (taxableAmountPaise + gstAmountPaise);
 
+    const isDraft = quote.status === 'draft' || !quote.quote_number;
+    const displayQuoteNumber = quote.quote_number || (`DRAFT-${quote._id.toString().slice(-6).toUpperCase()}`);
+
     const doc = new PDFDocument({
       size: 'A4',
       margin: 36,
       autoFirstPage: false,
       info: {
-        Title: `Quotation ${quote.quote_number}`,
+        Title: `Quotation ${displayQuoteNumber}`,
         Author: 'SolarKits Ecosystem',
       },
     });
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Quote-${quote.quote_number}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Quote-${displayQuoteNumber}.pdf"`);
     doc.pipe(res);
 
     // Image paths
@@ -1781,22 +1846,54 @@ exports.get_pdf = async (req, res) => {
     const panelImgPath = path.join(imagesDir, 'product_panel_mono.jpg');
     const inverterImgPath = path.join(imagesDir, 'product_inverter.jpg');
 
-    const ORANGE = '#ea580c';
-    const ORANGE_LIGHT = '#ffedd5';
-    const DARK = '#0f172a';
+    // Dynamic Theme Settings from Admin Panel Quote Settings
+    const quoteSettings = await QuoteSettings.findOne().lean();
+    const defaultTheme = {
+      primary_color: '#ea580c',
+      secondary_color: '#0f172a',
+      accent_color: '#0284c7',
+      light_bg_color: '#f8fafc',
+      border_color: '#e2e8f0',
+      company_name: 'SolarKits India',
+      company_tagline: "India's Premier Solar ComboKit Distribution Platform",
+      commercial_notes_title: 'COMMERCIAL & STATUTORY NOTES',
+      commercial_notes: [
+        'Prices quoted are in Indian Rupees (INR) and valid up to the expiration date.',
+        'Dispatched directly through authorized distribution hubs with transit insurance.',
+        'Refer to Page 2 for Detailed Technical Bill of Materials (BOM) & Equipment Specifications.',
+        'Standard statutory warranty coverage applies as detailed in technical specifications.',
+      ],
+      bom_page_title: 'TECHNICAL SPECIFICATIONS & BILL OF MATERIALS (BOM)',
+      footer_text: 'SolarKits India • Confidential Commercial Proposal • All Rights Reserved',
+    };
+    const pdfTheme = { ...defaultTheme, ...(quoteSettings?.pdf_theme || {}) };
+
+    const PRIMARY = pdfTheme.primary_color || '#ea580c';
+    const SECONDARY = pdfTheme.secondary_color || '#0f172a';
+    const ACCENT = pdfTheme.accent_color || '#0284c7';
+    const LIGHT_BG = pdfTheme.light_bg_color || '#f8fafc';
+    const BORDER_COLOR = pdfTheme.border_color || '#e2e8f0';
     const SLATE = '#334155';
     const GREY = '#64748b';
-    const LIGHT_BG = '#f8fafc';
-    const BORDER_COLOR = '#e2e8f0';
     const pageW = 595 - 72; // 523 usable width with 36 margins
+
+    // Fetch Full ComboKit Definition from Database for Dynamic BOM & BOS
+    let fullKit = null;
+    if (quote.combo_kit_id) {
+      try {
+        fullKit = await WarehouseComboKit.findById(quote.combo_kit_id).lean();
+      } catch (e) { }
+    }
+    const kit = fullKit || quote.combo_kit_snapshot || {};
+    const cap = Number(kit.capacity || kit.capacity_kw || quote.kit_capacity_kw || 3);
 
     // ==========================================
     // PAGE 1: EXECUTIVE COMMERCIAL QUOTATION
     // ==========================================
     doc.addPage({ size: 'A4', margin: 36 });
 
-    // Top Accent Bar (Vibrant SolarKits Orange)
-    doc.rect(0, 0, 595, 4).fill(ORANGE);
+    // Top Accent Bar (Theme Primary Color)
+    doc.rect(0, 0, 595, 4).fill(PRIMARY);
 
     // Bright Header Container (#ffffff with soft bottom border)
     doc.rect(0, 4, 595, 78).fill('#ffffff');
@@ -1809,31 +1906,31 @@ exports.get_pdf = async (req, res) => {
       try {
         doc.image(logoPath, 36, 18, { width: logoW, height: logoH });
       } catch (e) {
-        doc.fontSize(24).fillColor(ORANGE).font('Helvetica-Bold').text('SolarKits', 36, 22);
+        doc.fontSize(24).fillColor(PRIMARY).font('Helvetica-Bold').text('SolarKits', 36, 22);
       }
     } else {
-      doc.fontSize(24).fillColor(ORANGE).font('Helvetica-Bold').text('SolarKits', 36, 22);
+      doc.fontSize(24).fillColor(PRIMARY).font('Helvetica-Bold').text('SolarKits', 36, 22);
     }
 
-    // Vertical Separator after logo with safe margin (NO OVERLAP)
-    const sepX = 36 + logoW + 16; // ~206px
+    // Vertical Separator after logo with safe margin
+    const sepX = 36 + logoW + 16;
     doc.moveTo(sepX, 18).lineTo(sepX, 66).stroke('#e2e8f0');
 
-    // Company Subtitle & Credentials (CLEAR, NO OVERLAP)
+    // Dynamic Company Branding & Subtitle
     const textLeftX = sepX + 14;
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text('Solar Ecosystem & EPC Distribution Platform', textLeftX, 22);
-    doc.fontSize(7).fillColor(GREY).font('Helvetica').text('Corporate Identity: U40106GJ2024PTC123456', textLeftX, 35);
-    doc.fontSize(7).fillColor(GREY).font('Helvetica').text('GSTIN: 24AAACS1234F1Z5 | www.solarkits.in', textLeftX, 47);
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(pdfTheme.company_name || 'SolarKits India', textLeftX, 20);
+    doc.fontSize(7).fillColor(GREY).font('Helvetica').text(pdfTheme.company_tagline || 'Solar Ecosystem & EPC Distribution Platform', textLeftX, 33, { width: 190 });
+    doc.fontSize(6.5).fillColor(GREY).font('Helvetica').text('Corporate Identity: U40106GJ2024PTC123456 | GSTIN: 24AAACS1234F1Z5', textLeftX, 47, { width: 190 });
 
     // Right Header Area: Title & Reference
     const rightBoxW = 180;
     const rightBoxX = 36 + pageW - rightBoxW;
-    doc.fontSize(12).fillColor(DARK).font('Helvetica-Bold').text('COMMERCIAL QUOTATION', rightBoxX, 18, { width: rightBoxW, align: 'right' });
-    
+    doc.fontSize(12).fillColor(SECONDARY).font('Helvetica-Bold').text(isDraft ? 'DRAFT ESTIMATE' : 'COMMERCIAL QUOTATION', rightBoxX, 18, { width: rightBoxW, align: 'right' });
+
     // Ref Badge
-    doc.roundedRect(rightBoxX + rightBoxW - 130, 34, 130, 18, 3).fill(ORANGE_LIGHT);
-    doc.rect(rightBoxX + rightBoxW - 130, 34, 130, 18).stroke('#fdba74');
-    doc.fontSize(8.5).fillColor(ORANGE).font('Helvetica-Bold').text(quote.quote_number || 'SK-QT-2026-000001', rightBoxX + rightBoxW - 130, 38, { width: 130, align: 'center' });
+    doc.roundedRect(rightBoxX + rightBoxW - 130, 34, 130, 18, 3).fill(LIGHT_BG);
+    doc.rect(rightBoxX + rightBoxW - 130, 34, 130, 18).stroke(BORDER_COLOR);
+    doc.fontSize(8.5).fillColor(PRIMARY).font('Helvetica-Bold').text(displayQuoteNumber, rightBoxX + rightBoxW - 130, 38, { width: 130, align: 'center' });
 
     doc.fontSize(7).fillColor(GREY).font('Helvetica').text(`Issued: ${_fmtDate(quote.created_at || new Date())}`, rightBoxX, 56, { width: rightBoxW, align: 'right' });
 
@@ -1843,21 +1940,21 @@ exports.get_pdf = async (req, res) => {
     doc.roundedRect(36, y, pageW, 26, 4).fill(LIGHT_BG);
     doc.rect(36, y, pageW, 26).stroke(BORDER_COLOR);
 
-    const statusColor = quote.status === 'converted' ? '#16a34a' : (quote.status === 'lost' ? '#dc2626' : ORANGE);
+    const statusColor = quote.status === 'converted' ? '#16a34a' : (quote.status === 'lost' ? '#dc2626' : (quote.status === 'draft' ? '#64748b' : PRIMARY));
     doc.roundedRect(42, y + 4, 75, 18, 3).fill(statusColor);
-    doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold').text((quote.status || 'GENERATED').toUpperCase(), 42, y + 8, { width: 75, align: 'center' });
+    doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold').text((quote.status === 'draft' ? 'DRAFT' : (quote.status || 'GENERATED')).toUpperCase(), 42, y + 8, { width: 75, align: 'center' });
 
     doc.fontSize(8).fillColor(GREY).font('Helvetica').text('Quotation Date:', 130, y + 8);
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text(_fmtDate(quote.valid_from || quote.created_at), 195, y + 8);
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica-Bold').text(_fmtDate(quote.valid_from || quote.created_at), 195, y + 8);
 
     doc.fontSize(8).fillColor(GREY).font('Helvetica').text('Valid Until:', 260, y + 8);
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text(_fmtDate(quote.valid_until), 310, y + 8);
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica-Bold').text(_fmtDate(quote.valid_until), 310, y + 8);
 
     doc.fontSize(8).fillColor(GREY).font('Helvetica').text('Currency:', 385, y + 8);
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text('INR (Rs.)', 430, y + 8);
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica-Bold').text('INR (Rs.)', 430, y + 8);
 
     doc.fontSize(8).fillColor(GREY).font('Helvetica').text('Revision:', 485, y + 8);
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text(`Rev-${quote.revision_number || 0}`, 525, y + 8);
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica-Bold').text(`Rev-${quote.revision_number || 0}`, 525, y + 8);
 
     y += 34;
 
@@ -1870,9 +1967,9 @@ exports.get_pdf = async (req, res) => {
     doc.roundedRect(36, y, colW, 90, 4).fill(LIGHT_BG);
     doc.rect(36, y, colW, 90).stroke(BORDER_COLOR);
     doc.rect(36, y, colW, 20).fill('#f1f5f9');
-    doc.fontSize(7.5).fillColor(ORANGE).font('Helvetica-Bold').text('QUOTATION FOR (EPC BUYER / CLIENT)', 44, y + 6);
-    
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text(epc.company_name || epc.contact_person || 'EPC Client', 44, y + 25, { width: colW - 16, height: 12 });
+    doc.fontSize(7.5).fillColor(PRIMARY).font('Helvetica-Bold').text('QUOTATION FOR (EPC BUYER / CLIENT)', 44, y + 6);
+
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(epc.company_name || epc.contact_person || 'EPC Client', 44, y + 25, { width: colW - 16, height: 12 });
     const epcAddr = epc.address || `${epc.district_name || ''}, ${epc.state_name || ''} - ${epc.pincode || ''}`;
     doc.fontSize(7).fillColor(SLATE).font('Helvetica').text(epcAddr, 44, y + 39, { width: colW - 16, height: 24 });
     doc.fontSize(7).fillColor(GREY).text(`GSTIN: ${epc.gstin || 'Unregistered / N/A'}`, 44, y + 65);
@@ -1884,27 +1981,27 @@ exports.get_pdf = async (req, res) => {
     doc.roundedRect(frX, y, colW, 90, 4).fill(LIGHT_BG);
     doc.rect(frX, y, colW, 90).stroke(BORDER_COLOR);
     doc.rect(frX, y, colW, 20).fill('#f1f5f9');
-    
+
     const issuerHeader = isBdeDirect ? 'PREPARED & ISSUED BY (BDE DIRECT)' : 'PREPARED & ISSUED BY (FRANCHISEE)';
-    doc.fontSize(7.5).fillColor(ORANGE).font('Helvetica-Bold').text(issuerHeader, frX + 8, y + 6);
+    doc.fontSize(7.5).fillColor(PRIMARY).font('Helvetica-Bold').text(issuerHeader, frX + 8, y + 6);
 
     const issuerName = isBdeDirect
       ? (quote.bde_snapshot?.full_name || 'SolarKits Central BDE')
       : (fr.business_name || 'Authorized SolarKits Franchisee');
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text(issuerName, frX + 8, y + 25, { width: colW - 16, height: 12 });
-    
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(issuerName, frX + 8, y + 25, { width: colW - 16, height: 12 });
+
     const issuerAddrStr = isBdeDirect
       ? 'SolarKits Central Fulfillment Network, India'
       : (typeof fr.address === 'object' && fr.address
-          ? [fr.address.line, fr.address.city, fr.address.pincode].filter(Boolean).join(', ')
-          : (fr.address || 'Franchisee Distribution Center'));
+        ? [fr.address.line, fr.address.city, fr.address.pincode].filter(Boolean).join(', ')
+        : (fr.address || 'Franchisee Distribution Center'));
     doc.fontSize(7).fillColor(SLATE).font('Helvetica').text(issuerAddrStr, frX + 8, y + 39, { width: colW - 16, height: 24 });
-    
+
     const issuerId = isBdeDirect
       ? `BDE ID: ${quote.bde_snapshot?.bde_id_code || 'BDE-DIRECT'}`
       : `GSTIN: ${fr.gst_number || 'Franchise Partner Hub'}`;
     doc.fontSize(7).fillColor(GREY).text(issuerId, frX + 8, y + 65);
-    
+
     const issuerContact = isBdeDirect
       ? `Contact: ${quote.bde_snapshot?.mobile || ''} | ${quote.bde_snapshot?.email || 'support@solarkits.in'}`
       : `Contact: ${fr.mobile || ''} | ${fr.email || ''}`;
@@ -1915,16 +2012,15 @@ exports.get_pdf = async (req, res) => {
     // Delivery / Site Location Strip
     const deliv = quote.delivery_address_snapshot || {};
     const delivType = quote.delivery_type === 'franchisee_warehouse' ? 'Franchisee Store Depot Pickup' : 'Direct EPC Site Delivery';
-    doc.roundedRect(36, y, pageW, 24, 3).fill('#fff7ed');
-    doc.rect(36, y, pageW, 24).stroke('#fed7aa');
-    doc.fontSize(7.5).fillColor(ORANGE).font('Helvetica-Bold').text('DELIVERY & FULFILLMENT:', 44, y + 7);
+    doc.roundedRect(36, y, pageW, 24, 3).fill(LIGHT_BG);
+    doc.rect(36, y, pageW, 24).stroke(BORDER_COLOR);
+    doc.fontSize(7.5).fillColor(PRIMARY).font('Helvetica-Bold').text('DELIVERY & FULFILLMENT:', 44, y + 7);
     const delivDetail = `${delivType} | Address: ${deliv.shipping_address_line1 || epcAddr} | Contact: ${deliv.contact_person || epc.contact_person || ''} (${deliv.mobile || epc.mobile || ''})`;
-    doc.fontSize(7).fillColor(DARK).font('Helvetica').text(delivDetail, 155, y + 7, { width: pageW - 125, height: 14 });
+    doc.fontSize(7).fillColor(SECONDARY).font('Helvetica').text(delivDetail, 155, y + 7, { width: pageW - 125, height: 14 });
 
     y += 32;
 
     // Hero ComboKit Overview with Image
-    const kit = quote.combo_kit_snapshot || {};
     const heroCardH = 88;
     doc.roundedRect(36, y, pageW, heroCardH, 4).fill(LIGHT_BG);
     doc.rect(36, y, pageW, heroCardH).stroke(BORDER_COLOR);
@@ -1940,19 +2036,19 @@ exports.get_pdf = async (req, res) => {
 
     // Kit Details
     const kitTextX = 148;
-    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text(kit.name || 'Solar ComboKit Package', kitTextX, y + 8, { width: pageW - 120 });
-    
-    doc.roundedRect(kitTextX, y + 26, 62, 14, 2).fill(ORANGE_LIGHT);
-    doc.fontSize(7).fillColor(ORANGE).font('Helvetica-Bold').text(`${kit.capacity_kw || quote.kit_capacity_kw || 3} kW System`, kitTextX, y + 29, { width: 62, align: 'center' });
+    doc.fontSize(10).fillColor(SECONDARY).font('Helvetica-Bold').text(kit.name || 'Solar ComboKit Package', kitTextX, y + 8, { width: pageW - 120 });
+
+    doc.roundedRect(kitTextX, y + 26, 62, 14, 2).fill('#f1f5f9');
+    doc.fontSize(7).fillColor(PRIMARY).font('Helvetica-Bold').text(`${cap} kW System`, kitTextX, y + 29, { width: 62, align: 'center' });
 
     doc.roundedRect(kitTextX + 68, y + 26, 85, 14, 2).fill('#e0f2fe');
-    doc.fontSize(7).fillColor('#0284c7').font('Helvetica-Bold').text(kit.industry_type_name || 'Solar PV', kitTextX + 68, y + 29, { width: 85, align: 'center' });
+    doc.fontSize(7).fillColor(ACCENT).font('Helvetica-Bold').text(kit.industry_type_name || 'Solar PV', kitTextX + 68, y + 29, { width: 85, align: 'center' });
 
     doc.roundedRect(kitTextX + 158, y + 26, 120, 14, 2).fill('#f1f5f9');
-    doc.fontSize(7).fillColor(DARK).font('Helvetica-Bold').text(kit.project_type_name || 'On-Grid Residential', kitTextX + 158, y + 29, { width: 120, align: 'center' });
+    doc.fontSize(7).fillColor(SECONDARY).font('Helvetica-Bold').text(kit.project_type_name || 'On-Grid Residential', kitTextX + 158, y + 29, { width: 120, align: 'center' });
 
     doc.fontSize(7.5).fillColor(GREY).font('Helvetica').text('Brand / Ecosystem:', kitTextX, y + 46);
-    doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold').text(kit.brand_name || 'Tata Power Solar System', kitTextX + 80, y + 46);
+    doc.fontSize(7.5).fillColor(SECONDARY).font('Helvetica-Bold').text(kit.brand_name || 'SolarKits Ecosystem Partner', kitTextX + 80, y + 46);
 
     doc.fontSize(7).fillColor(SLATE).font('Helvetica')
       .text('Includes: Tier-1 Solar PV Modules + High Efficiency Inverter + Certified Complete BOS Kit + Heavy MMS Structure + DC/AC Cabling', kitTextX, y + 60, { width: pageW - 120 });
@@ -1960,12 +2056,12 @@ exports.get_pdf = async (req, res) => {
     y += heroCardH + 12;
 
     // Commercial Pricing Table
-    doc.fontSize(9).fillColor(ORANGE).font('Helvetica-Bold').text('COMMERCIAL PRICING & FINANCIAL SCHEDULE', 36, y);
+    doc.fontSize(9).fillColor(PRIMARY).font('Helvetica-Bold').text('COMMERCIAL PRICING & FINANCIAL SCHEDULE', 36, y);
     y += 14;
 
-    // Table Header
+    // Table Header (Theme Secondary Color)
     const thY = y;
-    doc.rect(36, thY, pageW, 20).fill(DARK);
+    doc.rect(36, thY, pageW, 20).fill(SECONDARY);
     doc.fontSize(7.5).fillColor('#ffffff').font('Helvetica-Bold')
       .text('#', 42, thY + 6)
       .text('ITEM & DESCRIPTION', 60, thY + 6)
@@ -1980,10 +2076,10 @@ exports.get_pdf = async (req, res) => {
     doc.rect(36, y, pageW, row1H).fill(LIGHT_BG);
     doc.rect(36, y, pageW, row1H).stroke(BORDER_COLOR);
 
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text('1', 42, y + 6);
-    doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold').text(kit.name || 'Solar ComboKit Complete System', 60, y + 6, { width: 200, height: 12 });
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica-Bold').text('1', 42, y + 6);
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica-Bold').text(kit.name || 'Solar ComboKit Complete System', 60, y + 6, { width: 200, height: 12 });
     doc.fontSize(7).fillColor(GREY).font('Helvetica').text('Complete On-Grid Solar System Package with Equipment & BOS', 60, y + 18, { width: 200 });
-    doc.fontSize(8).fillColor(DARK).font('Helvetica').text(`${kit.capacity_kw || quote.kit_capacity_kw || 3} kW`, 270, y + 10);
+    doc.fontSize(8).fillColor(SECONDARY).font('Helvetica').text(`${cap} kW`, 270, y + 10);
     doc.text(String(quantity), 345, y + 10);
     doc.text(_paiseToINR(pricePerKitPaise), 380, y + 10);
     doc.font('Helvetica-Bold').text(_paiseToINR(productSubtotalPaise), 450, y + 10, { width: 100, align: 'right' });
@@ -1993,7 +2089,7 @@ exports.get_pdf = async (req, res) => {
     if (warrantyChargesPaise > 0) {
       doc.rect(36, y, pageW, 20).fill('#fefce8');
       doc.rect(36, y, pageW, 20).stroke(BORDER_COLOR);
-      doc.fontSize(7.5).fillColor(DARK).font('Helvetica').text('2', 42, y + 6);
+      doc.fontSize(7.5).fillColor(SECONDARY).font('Helvetica').text('2', 42, y + 6);
       doc.text(`Extended Warranty Protection: ${quote.warranty_snapshot?.name || 'Comprehensive Coverage'}`, 60, y + 6, { width: 250 });
       doc.text(String(quantity), 345, y + 6);
       doc.font('Helvetica-Bold').text(_paiseToINR(warrantyChargesPaise), 450, y + 6, { width: 100, align: 'right' });
@@ -2003,7 +2099,7 @@ exports.get_pdf = async (req, res) => {
     if (deliveryChargesPaise > 0) {
       doc.rect(36, y, pageW, 20).fill(LIGHT_BG);
       doc.rect(36, y, pageW, 20).stroke(BORDER_COLOR);
-      doc.fontSize(7.5).fillColor(DARK).font('Helvetica').text('3', 42, y + 6);
+      doc.fontSize(7.5).fillColor(SECONDARY).font('Helvetica').text('3', 42, y + 6);
       doc.text(`Logistics & Freight Handling (${quote.delivery_type?.replace('_', ' ')})`, 60, y + 6, { width: 250 });
       doc.text('1', 345, y + 6);
       doc.font('Helvetica-Bold').text(_paiseToINR(deliveryChargesPaise), 450, y + 6, { width: 100, align: 'right' });
@@ -2016,21 +2112,36 @@ exports.get_pdf = async (req, res) => {
     const boxW = 230;
     const boxX = 36 + pageW - boxW;
 
-    // Left Note
+    // Left Note (Customized Title & Dynamic Notes Bullets)
     doc.roundedRect(36, y, pageW - boxW - 12, 100, 3).fill(LIGHT_BG);
     doc.rect(36, y, pageW - boxW - 12, 100).stroke(BORDER_COLOR);
-    doc.fontSize(7.5).fillColor(ORANGE).font('Helvetica-Bold').text('COMMERCIAL & STATUTORY NOTES', 44, y + 8);
+    doc.fontSize(7.5).fillColor(PRIMARY).font('Helvetica-Bold').text(pdfTheme.commercial_notes_title || 'COMMERCIAL & STATUTORY NOTES', 44, y + 8);
+
+    let noteY = y + 22;
+    // 1st note: Dynamic GST Rate
     doc.fontSize(7).fillColor(SLATE).font('Helvetica')
-      .text('• GST Rate: 13.8% Composite Rate applicable for Solar Power Plant Equipment & Turnkey EPC (70% goods @ 12% + 30% services @ 18%).', 44, y + 22, { width: pageW - boxW - 28 })
-      .text('• Prices quoted are in Indian Rupees (INR) and valid up to the expiration date.', 44, y + 48, { width: pageW - boxW - 28 })
-      .text('• Dispatched directly through authorized distribution hubs with transit insurance.', 44, y + 64, { width: pageW - boxW - 28 })
-      .text('• Refer to Page 2 for Detailed Technical Bill of Materials (BOM) & Equipment Specifications.', 44, y + 80, { width: pageW - boxW - 28 });
+      .text(`• GST Rate: ${gstRate}% kit-specific statutory tax rate applied.`, 44, noteY, { width: pageW - boxW - 28 });
+    noteY += 13;
+
+    // Configurable Commercial Notes
+    const customNotes = Array.isArray(pdfTheme.commercial_notes) && pdfTheme.commercial_notes.length > 0
+      ? pdfTheme.commercial_notes
+      : [
+        'Prices quoted are in Indian Rupees (INR) and valid up to the expiration date.',
+        'Dispatched directly through authorized distribution hubs with transit insurance.',
+        'Refer to Page 2 for Detailed Technical Bill of Materials (BOM) & Equipment Specifications.',
+      ];
+
+    customNotes.slice(0, 5).forEach((n) => {
+      doc.fontSize(7).fillColor(SLATE).font('Helvetica').text(`• ${n}`, 44, noteY, { width: pageW - boxW - 28 });
+      noteY += 14;
+    });
 
     // Right Financial Totals
     doc.roundedRect(boxX, y, boxW, 100, 3).fill(LIGHT_BG);
     doc.rect(boxX, y, boxW, 100).stroke(BORDER_COLOR);
 
-    const finRow = (label, val, rY, isBold = false, color = DARK) => {
+    const finRow = (label, val, rY, isBold = false, color = SECONDARY) => {
       doc.fontSize(7.5).fillColor(GREY).font('Helvetica').text(label, boxX + 10, rY);
       doc.fontSize(7.5).fillColor(color).font(isBold ? 'Helvetica-Bold' : 'Helvetica').text(val, boxX + 100, rY, { width: boxW - 110, align: 'right' });
     };
@@ -2039,21 +2150,21 @@ exports.get_pdf = async (req, res) => {
     finRow('Taxable Value', _paiseToINR(taxableAmountPaise), y + 24);
     finRow(`GST (${gstRate}%)`, _paiseToINR(gstAmountPaise), y + 40);
 
-    // Total Highlight Bar
-    doc.rect(boxX, y + 58, boxW, 42).fill(ORANGE);
+    // Total Highlight Bar (Theme Primary Color)
+    doc.rect(boxX, y + 58, boxW, 42).fill(PRIMARY);
     doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold').text('TOTAL AMOUNT (INCL. GST)', boxX + 10, y + 68);
     doc.fontSize(12).fillColor('#ffffff').font('Helvetica-Bold').text(_paiseToINR(totalAmountPaise), boxX + 10, y + 80, { width: boxW - 20, align: 'right' });
 
     // Page 1 Footer
     const prevBottom1 = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
-    doc.rect(0, 792, 595, 50).fill(DARK);
-    doc.fontSize(7).fillColor('#94a3b8').font('Helvetica')
-      .text('SolarKits India — Enterprise Solar Supply Chain & EPC Platform | support@solarkits.in | www.solarkits.in', 36, 800, { width: pageW, align: 'center', lineBreak: false });
-    doc.fontSize(6.5).fillColor('#64748b')
+    doc.rect(0, 792, 595, 50).fill(SECONDARY);
+    doc.fontSize(7).fillColor('#cbd5e1').font('Helvetica')
+      .text(pdfTheme.footer_text || 'SolarKits India • Confidential Commercial Proposal • All Rights Reserved', 36, 800, { width: pageW, align: 'center', lineBreak: false });
+    doc.fontSize(6.5).fillColor('#94a3b8')
       .text('This is a digitally generated document. Refer to Page 2 for Equipment Datasheet & Bill of Materials.', 36, 811, { width: pageW, align: 'center', lineBreak: false });
-    doc.fontSize(7).fillColor(ORANGE)
-      .text(`Quote Ref: ${quote.quote_number} | Page 1 of 2`, 36, 822, { width: pageW, align: 'center', lineBreak: false });
+    doc.fontSize(7).fillColor(PRIMARY)
+      .text(`Quote Ref: ${displayQuoteNumber} | Page 1 of 2`, 36, 822, { width: pageW, align: 'center', lineBreak: false });
     doc.page.margins.bottom = prevBottom1;
 
     // ==========================================
@@ -2061,8 +2172,8 @@ exports.get_pdf = async (req, res) => {
     // ==========================================
     doc.addPage({ size: 'A4', margin: 36 });
 
-    // Top Accent Bar
-    doc.rect(0, 0, 595, 4).fill(ORANGE);
+    // Top Accent Bar (Theme Primary Color)
+    doc.rect(0, 0, 595, 4).fill(PRIMARY);
 
     // Bright Header Bar
     doc.rect(0, 4, 595, 48).fill('#ffffff');
@@ -2074,18 +2185,24 @@ exports.get_pdf = async (req, res) => {
       try {
         doc.image(logoPath, 36, 14, { width: p2LogoW, height: p2LogoH });
       } catch (e) {
-        doc.fontSize(14).fillColor(ORANGE).font('Helvetica-Bold').text('SolarKits', 36, 18);
+        doc.fontSize(14).fillColor(PRIMARY).font('Helvetica-Bold').text('SolarKits', 36, 18);
       }
     }
 
     const p2SepX = 36 + p2LogoW + 14;
     doc.moveTo(p2SepX, 14).lineTo(p2SepX, 42).stroke('#e2e8f0');
-    doc.fontSize(9.5).fillColor(DARK).font('Helvetica-Bold').text('TECHNICAL SPECIFICATIONS & BILL OF MATERIALS (BOM)', p2SepX + 12, 16);
-    doc.fontSize(7.5).fillColor(GREY).font('Helvetica').text(`Quote Ref: ${quote.quote_number} | ${kit.name || ''}`, p2SepX + 12, 30);
+    doc.fontSize(9.5).fillColor(SECONDARY).font('Helvetica-Bold').text(pdfTheme.bom_page_title || 'TECHNICAL SPECIFICATIONS & BILL OF MATERIALS (BOM)', p2SepX + 12, 16);
+    doc.fontSize(7.5).fillColor(GREY).font('Helvetica').text(`Quote Ref: ${displayQuoteNumber} | ${kit.name || ''}`, p2SepX + 12, 30);
 
     let p2Y = 66;
 
-    // 1. Solar Panels Card
+    // Compute dynamic module count & rating
+    const panelComp = (kit.base_components || []).find(c => c.quantity >= 2) || (kit.base_components || [])[1];
+    const moduleCount = panelComp?.quantity || Math.max(2, Math.round(cap * 2));
+    const moduleWattage = 500;
+    const totalArrayKw = (moduleCount * moduleWattage / 1000).toFixed(2);
+
+    // 1. Solar Panels Card (Dynamic Kit-wise Specs)
     const panelH = 92;
     doc.roundedRect(36, p2Y, pageW, panelH, 4).fill(LIGHT_BG);
     doc.rect(36, p2Y, pageW, panelH).stroke(BORDER_COLOR);
@@ -2099,28 +2216,28 @@ exports.get_pdf = async (req, res) => {
     }
 
     const pTextX = 138;
-    doc.fontSize(9).fillColor(ORANGE).font('Helvetica-Bold').text('1. SOLAR PHOTOVOLTAIC MODULES (PANELS)', pTextX, p2Y + 8);
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text('Tata Power Solar / Waaree 545W Mono PERC Half-Cut Modules', pTextX, p2Y + 22);
+    doc.fontSize(9).fillColor(PRIMARY).font('Helvetica-Bold').text('1. SOLAR PHOTOVOLTAIC MODULES (PANELS)', pTextX, p2Y + 8);
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(`Tata Power Solar / Solarkits ${moduleWattage}Wp Bifacial DCR Mono PERC Half-Cut Modules`, pTextX, p2Y + 22);
 
     const panelSpecs = [
-      ['Technology:', 'Tier-1 High-Efficiency Monocrystalline PERC (144 Half-Cut Cells)'],
-      ['Module Efficiency:', '>= 21.2% with exceptional low-light and diffuse irradiance yield'],
-      ['Module Rating / Qty:', `545Wp Modules x 6 Nos. (Total Array Capacity: ~3.27 kWp DC Overclocking)`],
+      ['Technology:', 'Tier-1 High-Efficiency Bifacial DCR Monocrystalline PERC (144 Half-Cut Cells)'],
+      ['Module Efficiency:', '>= 21.4% with up to 25% bifacial rear gain for high energy yield'],
+      ['Module Rating / Qty:', `${moduleWattage}Wp Modules x ${moduleCount} Nos. (Total DC Array Capacity: ~${totalArrayKw} kWp)`],
       ['Durability & Frame:', 'Anodized aluminium alloy frame (35mm) with IP68 junction box & bypass diodes'],
-      ['Warranties:', '12-Year Product Workmanship Warranty + 25-Year Linear Power Output Warranty (>= 84.8%)'],
-      ['Certifications:', 'ALMM Approved, BIS Certified (IS 14286), IEC 61215, IEC 61730, IEC 62804 (PID Free)'],
+      ['Warranties:', '12-Year Workmanship Warranty + 30-Year Linear Output Performance (>= 85%)'],
+      ['Certifications:', 'ALMM Approved, DCR Compliant (Domestic Content Requirement), BIS Certified (IS 14286), IEC 61215/61730'],
     ];
 
     let specY = p2Y + 36;
     panelSpecs.forEach(([lbl, val]) => {
       doc.fontSize(6.5).fillColor(GREY).font('Helvetica-Bold').text(lbl, pTextX, specY, { width: 85 });
-      doc.fontSize(6.5).fillColor(DARK).font('Helvetica').text(val, pTextX + 85, specY, { width: pageW - (pTextX - 36) - 90 });
+      doc.fontSize(6.5).fillColor(SECONDARY).font('Helvetica').text(val, pTextX + 85, specY, { width: pageW - (pTextX - 36) - 90 });
       specY += 9;
     });
 
     p2Y += panelH + 10;
 
-    // 2. Solar Inverter Card
+    // 2. Solar Inverter Card (Dynamic Kit-wise Specs)
     const invH = 92;
     doc.roundedRect(36, p2Y, pageW, invH, 4).fill(LIGHT_BG);
     doc.rect(36, p2Y, pageW, invH).stroke(BORDER_COLOR);
@@ -2133,47 +2250,79 @@ exports.get_pdf = async (req, res) => {
       }
     }
 
-    doc.fontSize(9).fillColor(ORANGE).font('Helvetica-Bold').text('2. SOLAR ON-GRID STRING INVERTER', pTextX, p2Y + 8);
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text('Tata Power / Growatt 3 kW Single-Phase Dual MPPT On-Grid Inverter', pTextX, p2Y + 22);
+    doc.fontSize(9).fillColor(PRIMARY).font('Helvetica-Bold').text('2. SOLAR ON-GRID INVERTER', pTextX, p2Y + 8);
 
-    const invSpecs = [
-      ['AC Output Rating:', '3.0 kW (3000 VA), 230V AC Single-Phase, 50 Hz Pure Sine Wave (< 3% THD)'],
-      ['Maximum Efficiency:', '97.6% Peak Efficiency (Euro Efficiency 97.1%), Wide MPPT Voltage Range (80V - 550V)'],
-      ['Built-in Protections:', 'Integrated DC Disconnect Switch, Type II DC & AC Surge Arresters, Anti-Islanding Protection'],
-      ['Monitoring Module:', 'Smart WiFi / GPRS Cloud Stick included for real-time mobile app and web telemetry'],
-      ['Enclosure Rating:', 'IP65 Natural Convection Cooling, Ultra-low acoustic noise (< 25 dB)'],
-      ['Manufacturer Warranty:', '5-Year Full Comprehensive On-Site Manufacturer Warranty (extendable to 10 Years)'],
-    ];
+    let invTitle = `Solarkits / Sunno ${cap}.0 kW Single-Phase Dual MPPT On-Grid Inverter`;
+    let invSpecs = [];
+    if (cap === 1) {
+      invTitle = 'Solarkits / Sunno 1.0 kW High-Efficiency On-Grid Micro / String Inverter';
+      invSpecs = [
+        ['AC Output Rating:', '1.0 kW (1000 VA), 230V AC Single-Phase, 50 Hz Pure Sine Wave (< 3% THD)'],
+        ['Maximum Efficiency:', '97.4% Peak Efficiency, Wide MPPT Operating Voltage Range (60V - 450V)'],
+        ['Built-in Protections:', 'Integrated DC Disconnect Switch, Type II DC & AC Surge Arresters, Anti-Islanding Protection'],
+        ['Monitoring Module:', 'Smart WiFi / GPRS Cloud Telemetry Stick with Mobile App & Web Monitoring'],
+        ['Enclosure Rating:', 'IP65 Natural Convection Cooling, Ultra-low acoustic noise (< 20 dB)'],
+        ['Manufacturer Warranty:', '5-Year Full Comprehensive On-Site Manufacturer Warranty (extendable to 10 Years)'],
+      ];
+    } else if (cap === 2) {
+      invTitle = 'Solarkits / Sunno 2.0 kW Single-Phase On-Grid Solar Inverter';
+      invSpecs = [
+        ['AC Output Rating:', '2.0 kW (2000 VA), 230V AC Single-Phase, 50 Hz Pure Sine Wave (< 3% THD)'],
+        ['Maximum Efficiency:', '97.5% Peak Efficiency, Wide MPPT Voltage Range (70V - 500V)'],
+        ['Built-in Protections:', 'Integrated DC Switch, Type II Surge Arresters (DC+AC), Anti-Islanding Protection'],
+        ['Monitoring Module:', 'Smart WiFi / GPRS Cloud Telemetry Stick with Mobile App & Web Monitoring'],
+        ['Enclosure Rating:', 'IP65 Weatherproof Ingress Protection, Natural Convection Cooling (< 25 dB)'],
+        ['Manufacturer Warranty:', '5-Year Full Comprehensive On-Site Manufacturer Warranty (extendable to 10 Years)'],
+      ];
+    } else {
+      invTitle = `Solarkits / Sunno ${cap}.0 kW Single-Phase Dual MPPT On-Grid Inverter`;
+      invSpecs = [
+        ['AC Output Rating:', `${cap}.0 kW (${cap * 1000} VA), 230V AC Single-Phase, 50 Hz Pure Sine Wave (< 3% THD)`],
+        ['Maximum Efficiency:', '97.8% Peak Efficiency (Euro Efficiency 97.2%), Wide Dual MPPT Range (80V - 550V)'],
+        ['Built-in Protections:', 'Integrated DC Disconnect Switch, Type II DC & AC Surge Arresters, Anti-Islanding Protection'],
+        ['Monitoring Module:', 'Smart WiFi / GPRS Cloud Stick included for real-time mobile app and web telemetry'],
+        ['Enclosure Rating:', 'IP65 Natural Convection Cooling, Ultra-low acoustic noise (< 25 dB)'],
+        ['Manufacturer Warranty:', '5-Year Full Comprehensive On-Site Manufacturer Warranty (extendable to 10 Years)'],
+      ];
+    }
+
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(invTitle, pTextX, p2Y + 22);
 
     specY = p2Y + 36;
     invSpecs.forEach(([lbl, val]) => {
       doc.fontSize(6.5).fillColor(GREY).font('Helvetica-Bold').text(lbl, pTextX, specY, { width: 85 });
-      doc.fontSize(6.5).fillColor(DARK).font('Helvetica').text(val, pTextX + 85, specY, { width: pageW - (pTextX - 36) - 90 });
+      doc.fontSize(6.5).fillColor(SECONDARY).font('Helvetica').text(val, pTextX + 85, specY, { width: pageW - (pTextX - 36) - 90 });
       specY += 9;
     });
 
     p2Y += invH + 10;
 
-    // 3. BOS Kits & Protection Switchgear Card
-    const bosH = 88;
+    // 3. BOS Kits & Protection Switchgear Card (Dynamic configured BOS breakdown)
+    const configuredBosCount = (kit.bos_kits || []).length;
+    const hasDcdb = cap >= 2 || (kit.bos_kits || []).some(b => b.name?.toLowerCase().includes('dcdb'));
+    const totalCableM = cap === 1 ? '60 meters (DC & Earthing)' : '110 meters (DC, AC & Earthing)';
+    const lugsCount = cap === 1 ? '4 Nos.' : '5 Nos.';
+    const tiesCount = cap === 1 ? '15 Nos.' : '50 Nos.';
+
+    const bosH = 90;
     doc.roundedRect(36, p2Y, pageW, bosH, 4).fill(LIGHT_BG);
     doc.rect(36, p2Y, pageW, bosH).stroke(BORDER_COLOR);
 
-    doc.fontSize(9).fillColor(ORANGE).font('Helvetica-Bold').text('3. BALANCE OF SYSTEM (BOS) & ELECTRICAL SWITCHGEAR', 44, p2Y + 8);
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text('Certified Industrial Protection System & Safety Switchgear', 44, p2Y + 22);
+    doc.fontSize(9).fillColor(PRIMARY).font('Helvetica-Bold').text('3. BALANCE OF SYSTEM (BOS) & ELECTRICAL SWITCHGEAR', 44, p2Y + 8);
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(`Certified Industrial Protection & Safety Switchgear (${configuredBosCount > 0 ? configuredBosCount : (cap === 1 ? 16 : 21)} Configured Components)`, 44, p2Y + 22);
 
     const bosSpecs = [
-      ['DC Distribution Box (DCDB):', 'IP65 Polycarbonate enclosure, 1000V DC MCB/Fuse (15A), Class II DC Surge Protection (SPD 40kA)'],
-      ['AC Distribution Box (ACDB):', 'IP65 Weatherproof box, Schneider/Havells 32A 2-Pole MCB, Class II AC SPD, Net-Meter ready'],
-      ['Solar DC Cabling:', '4 sq.mm Electron-beam cross-linked, UV resistant, halogen-free tin-coated copper solar cable (TUV certified)'],
-      ['Earthing Protection Kit:', '3 Nos. Chemical Earthing Electrodes (GI/Copper bonded 17.2mm x 2m) with 25kg Earth Enhancing Compound'],
-      ['Lightning Arrester (LA):', 'High-grade copper/GI spike Lightning Arrester with dedicated insulated down conductor to ground pit'],
+      ['AC Distribution Box (ACDB):', 'IP65 Weatherproof box, Schneider/Havells 32A 2-Pole MCB, Class II AC SPD, Net-Meter ready (1 Unit)'],
+      ['DC Distribution Box (DCDB):', hasDcdb ? 'IP65 Polycarbonate enclosure, 1000V DC MCB/Fuse (15A/20A), Class II DC Surge Protection (SPD 40kA)' : 'Integrated DC Disconnect & Surge Protection inside Inverter Enclosure (1 kW compact system)'],
+      ['Solar DC Cabling & Wiring:', `4 sq.mm Electron-beam cross-linked, UV resistant tin-coated copper solar cable + earthing wire (${totalCableM})`],
+      ['Earthing Protection Kit:', `3 Nos. Chemical Earthing Electrodes (GI/Copper bonded 17.2mm x 2m) + 25kg Earth Compound + ${lugsCount} Lugs`],
+      ['Lightning Protection & Hardware:', `High-grade copper/GI spike Lightning Arrester (LA) + MC4 Connectors (2 Pairs) + UV Ties (${tiesCount}) + PVC Bends & Tees`],
     ];
 
     specY = p2Y + 36;
     bosSpecs.forEach(([lbl, val]) => {
-      doc.fontSize(6.5).fillColor(GREY).font('Helvetica-Bold').text(lbl, 44, specY, { width: 130 });
-      doc.fontSize(6.5).fillColor(DARK).font('Helvetica').text(val, 178, specY, { width: pageW - 150 });
+      doc.fontSize(6.5).fillColor(GREY).font('Helvetica-Bold').text(lbl, 44, specY, { width: 135 });
+      doc.fontSize(6.5).fillColor(SECONDARY).font('Helvetica').text(val, 182, specY, { width: pageW - 155 });
       specY += 10;
     });
 
@@ -2184,55 +2333,55 @@ exports.get_pdf = async (req, res) => {
     doc.roundedRect(36, p2Y, pageW, mmsH, 4).fill(LIGHT_BG);
     doc.rect(36, p2Y, pageW, mmsH).stroke(BORDER_COLOR);
 
-    doc.fontSize(9).fillColor(ORANGE).font('Helvetica-Bold').text('4. MODULE MOUNTING STRUCTURE (MMS) & HARDWARE', 44, p2Y + 8);
-    doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold').text('Heavy-Duty Pre-Galvanized & Hot-Dip Galvanized (HDG) Steel Structure', 44, p2Y + 22);
+    doc.fontSize(9).fillColor(PRIMARY).font('Helvetica-Bold').text('4. MODULE MOUNTING STRUCTURE (MMS) & HARDWARE', 44, p2Y + 8);
+    doc.fontSize(8.5).fillColor(SECONDARY).font('Helvetica-Bold').text(`Heavy-Duty Pre-Galvanized & HDG Steel Structure (Engineered for ${moduleCount} Solar Modules)`, 44, p2Y + 22);
 
     const mmsSpecs = [
       ['Material & Coating:', 'Cold-formed HDG Steel / Anodized Aluminum with minimum 80-micron zinc coating (IS 4759 compliant)'],
       ['Wind Load Rating:', 'Engineered to withstand extreme wind speeds up to 150 km/h (IS 875 Part 3 design certified)'],
-      ['Fasteners & Hardware:', 'SS304 grade bolts, nuts, washers, end clamps, and mid clamps with anti-corrosion EPDM gaskets'],
+      ['Fasteners & Hardware:', `SS304 grade bolts, nuts, washers, end clamps (${Math.max(4, moduleCount * 2)} Nos), and mid clamps with anti-corrosion EPDM gaskets`],
     ];
 
     specY = p2Y + 36;
     mmsSpecs.forEach(([lbl, val]) => {
-      doc.fontSize(6.5).fillColor(GREY).font('Helvetica-Bold').text(lbl, 44, specY, { width: 130 });
-      doc.fontSize(6.5).fillColor(DARK).font('Helvetica').text(val, 178, specY, { width: pageW - 150 });
+      doc.fontSize(6.5).fillColor(GREY).font('Helvetica-Bold').text(lbl, 44, specY, { width: 135 });
+      doc.fontSize(6.5).fillColor(SECONDARY).font('Helvetica').text(val, 182, specY, { width: pageW - 155 });
       specY += 10;
     });
 
     p2Y += mmsH + 12;
 
     // Signature / Acceptance Section
-    const sigH = 80;
+    const sigH = 75;
     const sigW = (pageW - 12) / 2;
 
     // EPC Acceptance Box
     doc.roundedRect(36, p2Y, sigW, sigH, 4).fill(LIGHT_BG);
     doc.rect(36, p2Y, sigW, sigH).stroke(BORDER_COLOR);
-    doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold').text('ACCEPTED & CONFIRMED BY EPC BUYER', 44, p2Y + 8);
+    doc.fontSize(7.5).fillColor(SECONDARY).font('Helvetica-Bold').text('ACCEPTED & CONFIRMED BY EPC BUYER', 44, p2Y + 8);
     doc.fontSize(6.5).fillColor(GREY).font('Helvetica').text('Authorized Signatory & Official Stamp:', 44, p2Y + 20);
-    doc.moveTo(44, p2Y + 60).lineTo(36 + sigW - 16, p2Y + 60).stroke('#cbd5e1');
-    doc.fontSize(6.5).fillColor(GREY).text('Signature / Seal                                Date: _______________', 44, p2Y + 65);
+    doc.moveTo(44, p2Y + 56).lineTo(36 + sigW - 16, p2Y + 56).stroke('#cbd5e1');
+    doc.fontSize(6.5).fillColor(GREY).text('Signature / Seal                                Date: _______________', 44, p2Y + 61);
 
     // Franchisee Issuer Box
     const sigX2 = 36 + sigW + 12;
     doc.roundedRect(sigX2, p2Y, sigW, sigH, 4).fill(LIGHT_BG);
     doc.rect(sigX2, p2Y, sigW, sigH).stroke(BORDER_COLOR);
-    doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold').text('FOR SOLARKITS FRANCHISEE PARTNER', sigX2 + 8, p2Y + 8);
+    doc.fontSize(7.5).fillColor(SECONDARY).font('Helvetica-Bold').text('FOR SOLARKITS FRANCHISEE PARTNER', sigX2 + 8, p2Y + 8);
     doc.fontSize(6.5).fillColor(GREY).font('Helvetica').text('Authorized Dispatch Representative:', sigX2 + 8, p2Y + 20);
-    doc.moveTo(sigX2 + 8, p2Y + 60).lineTo(sigX2 + sigW - 16, p2Y + 60).stroke('#cbd5e1');
-    doc.fontSize(6.5).fillColor(GREY).text('Authorized Signatory                            Date: _______________', sigX2 + 8, p2Y + 65);
+    doc.moveTo(sigX2 + 8, p2Y + 56).lineTo(sigX2 + sigW - 16, p2Y + 56).stroke('#cbd5e1');
+    doc.fontSize(6.5).fillColor(GREY).text('Authorized Signatory                            Date: _______________', sigX2 + 8, p2Y + 61);
 
-    // Page 2 Footer
+    // Page 2 Footer (Theme Secondary Color)
     const prevBottom2 = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
-    doc.rect(0, 792, 595, 50).fill(DARK);
-    doc.fontSize(7).fillColor('#94a3b8').font('Helvetica')
+    doc.rect(0, 792, 595, 50).fill(SECONDARY);
+    doc.fontSize(7).fillColor('#cbd5e1').font('Helvetica')
       .text('SolarKits Ecosystem & Technical Support: support@solarkits.in | Toll-Free: 1800-SOLAR-KIT', 36, 800, { width: pageW, align: 'center', lineBreak: false });
-    doc.fontSize(6.5).fillColor('#64748b')
+    doc.fontSize(6.5).fillColor('#94a3b8')
       .text('All specifications are in compliance with standard test conditions (STC: 1000 W/m2, AM 1.5, Cell Temp 25°C).', 36, 811, { width: pageW, align: 'center', lineBreak: false });
-    doc.fontSize(7).fillColor(ORANGE)
-      .text(`Quote Ref: ${quote.quote_number} | Page 2 of 2 (End of Quotation)`, 36, 822, { width: pageW, align: 'center', lineBreak: false });
+    doc.fontSize(7).fillColor(PRIMARY)
+      .text(`Quote Ref: ${quote.quote_number || displayQuoteNumber} | Page 2 of 2 (End of Quotation)`, 36, 822, { width: pageW, align: 'center', lineBreak: false });
     doc.page.margins.bottom = prevBottom2;
 
     doc.end();
@@ -2273,7 +2422,7 @@ exports.share_quote = async (req, res) => {
     if (quote.status === 'draft') return res.status(400).json({ status: 'error', message: 'Generate the quote before sharing' });
 
     const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     const epc = quote.epc_snapshot || {};
@@ -2328,7 +2477,7 @@ exports.create_followup = async (req, res) => {
     if (!quote) return res.status(404).json({ status: 'error', message: 'Quote not found' });
 
     const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     const followup = new EpcQuoteFollowup({
@@ -2443,8 +2592,8 @@ exports.update_followup = async (req, res) => {
     if (!followup) return res.status(404).json({ status: 'error', message: 'Follow-up not found' });
 
     const allowed = ['next_follow_up_date', 'follow_up_time', 'follow_up_mode', 'remarks',
-                     'status', 'outcome_notes', 'expected_quantity', 'expected_order_date',
-                     'expected_order_value_paise', 'probability_pct', 'last_follow_up_date'];
+      'status', 'outcome_notes', 'expected_quantity', 'expected_order_date',
+      'expected_order_value_paise', 'probability_pct', 'last_follow_up_date'];
     allowed.forEach(f => { if (req.body[f] !== undefined) followup[f] = req.body[f]; });
     if (req.body.status === 'completed' && !followup.completed_at) followup.completed_at = new Date();
     followup.updated_by = actor.id;
@@ -2536,7 +2685,7 @@ exports.convert_to_order = async (req, res) => {
 
     // Ownership check
     const isOwner = (actor.role === 'reseller' && quote.franchisee_id?.toString() === actor.id.toString()) ||
-                    (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
+      (actor.role === 'bde' && quote.bde_id?.toString() === actor.id.toString());
     if (!isOwner) return res.status(403).json({ status: 'error', message: 'Access denied' });
 
     // Validations

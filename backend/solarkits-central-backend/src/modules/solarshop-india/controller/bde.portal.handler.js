@@ -126,11 +126,19 @@ const GST_STATE_CODE_MAP = {
 };
 
 /**
- * Helper: Get BDE's active territory (state_id, state_name, district_names, district_ids)
+ * Helper: Get all BDE's active territories (supports multiple assigned states)
+ */
+async function _getBdeTerritories(bdeId) {
+  const territories = await BDETerritoryAssignment.find({ bde_id: bdeId, status: 'active' }).lean();
+  return territories || [];
+}
+
+/**
+ * Helper: Get BDE's primary active territory (state_id, state_name, district_names, district_ids)
  */
 async function _getBdeTerritoryScope(bdeId) {
-  const territory = await BDETerritoryAssignment.findOne({ bde_id: bdeId, status: 'active' }).lean();
-  return territory || null;
+  const territories = await _getBdeTerritories(bdeId);
+  return territories[0] || null;
 }
 
 /**
@@ -349,14 +357,15 @@ exports.forgot_password = async (req, res) => {
 exports.get_bde_me = async (req, res) => {
   try {
     const bdeId = req.user.id;
-    const [bde, kyc, territory, plans] = await Promise.all([
+    const [bde, kyc, territories, plans] = await Promise.all([
       BDEProfile.findById(bdeId).lean(),
       BDEKYC.findOne({ bde_id: bdeId }).lean(),
-      BDETerritoryAssignment.findOne({ bde_id: bdeId, status: 'active' }).lean(),
+      _getBdeTerritories(bdeId),
       BDEPlanAssignment.findOne({ bde_id: bdeId, status: 'active' }).populate('plan_ids').lean(),
     ]);
 
     if (!bde) return res.status(404).json({ status: 'error', message: 'BDE profile not found' });
+    const territory = territories[0] || null;
 
     return res.status(200).json({
       status: 'success',
@@ -388,6 +397,14 @@ exports.get_bde_me = async (req, res) => {
           priority: territory.priority,
           start_date: territory.assignment_start_date,
         } : null,
+        territories: territories.map(t => ({
+          id: t._id,
+          state_id: t.state_id,
+          state_name: t.state_name,
+          district_names: t.district_names || [],
+          priority: t.priority,
+          start_date: t.assignment_start_date,
+        })),
         plans: plans ? plans.plan_names : [],
       },
     });
@@ -419,8 +436,19 @@ exports.update_bde_me = async (req, res) => {
 
 exports.get_my_territory = async (req, res) => {
   try {
-    const territory = await BDETerritoryAssignment.findOne({ bde_id: req.user.id, status: 'active' }).lean();
-    return res.status(200).json({ status: 'success', data: territory });
+    const territories = await _getBdeTerritories(req.user.id);
+    return res.status(200).json({
+      status: 'success',
+      data: territories[0] || null,
+      territories: territories.map(t => ({
+        id: t._id,
+        state_id: t.state_id,
+        state_name: t.state_name,
+        district_names: t.district_names || [],
+        priority: t.priority,
+        start_date: t.assignment_start_date,
+      })),
+    });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch territory', error: err.message });
   }
@@ -441,31 +469,36 @@ exports.get_my_goals = async (req, res) => {
     const goals = await BDEGoal.find({ bde_id: bdeId }).sort({ createdAt: -1 }).lean();
     const current = goals.find(g => g.status === 'active') || goals[0] || null;
 
-    // Fetch live territory & achievements
-    const territory = await BDETerritoryAssignment.findOne({ bde_id: bdeId, status: 'active' }).lean();
-    const assignedDistricts = territory?.district_names || [];
-    const stateName = territory?.state_name || req.bde?.state_name || '';
+    // Fetch live territory & achievements (supports multiple assigned states)
+    const activeTerritories = await BDETerritoryAssignment.find({ bde_id: bdeId, status: 'active' }).lean();
+    const assignedDistricts = [...new Set(activeTerritories.flatMap(t => t.district_names || []))];
+    const assignedStates = [...new Set(activeTerritories.map(t => t.state_name).filter(Boolean))];
+    const stateNames = assignedStates.length > 0 ? assignedStates : (req.bde?.state_name ? [req.bde.state_name] : []);
 
     const resellerQuery = {
       deleted_at: null,
       $or: [{ bde_id: bdeId }],
     };
-    if (stateName) resellerQuery.$or.push({ 'address.state_name': new RegExp(`^${stateName}$`, 'i') });
+    if (stateNames.length > 0) {
+      resellerQuery.$or.push({ 'address.state_name': { $in: stateNames.map(s => new RegExp(`^${s}$`, 'i')) } });
+    }
     if (assignedDistricts.length > 0) resellerQuery.$or.push({ 'address.district_name': { $in: assignedDistricts } });
 
     const territoryFranchisees = await Reseller.find(resellerQuery).lean();
     const franchiseeIds = territoryFranchisees.map(f => f._id);
     const operationalCount = territoryFranchisees.filter(f => f.is_operational).length;
 
+    const stateLeadFilter = stateNames.length > 0 ? [{ state_name: { $in: stateNames.map(s => new RegExp(`^${s}$`, 'i')) } }] : [];
+
     const [epcLeadsCount, epcsOnboardedCount, fpoOrders] = await Promise.all([
       EPCLead.countDocuments({
         deleted_at: null,
-        $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+        $or: [{ current_bde_id: bdeId }, ...stateLeadFilter],
       }),
       EPCLead.countDocuments({
         deleted_at: null,
         lead_status: { $in: ['Onboarded', 'Assigned to Franchisee'] },
-        $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+        $or: [{ current_bde_id: bdeId }, ...stateLeadFilter],
       }),
       FpoOrder.find({
         reseller_id: { $in: franchiseeIds },
@@ -558,10 +591,10 @@ exports.mark_all_notifications_read = async (req, res) => {
 exports.get_bde_dashboard = async (req, res) => {
   try {
     const bdeId = req.user.id;
-    const [bde, kyc, territory, plans, goal, notifications] = await Promise.all([
+    const [bde, kyc, activeTerritories, plans, goal, notifications] = await Promise.all([
       BDEProfile.findById(bdeId).lean(),
       BDEKYC.findOne({ bde_id: bdeId }).lean(),
-      BDETerritoryAssignment.findOne({ bde_id: bdeId, status: 'active' }).lean(),
+      BDETerritoryAssignment.find({ bde_id: bdeId, status: 'active' }).lean(),
       BDEPlanAssignment.findOne({ bde_id: bdeId, status: 'active' }).populate('plan_ids').lean(),
       BDEGoal.findOne({ bde_id: bdeId, status: 'active' }).sort({ createdAt: -1 }).lean(),
       BDENotification.find({ bde_id: bdeId }).sort({ createdAt: -1 }).limit(5).lean(),
@@ -569,16 +602,18 @@ exports.get_bde_dashboard = async (req, res) => {
 
     if (!bde) return res.status(404).json({ status: 'error', message: 'BDE not found' });
 
-    const assignedDistricts = territory?.district_names || [];
-    const stateName = territory?.state_name || bde.state_name || 'Assigned Territory';
-    const stateId = territory?.state_id || bde.state_id;
+    const assignedDistricts = [...new Set((activeTerritories || []).flatMap(t => t.district_names || []))];
+    const assignedStates = [...new Set((activeTerritories || []).map(t => t.state_name).filter(Boolean))];
+    const stateNames = assignedStates.length > 0 ? assignedStates : (bde.state_name ? [bde.state_name] : ['Assigned Territory']);
+    const stateName = stateNames.join(', ');
+    const stateId = activeTerritories[0]?.state_id || bde.state_id;
 
-    // ── Territory Aggregation ──
+    // ── Territory Aggregation (supports multiple assigned states) ──
     const resellerQuery = {
       deleted_at: null,
       $or: [
         { bde_id: bdeId },
-        { 'address.state_name': new RegExp(`^${stateName}$`, 'i') },
+        { 'address.state_name': { $in: stateNames.map(s => new RegExp(`^${s}$`, 'i')) } },
       ],
     };
     if (assignedDistricts.length > 0) {
@@ -592,22 +627,24 @@ exports.get_bde_dashboard = async (req, res) => {
 
     const franchiseeIds = territoryFranchisees.map((f) => f._id);
 
+    const stateLeadFilter = stateNames.length > 0 ? [{ state_name: { $in: stateNames.map(s => new RegExp(`^${s}$`, 'i')) } }] : [];
+
     // EPC Leads in territory / by BDE
     const epcLeadsCount = await EPCLead.countDocuments({
       deleted_at: null,
-      $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+      $or: [{ current_bde_id: bdeId }, ...stateLeadFilter],
     });
 
     const epcsOnboardedCount = await EPCLead.countDocuments({
       deleted_at: null,
       lead_status: { $in: ['Onboarded', 'Assigned to Franchisee'] },
-      $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+      $or: [{ current_bde_id: bdeId }, ...stateLeadFilter],
     });
 
     const epcsAssignedCount = await EPCLead.countDocuments({
       deleted_at: null,
       lead_status: 'Assigned to Franchisee',
-      $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+      $or: [{ current_bde_id: bdeId }, ...stateLeadFilter],
     });
 
     // PO & Kit orders in territory
@@ -701,12 +738,14 @@ exports.get_bde_dashboard = async (req, res) => {
         },
         territory: {
           state_name: stateName,
+          assigned_states: assignedStates,
           districts: assignedDistricts,
           district_names: assignedDistricts,
           district_count: assignedDistricts.length,
-          priority: territory?.priority || 'medium',
-          start_date: territory?.assignment_start_date || null,
+          priority: activeTerritories[0]?.priority || 'medium',
+          start_date: activeTerritories[0]?.assignment_start_date || null,
         },
+        territories: activeTerritories || [],
         state_summary: {
           total_assigned_districts: assignedDistricts.length,
           total_franchisees: totalFranchisees,
@@ -776,9 +815,53 @@ exports.create_epc_lead = async (req, res) => {
       });
     }
 
-    const cleanMobile = mobile_number.trim();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanGst = gst_number ? gst_number.trim().toUpperCase() : null;
+    // Strict validation for Indian 10-digit mobile number starting with 6, 7, 8, or 9
+    const cleanMobile = String(mobile_number || '').trim().replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.',
+      });
+    }
+
+    // Email format validation
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please enter a valid email address.',
+      });
+    }
+
+    // Optional Pincode validation: must be 6 digits
+    const cleanPincode = pincode ? String(pincode).trim().replace(/\D/g, '') : null;
+    if (cleanPincode && !/^\d{6}$/.test(cleanPincode)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Pincode must be a valid 6-digit number.',
+      });
+    }
+
+    // Optional GST validation: 15-character GSTIN format
+    const cleanGst = gst_number ? String(gst_number).trim().toUpperCase() : null;
+    if (cleanGst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGst)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid GSTIN format. Expected 15 characters (e.g. 27ABCDE1234F1Z5).',
+      });
+    }
+
+    // Verify state belongs to BDE assigned territories (if any territory is assigned)
+    const activeTerritories = await _getBdeTerritories(bdeId);
+    if (activeTerritories && activeTerritories.length > 0) {
+      const allowedStates = activeTerritories.map(t => t.state_name.toLowerCase());
+      if (!allowedStates.includes(state_name.trim().toLowerCase())) {
+        return res.status(400).json({
+          status: 'error',
+          message: `State "${state_name}" is outside your assigned territories (${activeTerritories.map(t => t.state_name).join(', ')}).`,
+        });
+      }
+    }
 
     // Check duplicate in EPC leads
     const dupQuery = {
@@ -884,7 +967,8 @@ exports.list_epc_leads = async (req, res) => {
     const bdeId = req.user.id;
     const { search = '', status = '', district = '', state = '', franchisee = '', page = 1, limit = 50 } = req.query;
 
-    const territory = await _getBdeTerritoryScope(bdeId);
+    const territories = await _getBdeTerritories(bdeId);
+    const territory = territories[0] || null;
     const stateName = territory?.state_name;
     const districtNames = territory?.district_names || [];
 
@@ -971,6 +1055,13 @@ exports.list_epc_leads = async (req, res) => {
         limit: parseInt(limit, 10),
         pages: Math.ceil(total / parseInt(limit, 10)) || 1,
       },
+      territories: territories.map(t => ({
+        id: t._id,
+        state_id: t.state_id,
+        state_name: t.state_name,
+        district_names: t.district_names || [],
+        priority: t.priority,
+      })),
       territory: {
         state_name: stateName,
         district_names: districtNames,
@@ -1004,6 +1095,63 @@ exports.update_epc_lead = async (req, res) => {
     const updateData = req.body;
     delete updateData.lead_id; // immutable
     delete updateData.created_by_bde_id;
+
+    if (updateData.mobile_number !== undefined) {
+      const cleanMobile = String(updateData.mobile_number || '').trim().replace(/\D/g, '');
+      if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.',
+        });
+      }
+      updateData.mobile_number = cleanMobile;
+    }
+
+    if (updateData.email !== undefined) {
+      const cleanEmail = String(updateData.email || '').trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Please enter a valid email address.',
+        });
+      }
+      updateData.email = cleanEmail;
+    }
+
+    if (updateData.pincode !== undefined && updateData.pincode) {
+      const cleanPincode = String(updateData.pincode).trim().replace(/\D/g, '');
+      if (!/^\d{6}$/.test(cleanPincode)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Pincode must be a valid 6-digit number.',
+        });
+      }
+      updateData.pincode = cleanPincode;
+    }
+
+    if (updateData.gst_number !== undefined && updateData.gst_number) {
+      const cleanGst = String(updateData.gst_number).trim().toUpperCase();
+      if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGst)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid GSTIN format. Expected 15 characters (e.g. 27ABCDE1234F1Z5).',
+        });
+      }
+      updateData.gst_number = cleanGst;
+    }
+
+    if (updateData.state_name) {
+      const activeTerritories = await _getBdeTerritories(req.user.id);
+      if (activeTerritories && activeTerritories.length > 0) {
+        const allowedStates = activeTerritories.map(t => t.state_name.toLowerCase());
+        if (!allowedStates.includes(updateData.state_name.trim().toLowerCase())) {
+          return res.status(400).json({
+            status: 'error',
+            message: `State "${updateData.state_name}" is outside your assigned territories (${activeTerritories.map(t => t.state_name).join(', ')}).`,
+          });
+        }
+      }
+    }
 
     const lead = await EPCLead.findOneAndUpdate({ _id: id, deleted_at: null }, { $set: updateData }, { new: true });
     if (!lead) return res.status(404).json({ status: 'error', message: 'EPC lead not found' });
@@ -2462,19 +2610,94 @@ exports.update_bde_lead = async (req, res) => {
 exports.add_lead_activity = async (req, res) => {
   try {
     const { id } = req.params;
-    const { activity_type, notes, next_follow_up_date } = req.body;
-    const act = await BDELeadActivity.create({
-      lead_id: id,
-      bde_id: req.user.id,
-      activity_type: activity_type || 'note',
-      notes,
-    });
-    if (next_follow_up_date) {
-      await BDELead.findByIdAndUpdate(id, { next_follow_up_date: new Date(next_follow_up_date) });
+    const { activity_type, title, notes, next_follow_up_date, location } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid lead ID is required' });
     }
-    return res.status(201).json({ status: 'success', message: 'Activity added', data: act });
+
+    const lead = await BDELead.findOne({ _id: id, deleted_at: null });
+    if (!lead) {
+      return res.status(404).json({ status: 'error', message: 'Lead not found' });
+    }
+
+    const bdeId = req.user?.id || req.user?._id || req.bde?._id || lead.current_bde_id;
+    const bdeName = req.user?.full_name || req.bde?.full_name || 'BDE Executive';
+
+    const rawType = (activity_type && typeof activity_type === 'string') ? activity_type.toLowerCase().trim() : 'note';
+    const validTypes = ['call', 'meeting', 'site_visit', 'demo', 'email', 'note', 'stage_change', 'reassigned', 'signup_initiated'];
+    const safeType = validTypes.includes(rawType) ? rawType : 'note';
+
+    const actTitle = (title && typeof title === 'string' && title.trim())
+      ? title.trim()
+      : `${safeType.toUpperCase()} Log`;
+
+    const act = await BDELeadActivity.create({
+      lead_id: lead._id,
+      bde_id: bdeId,
+      bde_name: bdeName,
+      activity_type: safeType,
+      title: actTitle,
+      notes: (notes && typeof notes === 'string') ? notes.trim() : '',
+      location: location || null,
+      next_follow_up_date: next_follow_up_date ? new Date(next_follow_up_date) : null,
+    });
+
+    if (next_follow_up_date) {
+      const followUpDate = new Date(next_follow_up_date);
+      await BDELead.findByIdAndUpdate(lead._id, {
+        next_follow_up_date: followUpDate,
+        bde_remarks: (notes && typeof notes === 'string') ? notes.trim() : lead.bde_remarks,
+      });
+
+      try {
+        await BDEFollowUp.create({
+          lead_id: lead._id,
+          bde_id: bdeId,
+          follow_up_date: followUpDate,
+          purpose: actTitle,
+          status: 'scheduled',
+          outcome_notes: (notes && typeof notes === 'string') ? notes.trim() : null,
+        });
+      } catch (fErr) {
+        console.warn('[add_lead_activity] Follow-up creation notice:', fErr.message);
+      }
+
+      try {
+        await BDENotification.create({
+          bde_id: bdeId,
+          title: `Follow-up Scheduled: ${lead.company_name || lead.prospect_name} 📅`,
+          message: `Follow-up set for ${followUpDate.toLocaleDateString('en-IN')}${notes ? `: ${notes}` : ''}`,
+          type: 'follow_up',
+          link: '/leads',
+          action_label: 'View Franchisee Lead',
+          entity_type: 'bde_lead',
+          entity_id: lead._id,
+        });
+      } catch (nErr) {
+        console.warn('[add_lead_activity] Notification creation notice:', nErr.message);
+      }
+    }
+
+    return res.status(201).json({ status: 'success', message: 'Activity added successfully', data: act });
   } catch (err) {
+    console.error('[add_lead_activity Error]:', err);
     return res.status(500).json({ status: 'error', message: 'Failed to add activity', error: err.message });
+  }
+};
+
+exports.get_lead_activities = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid lead ID is required' });
+    }
+
+    const activities = await BDELeadActivity.find({ lead_id: id }).sort({ created_at: -1 }).lean();
+    return res.status(200).json({ status: 'success', data: activities });
+  } catch (err) {
+    console.error('[get_lead_activities Error]:', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch lead activities', error: err.message });
   }
 };
 
@@ -2510,21 +2733,47 @@ exports.schedule_follow_up = async (req, res) => {
 exports.update_lead_stage = async (req, res) => {
   try {
     const { id } = req.params;
-    const { stage, notes } = req.body;
-    const lead = await BDELead.findByIdAndUpdate(id, { lead_status: stage, bde_remarks: notes }, { new: true });
+    const stage = req.body.new_stage || req.body.stage;
+    const notes = req.body.reason || req.body.notes;
 
-    if (lead) {
-      await BDENotification.create({
-        bde_id: req.user.id,
-        title: `Franchisee Lead Stage: ${lead.company_name || lead.prospect_name} 🎯`,
-        message: `Lead transitioned to stage "${stage}"${notes ? ` (${notes})` : ''}`,
-        type: 'lead',
-        link: '/leads',
-        action_label: 'View Lead Pipeline',
-        entity_type: 'bde_lead',
-        entity_id: lead._id,
-      }).catch(() => { });
+    if (!stage) {
+      return res.status(400).json({ status: 'error', message: 'Target stage is required' });
     }
+
+    const lead = await BDELead.findById(id);
+    if (!lead) {
+      return res.status(404).json({ status: 'error', message: 'Lead not found' });
+    }
+
+    const prevStage = lead.lead_status;
+    lead.lead_status = stage;
+    if (notes) lead.bde_remarks = notes;
+    await lead.save();
+
+    const bdeId = req.user?.id || req.user?._id || req.bde?._id || lead.current_bde_id;
+    const bdeName = req.user?.full_name || req.bde?.full_name || 'BDE Executive';
+
+    await BDELeadActivity.create({
+      lead_id: lead._id,
+      bde_id: bdeId,
+      bde_name: bdeName,
+      activity_type: 'stage_change',
+      title: `Stage Changed: ${stage.replace(/_/g, ' ').toUpperCase()}`,
+      notes: notes || `Lead transitioned to stage "${stage}"`,
+      previous_stage: prevStage,
+      new_stage: stage,
+    }).catch((e) => console.warn('[update_lead_stage] Activity log notice:', e.message));
+
+    await BDENotification.create({
+      bde_id: bdeId,
+      title: `Franchisee Lead Stage: ${lead.company_name || lead.prospect_name} 🎯`,
+      message: `Lead transitioned to stage "${stage}"${notes ? ` (${notes})` : ''}`,
+      type: 'lead',
+      link: '/leads',
+      action_label: 'View Lead Pipeline',
+      entity_type: 'bde_lead',
+      entity_id: lead._id,
+    }).catch(() => { });
 
     return res.status(200).json({ status: 'success', message: `Lead updated to ${stage}`, data: lead });
   } catch (err) {
@@ -2533,7 +2782,14 @@ exports.update_lead_stage = async (req, res) => {
 };
 
 exports.start_franchisee_signup = async (req, res) => {
-  return startFranchiseeSignup(req.params.id, req.user.id, req, res);
+  try {
+    const bdeId = req.user?.id || req.user?._id || req.bde?._id;
+    const result = await startFranchiseeSignup(req.params.id, bdeId);
+    return res.status(200).json({ status: 'success', message: result?.message || 'Onboarding started', data: result });
+  } catch (err) {
+    console.error('[start_franchisee_signup Error]:', err);
+    return res.status(err.statusCode || 500).json({ status: 'error', message: err.message || 'Failed to start signup' });
+  }
 };
 
 exports.get_bde_pipeline = async (req, res) => {

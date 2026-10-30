@@ -21,13 +21,15 @@ import StoreLocatorPage from "./store-locator/StoreLocatorPage";
 import KnowMyMargin from "./know-my-margin/KnowMyMargin";
 import EpcProfile from "./profile/EpcProfile";
 import EpcTeamUsers from "./users/EpcTeamUsers";
+import EpcQuotations from "./dashboard/EpcQuotations";
+import EpcQuoteDetail from "./dashboard/EpcQuoteDetail";
 import {
   MdDashboard,
   MdShoppingCart,
   MdListAlt,
   MdSettings,
 } from "react-icons/md";
-import { FaBoxes, FaSolarPanel, FaShoppingBag, FaMapMarkerAlt } from "react-icons/fa";
+import { FaBoxes, FaSolarPanel, FaShoppingBag, FaMapMarkerAlt, FaFileInvoiceDollar } from "react-icons/fa";
 import { FiTrendingUp } from "react-icons/fi";
 
 const INVENTORY_POLL_INTERVAL_MS = 30000; // 30 seconds
@@ -63,6 +65,7 @@ export default function Board() {
     ];
 
     if (isAuthenticated) {
+      defaultGroup.push({ name: "Quotations", icon: <FaFileInvoiceDollar />, path: "/my-quotes", requiresAuth: true });
       defaultGroup.push({ name: "PO Orders", icon: <FaShoppingBag />, path: "/po-orders", requiresAuth: true });
     }
 
@@ -146,6 +149,10 @@ export default function Board() {
             <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />
             <Route path="/po-orders" element={<ProtectedRoute><EpcPoAllocations /></ProtectedRoute>} />
             <Route path="/po-allocations" element={<ProtectedRoute><EpcPoAllocations /></ProtectedRoute>} />
+            <Route path="/my-quotes" element={<ProtectedRoute><EpcQuotations /></ProtectedRoute>} />
+            <Route path="/my-quotes/:id" element={<ProtectedRoute><EpcQuoteDetail /></ProtectedRoute>} />
+            <Route path="/epc-quotes" element={<ProtectedRoute><EpcQuotations /></ProtectedRoute>} />
+            <Route path="/epc-quotes/:id" element={<ProtectedRoute><EpcQuoteDetail /></ProtectedRoute>} />
 
             <Route path="/bulk-buy" element={<ProtectedRoute><BulkBuy /></ProtectedRoute>} />
             <Route path="/request-order" element={<ProtectedRoute><BulkOrderCart /></ProtectedRoute>} />

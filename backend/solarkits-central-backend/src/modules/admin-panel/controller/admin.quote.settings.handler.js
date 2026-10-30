@@ -26,6 +26,25 @@ exports.get_settings = async (req, res) => {
     if (!settings) {
       settings = (await QuoteSettings.create({})).toObject();
     }
+    const defaultTheme = {
+      primary_color: '#ea580c',
+      secondary_color: '#0f172a',
+      accent_color: '#0284c7',
+      light_bg_color: '#f8fafc',
+      border_color: '#e2e8f0',
+      company_name: 'SolarKits India',
+      company_tagline: "India's Premier Solar ComboKit Distribution Platform",
+      commercial_notes_title: 'COMMERCIAL & STATUTORY NOTES',
+      commercial_notes: [
+        'Prices quoted are in Indian Rupees (INR) and valid up to the expiration date.',
+        'Dispatched directly through authorized distribution hubs with transit insurance.',
+        'Refer to Page 2 for Detailed Technical Bill of Materials (BOM) & Equipment Specifications.',
+        'Standard statutory warranty coverage applies as detailed in technical specifications.',
+      ],
+      bom_page_title: 'TECHNICAL SPECIFICATIONS & BILL OF MATERIALS (BOM)',
+      footer_text: 'SolarKits India • Confidential Commercial Proposal • All Rights Reserved',
+    };
+    settings.pdf_theme = { ...defaultTheme, ...(settings.pdf_theme || {}) };
     return res.json({ status: 'success', data: settings });
   } catch (err) {
     console.error('[admin.quote.settings] get_settings:', err.message);
@@ -43,6 +62,7 @@ exports.update_settings = async (req, res) => {
       'default_follow_up_days', 'follow_up_modes', 'follow_up_statuses',
       'allow_duplicate_conversion', 'allow_revised_quote_conversion',
       'allow_expired_quote_conversion', 'allow_manual_discount', 'max_discount_pct',
+      'pdf_theme',
     ];
     const update = {};
     allowedFields.forEach(f => { if (body[f] !== undefined) update[f] = body[f]; });

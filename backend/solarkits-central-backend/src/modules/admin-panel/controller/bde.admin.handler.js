@@ -738,6 +738,7 @@ exports.assign_territory = async (req, res) => {
     const {
       bde_id,
       country_name = 'India',
+      states, // Optional array of state objects
       state_id,
       state_name,
       district_ids = [],
@@ -746,12 +747,13 @@ exports.assign_territory = async (req, res) => {
       assignment_end_date,
       priority = 'medium',
       notes,
+      replace_all = false,
     } = req.body;
 
-    if (!bde_id || !state_id) {
+    if (!bde_id) {
       return res.status(400).json({
         status: 'error',
-        message: 'BDE ID and State are required for territory assignment',
+        message: 'BDE ID is required for territory assignment',
       });
     }
 
@@ -760,55 +762,107 @@ exports.assign_territory = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'BDE profile not found' });
     }
 
-    // Resolve state name if not provided
-    let resolvedStateName = state_name;
-    if (!resolvedStateName) {
-      const stateDoc = await GeoLevel1.findById(state_id);
-      if (stateDoc) resolvedStateName = stateDoc.name;
+    // Build array of states to process (supports single state or multiple states)
+    let statesToProcess = [];
+    if (Array.isArray(states) && states.length > 0) {
+      statesToProcess = states;
+    } else if (state_id) {
+      statesToProcess = [{
+        state_id,
+        state_name,
+        district_ids,
+        district_names,
+        assignment_start_date,
+        assignment_end_date,
+        priority,
+        notes,
+      }];
+    } else {
+      return res.status(400).json({
+        status: 'error',
+        message: 'At least one State is required for territory assignment',
+      });
     }
 
-    // Resolve district names if not provided
-    let resolvedDistrictNames = district_names;
-    if ((!resolvedDistrictNames || resolvedDistrictNames.length === 0) && district_ids.length > 0) {
-      const districtDocs = await GeoLevel2.find({ _id: { $in: district_ids } });
-      resolvedDistrictNames = districtDocs.map(d => d.name);
+    // If replace_all is true, deactivate all existing active territory assignments for this BDE
+    if (replace_all) {
+      await BDETerritoryAssignment.updateMany(
+        { bde_id, status: 'active' },
+        { $set: { status: 'inactive' } }
+      );
     }
 
-    // Mark existing active territory assignment as inactive
-    await BDETerritoryAssignment.updateMany(
-      { bde_id, status: 'active' },
-      { $set: { status: 'inactive' } }
-    );
+    const createdAssignments = [];
 
-    // Create new active assignment
-    const assignment = await BDETerritoryAssignment.create({
-      bde_id,
-      country_name,
-      state_id,
-      state_name: resolvedStateName || 'Assigned State',
-      district_ids,
-      district_names: resolvedDistrictNames,
-      assignment_start_date: assignment_start_date ? new Date(assignment_start_date) : new Date(),
-      assignment_end_date: assignment_end_date ? new Date(assignment_end_date) : null,
-      priority,
-      status: 'active',
-      assigned_by: req.user?.id || null,
-      notes: notes || null,
-    });
+    for (const item of statesToProcess) {
+      const sId = item.state_id;
+      if (!sId) continue;
 
-    // Update BDE profile main territory summary
-    bde.state_id = state_id;
-    bde.state_name = resolvedStateName;
-    if (district_ids.length > 0) {
-      bde.district_id = district_ids[0];
-      bde.district_name = resolvedDistrictNames[0];
+      // Resolve state name if missing
+      let resolvedStateName = item.state_name;
+      if (!resolvedStateName) {
+        const stateDoc = await GeoLevel1.findById(sId);
+        if (stateDoc) resolvedStateName = stateDoc.name;
+      }
+
+      // Resolve district IDs & names
+      let itemDistrictIds = Array.isArray(item.district_ids) ? item.district_ids : [];
+      let resolvedDistrictNames = Array.isArray(item.district_names) ? item.district_names : [];
+
+      // If all_districts requested or no specific districts provided, load all active districts for this state
+      if (item.all_districts && itemDistrictIds.length === 0) {
+        const allDistDocs = await GeoLevel2.find({ state_id: sId, status: { $ne: 'inactive' } }).lean();
+        itemDistrictIds = allDistDocs.map(d => d._id);
+        resolvedDistrictNames = allDistDocs.map(d => d.name);
+      } else if (resolvedDistrictNames.length === 0 && itemDistrictIds.length > 0) {
+        const districtDocs = await GeoLevel2.find({ _id: { $in: itemDistrictIds } });
+        resolvedDistrictNames = districtDocs.map(d => d.name);
+      }
+
+      // Deactivate existing active assignment for this specific state (unless replace_all already ran)
+      if (!replace_all) {
+        await BDETerritoryAssignment.updateMany(
+          { bde_id, state_id: sId, status: 'active' },
+          { $set: { status: 'inactive' } }
+        );
+      }
+
+      // Create new active assignment
+      const assignment = await BDETerritoryAssignment.create({
+        bde_id,
+        country_name: item.country_name || country_name,
+        state_id: sId,
+        state_name: resolvedStateName || 'Assigned State',
+        district_ids: itemDistrictIds,
+        district_names: resolvedDistrictNames,
+        assignment_start_date: item.assignment_start_date ? new Date(item.assignment_start_date) : (assignment_start_date ? new Date(assignment_start_date) : new Date()),
+        assignment_end_date: item.assignment_end_date ? new Date(item.assignment_end_date) : (assignment_end_date ? new Date(assignment_end_date) : null),
+        priority: item.priority || priority || 'medium',
+        status: 'active',
+        assigned_by: req.user?.id || null,
+        notes: item.notes || notes || null,
+      });
+
+      createdAssignments.push(assignment);
     }
+
+    // Refresh all active assignments to update BDE profile summary
+    const allActive = await BDETerritoryAssignment.find({ bde_id, status: 'active' }).sort({ createdAt: -1 });
+    const allStateNames = [...new Set(allActive.map(a => a.state_name).filter(Boolean))];
+    const allDistNames = [...new Set(allActive.flatMap(a => a.district_names || []))];
+    const allDistIds = allActive.flatMap(a => a.district_ids || []);
+
+    bde.state_id = allActive[0]?.state_id || null;
+    bde.state_name = allStateNames.join(', ') || null;
+    bde.district_id = allDistIds[0] || null;
+    bde.district_name = allDistNames[0] || null;
     await bde.save();
 
+    const stateSummaryStr = allStateNames.join(', ');
     await BDENotification.create({
       bde_id: bde._id,
       title: 'Territory Assigned',
-      message: `You have been assigned state "${resolvedStateName}" with ${district_ids.length} district(s).`,
+      message: `You have been assigned state territory: "${stateSummaryStr}" with ${allDistNames.length} total district(s).`,
       type: 'assignment',
     });
 
@@ -819,12 +873,11 @@ exports.assign_territory = async (req, res) => {
       actor_name: req.user?.name || 'Admin',
       action: 'TERRITORY_ASSIGNED',
       details: {
-        state_name: resolvedStateName,
-        district_count: district_ids.length,
-        districts: resolvedDistrictNames,
-        priority,
+        assigned_states: allStateNames,
+        total_districts: allDistNames.length,
+        created_count: createdAssignments.length,
       },
-      notes: notes || `Assigned to ${resolvedStateName} (${district_ids.length} districts)`,
+      notes: notes || `Territory assigned: ${stateSummaryStr} (${allDistNames.length} districts)`,
       req,
     });
 
@@ -833,15 +886,19 @@ exports.assign_territory = async (req, res) => {
       actor_id: req.user?.id,
       action: 'BDE_TERRITORY_ASSIGNED',
       entity_type: 'bde_territory_assignments',
-      entity_id: assignment._id,
-      after_snapshot: { state_name: resolvedStateName, district_count: district_ids.length },
+      entity_id: createdAssignments[0]?._id || bde._id,
+      after_snapshot: { states: allStateNames, district_count: allDistNames.length },
       req,
     });
 
     return res.status(200).json({
       status: 'success',
-      message: `Territory assigned successfully to BDE "${bde.full_name}"`,
-      data: assignment,
+      message: `Territory assigned successfully to BDE "${bde.full_name}" (${allStateNames.length} state(s) active)`,
+      data: {
+        created: createdAssignments,
+        active: allActive,
+        state_names: allStateNames,
+      },
     });
   } catch (error) {
     console.error('[assign_territory Error]', error);
@@ -854,18 +911,73 @@ exports.get_territory = async (req, res) => {
   try {
     const { bde_id } = req.params;
     const assignments = await BDETerritoryAssignment.find({ bde_id }).sort({ createdAt: -1 });
-    const current = assignments.find(a => a.status === 'active') || null;
+    const activeAssignments = assignments.filter(a => a.status === 'active');
+    const current = activeAssignments[0] || null;
 
     return res.status(200).json({
       status: 'success',
       data: {
         current,
+        active: activeAssignments,
         history: assignments,
       },
     });
   } catch (error) {
     console.error('[get_territory Error]', error);
     return res.status(500).json({ status: 'error', message: 'Failed to fetch territory', error: error.message });
+  }
+};
+
+// Remove/deactivate a specific territory assignment for a BDE
+exports.remove_territory_assignment = async (req, res) => {
+  try {
+    const { bde_id, assignment_id } = req.params;
+    const assignment = await BDETerritoryAssignment.findOneAndUpdate(
+      { _id: assignment_id, bde_id, status: 'active' },
+      { $set: { status: 'inactive' } },
+      { new: true }
+    );
+
+    if (!assignment) {
+      return res.status(404).json({ status: 'error', message: 'Active territory assignment not found' });
+    }
+
+    // Refresh remaining active assignments to update BDE profile summary
+    const remaining = await BDETerritoryAssignment.find({ bde_id, status: 'active' });
+    const remainingStates = [...new Set(remaining.map(r => r.state_name).filter(Boolean))];
+    const remainingDistNames = [...new Set(remaining.flatMap(r => r.district_names || []))];
+    const remainingDistIds = remaining.flatMap(r => r.district_ids || []);
+
+    await BDEProfile.findByIdAndUpdate(bde_id, {
+      state_name: remainingStates.join(', ') || null,
+      state_id: remaining[0]?.state_id || null,
+      district_name: remainingDistNames[0] || null,
+      district_id: remainingDistIds[0] || null,
+    });
+
+    await recordBdeActivity({
+      bde_id,
+      actor_type: 'admin',
+      actor_id: req.user?.id,
+      actor_name: req.user?.name || 'Admin',
+      action: 'TERRITORY_REMOVED',
+      details: { state_name: assignment.state_name, remaining_states: remainingStates },
+      notes: `Removed state territory "${assignment.state_name}". Remaining states: ${remainingStates.join(', ') || 'None'}`,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Territory "${assignment.state_name}" removed successfully`,
+      data: {
+        removed: assignment,
+        remaining_active: remaining,
+        remaining_states: remainingStates,
+      },
+    });
+  } catch (error) {
+    console.error('[remove_territory_assignment Error]', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to remove territory', error: error.message });
   }
 };
 
@@ -1181,7 +1293,9 @@ exports.list_bdes = async (req, res) => {
 
     const territoryMap = {};
     for (const t of territories) {
-      territoryMap[t.bde_id.toString()] = t;
+      const bId = t.bde_id.toString();
+      if (!territoryMap[bId]) territoryMap[bId] = [];
+      territoryMap[bId].push(t);
     }
 
     const planMap = {};
@@ -1197,9 +1311,13 @@ exports.list_bdes = async (req, res) => {
     let formatted = bdes.map(b => {
       const bId = b._id.toString();
       const kycInfo = kycMap[bId] || { kyc_status: 'pending', aadhaar_masked: 'XXXXXXXXXXXX', pan_masked: 'XXXXXXXXXX' };
-      const territory = territoryMap[bId] || null;
+      const bdeTerritories = territoryMap[bId] || [];
       const plans = planMap[bId] || null;
       const goal = goalMap[bId] || null;
+
+      const assignedStates = [...new Set(bdeTerritories.map(t => t.state_name).filter(Boolean))];
+      const allDistricts = bdeTerritories.flatMap(t => t.district_names || []);
+      const uniqueDistricts = [...new Set(allDistricts)];
 
       return {
         id: b._id,
@@ -1210,10 +1328,13 @@ exports.list_bdes = async (req, res) => {
         email: b.email,
         mobile_number: b.mobile_number,
         state_id: b.state_id,
-        state_name: territory ? territory.state_name : b.state_name,
+        state_name: assignedStates.length > 0 ? assignedStates.join(', ') : (b.state_name || 'None Assigned'),
+        assigned_states: assignedStates,
+        assigned_states_count: assignedStates.length,
+        territories: bdeTerritories,
         district_name: b.district_name,
-        assigned_districts: territory ? territory.district_names : [],
-        assigned_districts_count: territory ? territory.district_names.length : 0,
+        assigned_districts: uniqueDistricts,
+        assigned_districts_count: uniqueDistricts.length,
         assigned_plans: plans ? plans.plan_names : [],
         assigned_plans_count: plans ? plans.plan_names.length : 0,
         goal: goal,
@@ -1264,25 +1385,34 @@ exports.get_bde_detail = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'BDE not found' });
     }
 
-    const [kyc, territory, plans, goal, recentActivities] = await Promise.all([
+    const [kyc, activeTerritories, plans, goal, recentActivities] = await Promise.all([
       BDEKYC.findOne({ bde_id: id }).lean(),
-      BDETerritoryAssignment.findOne({ bde_id: id, status: 'active' }).lean(),
+      BDETerritoryAssignment.find({ bde_id: id, status: 'active' }).sort({ createdAt: -1 }).lean(),
       BDEPlanAssignment.findOne({ bde_id: id, status: 'active' }).populate('plan_ids').lean(),
       BDEGoal.findOne({ bde_id: id, status: 'active' }).lean(),
       BDEActivityLog.find({ bde_id: id }).sort({ createdAt: -1 }).limit(10).lean(),
     ]);
+
+    const territory = activeTerritories && activeTerritories.length > 0 ? activeTerritories[0] : null;
+    const assignedStates = [...new Set((activeTerritories || []).map(t => t.state_name).filter(Boolean))];
+    const allDistricts = [...new Set((activeTerritories || []).flatMap(t => t.district_names || []))];
 
     return res.status(200).json({
       status: 'success',
       data: {
         ...bde,
         id: bde._id,
+        state_name: assignedStates.length > 0 ? assignedStates.join(', ') : bde.state_name,
+        assigned_states: assignedStates,
+        assigned_districts: allDistricts,
+        assigned_districts_count: allDistricts.length,
         kyc: kyc ? {
           ...kyc,
           aadhaar_masked: maskAadhaar(kyc.aadhaar_number),
           pan_masked: maskPan(kyc.pan_number),
         } : null,
         territory,
+        territories: activeTerritories || [],
         plans,
         goal,
         recent_activities: recentActivities,

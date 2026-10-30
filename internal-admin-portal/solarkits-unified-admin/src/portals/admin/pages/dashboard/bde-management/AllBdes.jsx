@@ -324,7 +324,12 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                     {/* State & Districts */}
                     <td className="px-4 py-3.5">
                       <div className="font-bold text-slate-900 text-xs">{bde.state_name || 'Unassigned'}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
+                        {bde.assigned_states && bde.assigned_states.length > 1 && (
+                          <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px] border border-indigo-200">
+                            {bde.assigned_states.length} States
+                          </span>
+                        )}
                         {bde.assigned_districts_count > 0 ? (
                           <span className="text-[#0575B8] font-bold">
                             {bde.assigned_districts_count} District(s)

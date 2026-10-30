@@ -29,6 +29,7 @@ import {
   Edit3,
   CalendarPlus,
   ArrowUpRight,
+  Lock,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -87,6 +88,7 @@ export default function BdeEpcLeads() {
   const [stageCounts, setStageCounts] = useState({});
   const [totalAllCount, setTotalAllCount] = useState(0);
   const [territory, setTerritory] = useState(null);
+  const [territories, setTerritories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -103,6 +105,7 @@ export default function BdeEpcLeads() {
   const [followUpDate, setFollowUpDate] = useState('');
   const [followUpNotes, setFollowUpNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
 
   // Form State for Add / Edit
   const [formData, setFormData] = useState({
@@ -111,8 +114,8 @@ export default function BdeEpcLeads() {
     mobile_number: '',
     email: '',
     gst_number: '',
-    state_name: 'Maharashtra',
-    district_name: 'Pune',
+    state_name: 'Gujarat',
+    district_name: 'Ahmedabad',
     pincode: '',
     address_line: '',
     lead_source: 'direct_visit',
@@ -136,12 +139,19 @@ export default function BdeEpcLeads() {
         setLeads(res.data.data || []);
         setStageCounts(res.data.stage_counts || {});
         setTotalAllCount(res.data.total_all_leads || res.data.pagination?.total || 0);
-        setTerritory(res.data.territory || null);
-        if (res.data.territory?.state_name) {
+
+        const activeTerritories = Array.isArray(res.data.territories) && res.data.territories.length > 0
+          ? res.data.territories
+          : (res.data.territory && res.data.territory.state_name ? [res.data.territory] : []);
+        setTerritories(activeTerritories);
+        setTerritory(res.data.territory || activeTerritories[0] || null);
+
+        if (activeTerritories.length > 0) {
+          const firstT = activeTerritories[0];
           setFormData((prev) => ({
             ...prev,
-            state_name: res.data.territory.state_name,
-            district_name: res.data.territory.district_names?.[0] || prev.district_name,
+            state_name: prev.state_name || firstT.state_name,
+            district_name: prev.district_name || firstT.district_names?.[0] || '',
           }));
         }
       }
@@ -156,16 +166,117 @@ export default function BdeEpcLeads() {
     fetchLeads();
   }, [fetchLeads]);
 
+  // Derive districts for the currently selected state in formData
+  const selectedStateTerritory = territories.find(
+    (t) => t.state_name?.toLowerCase() === formData.state_name?.toLowerCase()
+  ) || (territories.length === 1 ? territories[0] : null);
+
+  const availableDistricts = selectedStateTerritory?.district_names || territory?.district_names || [];
+
+  const handleStateSelect = (selectedState) => {
+    const matchedTerritory = territories.find((t) => t.state_name === selectedState);
+    const firstDistrict = matchedTerritory?.district_names?.[0] || '';
+    setFormData((prev) => ({
+      ...prev,
+      state_name: selectedState,
+      district_name: firstDistrict,
+    }));
+    if (formErrors.state_name) setFormErrors((prev) => ({ ...prev, state_name: null }));
+    if (formErrors.district_name) setFormErrors((prev) => ({ ...prev, district_name: null }));
+  };
+
+  const handleMobileChange = (e) => {
+    const numeric = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setFormData((prev) => ({ ...prev, mobile_number: numeric }));
+    if (!numeric) {
+      setFormErrors((prev) => ({ ...prev, mobile_number: 'Mobile number is required' }));
+    } else if (numeric.length < 10) {
+      setFormErrors((prev) => ({ ...prev, mobile_number: `Please enter full 10 digits (${numeric.length}/10 entered)` }));
+    } else if (!/^[6-9]\d{9}$/.test(numeric)) {
+      setFormErrors((prev) => ({ ...prev, mobile_number: 'Indian mobile number must start with 6, 7, 8, or 9' }));
+    } else {
+      setFormErrors((prev) => ({ ...prev, mobile_number: null }));
+    }
+  };
+
+  const handleEmailChange = (e) => {
+    const val = e.target.value.trim();
+    setFormData((prev) => ({ ...prev, email: val }));
+    if (!val) {
+      setFormErrors((prev) => ({ ...prev, email: 'Email address is required' }));
+    } else if (!/^\S+@\S+\.\S+$/.test(val)) {
+      setFormErrors((prev) => ({ ...prev, email: 'Please enter a valid email address' }));
+    } else {
+      setFormErrors((prev) => ({ ...prev, email: null }));
+    }
+  };
+
+  const handlePincodeChange = (e) => {
+    const numeric = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setFormData((prev) => ({ ...prev, pincode: numeric }));
+    if (numeric && numeric.length < 6) {
+      setFormErrors((prev) => ({ ...prev, pincode: 'Pincode must be exactly 6 digits' }));
+    } else {
+      setFormErrors((prev) => ({ ...prev, pincode: null }));
+    }
+  };
+
+  const handleGstChange = (e) => {
+    const val = e.target.value.toUpperCase().trim().slice(0, 15);
+    setFormData((prev) => ({ ...prev, gst_number: val }));
+    if (val && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(val)) {
+      setFormErrors((prev) => ({ ...prev, gst_number: 'Invalid GSTIN format (e.g. 27ABCDE1234F1Z5)' }));
+    } else {
+      setFormErrors((prev) => ({ ...prev, gst_number: null }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.company_name.trim()) errors.company_name = 'EPC Company Name is required';
+    if (!formData.contact_person.trim()) errors.contact_person = 'Contact Person Name is required';
+
+    if (!formData.mobile_number) {
+      errors.mobile_number = 'Mobile number is required';
+    } else if (!/^[6-9]\d{9}$/.test(formData.mobile_number)) {
+      errors.mobile_number = 'Please enter a valid 10-digit Indian mobile number (starting with 6, 7, 8, or 9)';
+    }
+
+    if (!formData.email) {
+      errors.email = 'Email address is required';
+    } else if (!/^\S+@\S+\.\S+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!formData.state_name) errors.state_name = 'State is required';
+    if (!formData.district_name) errors.district_name = 'District is required';
+
+    if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) {
+      errors.pincode = 'Pincode must be exactly 6 digits';
+    }
+
+    if (formData.gst_number && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formData.gst_number)) {
+      errors.gst_number = 'Invalid GSTIN format (e.g. 27ABCDE1234F1Z5)';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleOpenCreateModal = () => {
     setEditLead(null);
+    setFormErrors({});
+    const initialTerritory = territories[0] || territory;
+    const initialState = initialTerritory?.state_name || 'Gujarat';
+    const initialDistrict = initialTerritory?.district_names?.[0] || '';
     setFormData({
       company_name: '',
       contact_person: '',
       mobile_number: '',
       email: '',
       gst_number: '',
-      state_name: territory?.state_name || 'Maharashtra',
-      district_name: territory?.district_names?.[0] || 'Pune',
+      state_name: initialState,
+      district_name: initialDistrict,
       pincode: '',
       address_line: '',
       lead_source: 'direct_visit',
@@ -178,14 +289,15 @@ export default function BdeEpcLeads() {
 
   const handleOpenEditModal = (lead) => {
     setEditLead(lead);
+    setFormErrors({});
     setFormData({
-      company_name: lead.company_name,
-      contact_person: lead.contact_person,
-      mobile_number: lead.mobile_number,
-      email: lead.email,
+      company_name: lead.company_name || '',
+      contact_person: lead.contact_person || '',
+      mobile_number: lead.mobile_number || '',
+      email: lead.email || '',
       gst_number: lead.gst_number || '',
-      state_name: lead.state_name,
-      district_name: lead.district_name,
+      state_name: lead.state_name || (territories[0]?.state_name || ''),
+      district_name: lead.district_name || (territories[0]?.district_names?.[0] || ''),
       pincode: lead.pincode || '',
       address_line: lead.address_line || '',
       lead_source: lead.lead_source || 'direct_visit',
@@ -198,6 +310,9 @@ export default function BdeEpcLeads() {
 
   const handleSubmitLeadForm = async (e) => {
     e.preventDefault();
+    if (!validateForm()) {
+      return;
+    }
     setSubmitting(true);
     try {
       if (editLead) {
@@ -400,18 +515,16 @@ export default function BdeEpcLeads() {
             <div className="flex items-center bg-slate-100 p-1 rounded-xl">
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition ${
-                  viewMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
+                className={`p-1.5 rounded-lg text-xs font-bold transition ${viewMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 title="Table View"
               >
                 <List className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('kanban')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition ${
-                  viewMode === 'kanban' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
+                className={`p-1.5 rounded-lg text-xs font-bold transition ${viewMode === 'kanban' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 title="Kanban Pipeline"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -424,9 +537,8 @@ export default function BdeEpcLeads() {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
           <button
             onClick={() => setStageFilter('all')}
-            className={`px-3 py-1 rounded-lg font-bold shrink-0 transition ${
-              stageFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className={`px-3 py-1 rounded-lg font-bold shrink-0 transition ${stageFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
           >
             All Leads ({totalLeadsCount})
           </button>
@@ -434,9 +546,8 @@ export default function BdeEpcLeads() {
             <button
               key={st}
               onClick={() => setStageFilter(st)}
-              className={`px-3 py-1 rounded-lg font-bold shrink-0 transition flex items-center gap-1.5 ${
-                stageFilter === st ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
-              }`}
+              className={`px-3 py-1 rounded-lg font-bold shrink-0 transition flex items-center gap-1.5 ${stageFilter === st ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
             >
               <span>{st}</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${stageFilter === st ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>
@@ -518,11 +629,10 @@ export default function BdeEpcLeads() {
                         <div>
                           <div className="font-mono font-bold text-slate-700 text-[11px]">{lead.gst_number}</div>
                           <span
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold mt-1 ${
-                              lead.gst_verified
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold mt-1 ${lead.gst_verified
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
+                              }`}
                           >
                             {lead.gst_verified ? 'Verified' : 'Pending Verification'}
                           </span>
@@ -681,10 +791,19 @@ export default function BdeEpcLeads() {
                     type="text"
                     required
                     value={formData.company_name}
-                    onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, company_name: e.target.value });
+                      if (formErrors.company_name) setFormErrors((prev) => ({ ...prev, company_name: null }));
+                    }}
                     placeholder="e.g. Apex Solar Tech Pvt Ltd"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-800 focus:outline-none transition ${formErrors.company_name ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                   />
+                  {formErrors.company_name && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.company_name}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -693,22 +812,41 @@ export default function BdeEpcLeads() {
                     type="text"
                     required
                     value={formData.contact_person}
-                    onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, contact_person: e.target.value });
+                      if (formErrors.contact_person) setFormErrors((prev) => ({ ...prev, contact_person: null }));
+                    }}
                     placeholder="e.g. Rajesh Sharma"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-800 focus:outline-none transition ${formErrors.contact_person ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                   />
+                  {formErrors.contact_person && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.contact_person}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mobile Number *</label>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Mobile Number *</span>
+                    <span className="text-[10px] text-slate-400 font-mono">10 digits</span>
+                  </label>
                   <input
                     type="tel"
                     required
+                    maxLength={10}
                     value={formData.mobile_number}
-                    onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value })}
+                    onChange={handleMobileChange}
                     placeholder="e.g. 9876543210"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-800 font-mono focus:outline-none transition ${formErrors.mobile_number ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                   />
+                  {formErrors.mobile_number && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.mobile_number}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -717,21 +855,37 @@ export default function BdeEpcLeads() {
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={handleEmailChange}
                     placeholder="e.g. contact@apexsolar.in"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-800 focus:outline-none transition ${formErrors.email ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                   />
+                  {formErrors.email && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">GST Number (Optional)</label>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>GST Number (Optional)</span>
+                    <span className="text-[10px] text-slate-400 font-mono">15 chars</span>
+                  </label>
                   <input
                     type="text"
+                    maxLength={15}
                     value={formData.gst_number}
-                    onChange={(e) => setFormData({ ...formData, gst_number: e.target.value.toUpperCase() })}
+                    onChange={handleGstChange}
                     placeholder="e.g. 27ABCDE1234F1Z5"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono uppercase focus:outline-none focus:border-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-800 font-mono uppercase focus:outline-none transition ${formErrors.gst_number ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                   />
+                  {formErrors.gst_number && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.gst_number}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -739,7 +893,7 @@ export default function BdeEpcLeads() {
                   <select
                     value={formData.lead_source}
                     onChange={(e) => setFormData({ ...formData, lead_source: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 cursor-pointer"
                   >
                     {LEAD_SOURCES.map((s) => (
                       <option key={s.value} value={s.value}>
@@ -749,26 +903,79 @@ export default function BdeEpcLeads() {
                   </select>
                 </div>
 
+                {/* State Field: Dropdown if multiple assigned states; Locked input if exactly 1 assigned state */}
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">State *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.state_name}
-                    onChange={(e) => setFormData({ ...formData, state_name: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                  />
+                  {territories.length > 1 ? (
+                    <>
+                      <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                        <span>State *</span>
+                        <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                          {territories.length} Assigned States
+                        </span>
+                      </label>
+                      <select
+                        required
+                        value={formData.state_name}
+                        onChange={(e) => handleStateSelect(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        {territories.map((t) => (
+                          <option key={t.id || t.state_id || t.state_name} value={t.state_name}>
+                            {t.state_name} ({t.district_names?.length || 0} Districts)
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : territories.length === 1 ? (
+                    <>
+                      <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                        <span>State *</span>
+                        <span className="text-[10px] text-indigo-700 font-bold flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                          <Lock className="w-2.5 h-2.5" /> Assigned State (Locked)
+                        </span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          readOnly
+                          disabled
+                          value={formData.state_name || territories[0].state_name}
+                          className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 font-bold cursor-not-allowed select-none pl-8"
+                        />
+                        <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="block font-bold text-slate-700 mb-1">State *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.state_name}
+                        onChange={(e) => setFormData({ ...formData, state_name: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                      />
+                    </>
+                  )}
+                  {formErrors.state_name && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold">{formErrors.state_name}</p>
+                  )}
                 </div>
 
+                {/* District Field: Dynamically filtered by selected state */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">District *</label>
-                  {territory?.district_names && territory.district_names.length > 0 ? (
+                  {availableDistricts && availableDistricts.length > 0 ? (
                     <select
+                      required
                       value={formData.district_name}
-                      onChange={(e) => setFormData({ ...formData, district_name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                      onChange={(e) => {
+                        setFormData({ ...formData, district_name: e.target.value });
+                        if (formErrors.district_name) setFormErrors((prev) => ({ ...prev, district_name: null }));
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-semibold focus:outline-none focus:border-blue-500 cursor-pointer"
                     >
-                      {territory.district_names.map((d) => (
+                      {availableDistricts.map((d) => (
                         <option key={d} value={d}>
                           {d}
                         </option>
@@ -778,22 +985,39 @@ export default function BdeEpcLeads() {
                     <input
                       type="text"
                       required
+                      placeholder="Enter district"
                       value={formData.district_name}
-                      onChange={(e) => setFormData({ ...formData, district_name: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, district_name: e.target.value });
+                        if (formErrors.district_name) setFormErrors((prev) => ({ ...prev, district_name: null }));
+                      }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
                     />
+                  )}
+                  {formErrors.district_name && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold">{formErrors.district_name}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Pincode</label>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Pincode</span>
+                    <span className="text-[10px] text-slate-400 font-mono">6 digits</span>
+                  </label>
                   <input
                     type="text"
+                    maxLength={6}
                     value={formData.pincode}
-                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                    onChange={handlePincodeChange}
                     placeholder="e.g. 411001"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-800 font-mono focus:outline-none transition ${formErrors.pincode ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                   />
+                  {formErrors.pincode && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> {formErrors.pincode}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -817,11 +1041,10 @@ export default function BdeEpcLeads() {
                         type="button"
                         key={p}
                         onClick={() => handleToggleProduct(p)}
-                        className={`px-3 py-1.5 rounded-xl font-semibold transition ${
-                          isSelected
+                        className={`px-3 py-1.5 rounded-xl font-semibold transition ${isSelected
                             ? 'bg-blue-600 text-white shadow-xs'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
+                          }`}
                       >
                         {p}
                       </button>

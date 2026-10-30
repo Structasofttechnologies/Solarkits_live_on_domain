@@ -107,6 +107,11 @@ export const bdeApi = {
     return res.data;
   },
 
+  removeTerritory: async (bdeId, assignmentId, uniqueId = 'ADM_BDE_MGMT') => {
+    const res = await axios.delete(`${API_BASE}/bde/territory/${bdeId}/${assignmentId}?unique_id=${uniqueId}&req_for=delete`, getHeaders());
+    return res.data;
+  },
+
   // Plan Assignment
   assignPlans: async (data, uniqueId = 'ADM_BDE_MGMT') => {
     const res = await axios.post(`${API_BASE}/bde/plans/assign?unique_id=${uniqueId}&req_for=edit`, data, getHeaders());
