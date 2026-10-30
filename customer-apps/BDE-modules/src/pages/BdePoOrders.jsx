@@ -825,8 +825,8 @@ export default function BdePoOrders() {
   // PO-level Token Deposit: If FIXED_AMOUNT, flat tokenValue (e.g. ₹60,000 for the whole PO). If PERCENTAGE, X% of total PO value.
   const estimatedTokenDeposit = isTokenBookingActive
     ? (tokenBookingType === 'PERCENTAGE'
-        ? Math.round(estimatedGrandTotal * (rawTokenValue / 100))
-        : rawTokenValue)
+      ? Math.round(estimatedGrandTotal * (rawTokenValue / 100))
+      : rawTokenValue)
     : 0;
 
   // Active Onboarded EPC Object
@@ -1071,7 +1071,7 @@ export default function BdePoOrders() {
             gstin: buyer?.gstin || null,
             allocated_quantity: totalCommitted,
             token_amount_paise: poTotalTokenPaise,
-            payment_status: 'PENDING',
+            payment_status: (allocatingOrder.token_paid_paise >= poTotalTokenPaise && poTotalTokenPaise > 0) ? 'PAID' : 'PENDING',
           },
         ];
       } else {
@@ -1083,7 +1083,7 @@ export default function BdePoOrders() {
             gstin: null,
             allocated_quantity: totalCommitted,
             token_amount_paise: poTotalTokenPaise,
-            payment_status: 'PENDING',
+            payment_status: (allocatingOrder.token_paid_paise >= poTotalTokenPaise && poTotalTokenPaise > 0) ? 'PAID' : 'PENDING',
           },
         ];
       }
@@ -2554,8 +2554,8 @@ export default function BdePoOrders() {
                 </div>
               )}
 
-              {/* Order Info Badge */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+              {/* Order Info & Rate Lock Badge */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div>
                   <div className="text-slate-400 text-[10px] uppercase font-bold">Committed PO Quota</div>
                   <div className="font-extrabold text-base text-slate-900 mt-0.5">
@@ -2565,10 +2565,14 @@ export default function BdePoOrders() {
                     {allocatingOrder.items?.[0]?.item_name || 'Solar Kit Blueprint'}
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[11px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-800">
+                <div className="flex flex-col sm:items-end gap-1">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 w-fit">
                     {allocatingOrder.po_category === 'COMBINE_PO' ? 'Combine PO' : 'Single PO'}
                   </span>
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black">
+                    <Lock className="w-3 h-3 text-emerald-600" />
+                    <span>Locked: ₹{Math.round(((allocatingOrder.items?.[0]?.unit_price_paise || kitObj.base_price_paise || 0) / 100)).toLocaleString('en-IN')}/kit</span>
+                  </div>
                 </div>
               </div>
 
