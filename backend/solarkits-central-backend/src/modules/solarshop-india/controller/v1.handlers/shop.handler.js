@@ -1389,7 +1389,8 @@ const get_combo_kits_by_district = async (req, res) => {
             quantity: bk.quantity || bk.qty || 1,
             skuCode: skuInfo?.sku_code || "",
             attributes: componentAttributes,
-            image: finalCompImage || null
+            image: finalCompImage || null,
+            datasheet: skuInfo?.product?.datasheet || bk.datasheet || null
           });
 
           bosIncludedList.push(name);
@@ -1481,6 +1482,26 @@ const get_combo_kits_by_district = async (req, res) => {
           kitDatasheets.push(item);
         }
       });
+
+      // Include Complete BOS Kit in kitDatasheets
+      if (bosComponents.length > 0 || (kit.bos_kits && kit.bos_kits.length > 0)) {
+        const bosCount = bosComponents.length || kit.bos_kits?.length || 0;
+        const bosItem = {
+          id: "bos-kit-complete",
+          productName: `Complete Balance of System (BOS) Kit (${bosCount} Components)`,
+          brandName: bosBrandName || "SolarKits Certified",
+          skuCode: kit.capacity ? `BOS-${kit.capacity}KW-KIT` : "BOS-KIT",
+          componentType: "BOS Kit",
+          datasheetUrl: kit.bos_datasheet || null,
+          hasDatasheet: !!kit.bos_datasheet,
+          quantity: 1,
+          unit: "Set",
+          image: bosImage || null,
+          components: bosComponents,
+          included: bosIncludedList
+        };
+        kitDatasheets.push(bosItem);
+      }
 
       const mappedKit = {
         id: kit._id.toString(),

@@ -23,6 +23,20 @@ exports.get_delivery_orders = async (req, res) => {
 
     const filter = { delivery_order_id: { $exists: true } };
 
+    // Auto-heal: Ensure any order with pending inward items is NOT stuck in out_for_delivery / sent_for_delivery_at
+    await DeliveryOrder.updateMany(
+      {
+        sent_for_delivery_at: { $ne: null },
+        'items.pending_qty': { $gt: 0 }
+      },
+      {
+        $set: {
+          sent_for_delivery_at: null,
+          delivery_status: 'new_order'
+        }
+      }
+    ).catch(() => {});
+
     const now = new Date();
     const slaThresholdDate = new Date(now.getTime() - 2 * 24 * 3600 * 1000);
 
@@ -245,8 +259,10 @@ exports.get_delivery_orders = async (req, res) => {
       total: await DeliveryOrder.countDocuments(baseQuery),
       new_orders: await DeliveryOrder.countDocuments({
         ...baseQuery,
-        sent_for_delivery_at: null,
-        delivery_status: { $nin: ['in_transit', 'delivered', 'delivery_exception'] }
+        $or: [
+          { sent_for_delivery_at: null, delivery_status: { $nin: ['in_transit', 'delivered', 'delivery_exception'] } },
+          { 'items.pending_qty': { $gt: 0 } }
+        ]
       }),
       bos_kit_assembly: await DeliveryOrder.countDocuments({
         ...baseQuery,
@@ -255,12 +271,13 @@ exports.get_delivery_orders = async (req, res) => {
       }),
       material_inward: await DeliveryOrder.countDocuments({
         ...baseQuery,
-        sent_for_delivery_at: null,
-        delivery_status: { $in: ['new_order', 'partially_inwarded', 'inward_completed', 'inward_done'] }
+        $or: [
+          { sent_for_delivery_at: null, delivery_status: { $in: ['new_order', 'partially_inwarded', 'inward_completed', 'inward_done'] } },
+          { 'items.pending_qty': { $gt: 0 } }
+        ]
       }),
       pending_inward: await DeliveryOrder.countDocuments({
         ...baseQuery,
-        sent_for_delivery_at: null,
         $or: [
           { delivery_status: { $in: ['new_order', 'partially_inwarded'] } },
           { 'items.pending_qty': { $gt: 0 } }
@@ -270,11 +287,13 @@ exports.get_delivery_orders = async (req, res) => {
       ready_for_dispatch: await DeliveryOrder.countDocuments({
         ...baseQuery,
         sent_for_delivery_at: { $ne: null },
+        'items.pending_qty': { $not: { $gt: 0 } },
         delivery_status: 'ready_for_dispatch'
       }),
       out_for_delivery: await DeliveryOrder.countDocuments({
         ...baseQuery,
         sent_for_delivery_at: { $ne: null },
+        'items.pending_qty': { $not: { $gt: 0 } },
         delivery_status: { $in: ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate', 'dispatched_pending'] }
       }),
       track_delivery: await DeliveryOrder.countDocuments({ ...baseQuery, delivery_status: 'in_transit' }),
@@ -809,6 +828,10 @@ exports.save_transport_details = async (req, res) => {
       notes: notes || order.transport_details.notes
     };
 
+    if (vehicle_type) {
+      order.required_vehicle = vehicle_type;
+    }
+
     order.audit_trail.push({
       action: 'Transport & Vehicle Details Updated',
       performed_by_name: req.user?.name || 'Delivery Manager',
@@ -846,6 +869,15 @@ exports.request_eway_bill = async (req, res) => {
       timestamp: new Date(),
       notes: 'Request submitted to Account Manager for GST invoice validation and e-way bill generation.'
     });
+
+    sendAdminNotification({
+      title: `📄 E-Way Bill Requested: Order #${order.order_number}`,
+      message: `Warehouse requested E-Way Bill generation for Delivery Order ${order.delivery_order_id}. Vehicle: ${order.transport_details?.vehicle_number || order.required_vehicle || 'Truck'}. Destination: ${order.destination?.district || order.destination?.state}.`,
+      category: 'orders',
+      priority: 'high',
+      action_url: '/account-panel/eway-bills',
+      metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'eway_bill_requested' }
+    }).catch(err => console.warn('[Eway Request Notification Error]:', err.message));
 
     await order.save();
     return res.status(200).json({
@@ -886,6 +918,15 @@ exports.verify_eway_bill = async (req, res) => {
       timestamp: new Date(),
       notes: `E-Way Bill #${generatedEwb} approved, valid until ${validityDate.toLocaleString('en-IN')}.`
     });
+
+    sendAdminNotification({
+      title: `✅ E-Way Bill Issued: Order #${order.order_number}`,
+      message: `E-Way Bill #${generatedEwb} generated & verified for Order #${order.order_number}. Warehouse can now complete dispatch.`,
+      category: 'orders',
+      priority: 'high',
+      action_url: '/warehouse/out-for-delivery',
+      metadata: { order_id: order._id, order_number: order.order_number, delivery_order_id: order.delivery_order_id, event: 'eway_bill_issued' }
+    }).catch(err => console.warn('[Eway Issued Notification Error]:', err.message));
 
     await order.save();
     return res.status(200).json({

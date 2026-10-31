@@ -1721,8 +1721,22 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
         deliveryOrder.items[existingItemIndex].pending_qty = Math.max(0, newItem.ordered_qty - deliveryOrder.items[existingItemIndex].received_qty);
         deliveryOrder.items[existingItemIndex].pi_reference = newItem.pi_reference;
       } else {
-        deliveryOrder.items.push(newItem);
+        // If an older item for the same SKU exists with 0 pending and different PI (stale mock), replace it
+        const staleItemIndex = deliveryOrder.items.findIndex(it => it.sku === newItem.sku && it.pi_reference?.pi_number !== newItem.pi_reference?.pi_number);
+        if (staleItemIndex >= 0 && (deliveryOrder.items[staleItemIndex].pending_qty === 0 || !deliveryOrder.items[staleItemIndex].pi_reference?.pi_number)) {
+          deliveryOrder.items[staleItemIndex] = newItem;
+        } else {
+          deliveryOrder.items.push(newItem);
+        }
       }
+    }
+
+    // Whenever items with pending quantities are synced, ensure order is actively in New Orders queue awaiting dock inwarding!
+    const totalPending = deliveryOrder.items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+    if (totalPending > 0) {
+      deliveryOrder.sent_for_delivery_at = null;
+      deliveryOrder.delivery_status = 'new_order';
+      deliveryOrder.kit_preparation_status = 'awaiting_components';
     }
 
     if (!deliveryOrder.num_kits || deliveryOrder.num_kits < inferredKitsCount) {
@@ -1735,11 +1749,23 @@ async function syncDeliveryOrderFromPi(pi, reqUser = null) {
       deliveryOrder.solarkit_model = detectedModel;
     }
     if (deliveryOrder.epcs && deliveryOrder.epcs.length > 0) {
+      deliveryOrder.epcs[0].items = deliveryOrder.items;
       if (!deliveryOrder.epcs[0].boskit_qty || deliveryOrder.epcs[0].boskit_qty === '1 Kits' || deliveryOrder.epcs[0].boskit_qty === '') {
         deliveryOrder.epcs[0].boskit_qty = `${deliveryOrder.num_kits} Kits`;
         deliveryOrder.epcs[0].inverter_qty = `${deliveryOrder.num_kits} Inverters`;
         deliveryOrder.epcs[0].system_capacity = deliveryOrder.system_capacity;
         deliveryOrder.epcs[0].solarkit_model = deliveryOrder.solarkit_model;
+      }
+    }
+
+    if (group?.vehicle_details?.vehicle_name) {
+      deliveryOrder.required_vehicle = group.vehicle_details.vehicle_name;
+      if (!deliveryOrder.transport_details) deliveryOrder.transport_details = {};
+      if (!deliveryOrder.transport_details.vehicle_type || deliveryOrder.transport_details.vehicle_type === '14ft Eicher (4.0 Ton)') {
+        deliveryOrder.transport_details.vehicle_type = group.vehicle_details.vehicle_name;
+      }
+      if (group.vehicle_details.vehicle_number && !deliveryOrder.transport_details.vehicle_number) {
+        deliveryOrder.transport_details.vehicle_number = group.vehicle_details.vehicle_number;
       }
     }
 
