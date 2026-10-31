@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
+import { useLocation } from "react-router-dom";
 import axiosInstance from "@/utils/axiosInstance";
 import {
   FaShoppingCart, FaEye, FaRegClock, FaCheckCircle,
@@ -14,6 +15,7 @@ import CustomInput from "@/Components/CustomInput";
 import MapLocationPicker from "@/Components/MapLocationPicker";
 
 export default function ProjectOrderStatus() {
+  const location = useLocation();
   const { user } = useSelector((state) => state.auth_slice || {});
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,8 +23,14 @@ export default function ProjectOrderStatus() {
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
   // Search & Copy state
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(location.state?.orderNumber || "");
   const [copiedKey, setCopiedKey] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.orderNumber) {
+      setSearchQuery(location.state.orderNumber);
+    }
+  }, [location.state]);
 
   const handleCopy = (text, key) => {
     if (!text) return;

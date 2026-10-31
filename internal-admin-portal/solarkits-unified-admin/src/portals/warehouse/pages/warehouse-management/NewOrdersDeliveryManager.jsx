@@ -956,6 +956,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   // Helper to determine if an order has been forwarded to Out for Delivery or beyond
   const isOrderSentForDelivery = (ord) => {
     if (!ord) return false;
+    // An order with pending items waiting for physical warehouse inward MUST stay in New Orders / Inwarding
+    const totalPending = (ord.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+    if (totalPending > 0) return false;
+
     // An order is transferred out of New Orders only when the user has explicitly clicked Send for Delivery
     if (ord.sent_for_delivery_at) return true;
     const dispatchedStatuses = ['in_transit', 'delivered', 'delivery_exception'];
@@ -1040,9 +1044,12 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
       }
     }
 
-    // 2. Scan items for inverters, ACDB, lightning arrestor, panels
+    // 2. Scan items for inverters (1 inverter = 1 kit) and panels (e.g. 9 panels/kit)
     const items = ord.items || [];
-    let detectedFromItems = 0;
+    let inverterCount = 0;
+    let panelKits = 0;
+    let fallbackHardwareKits = 0;
+
     for (const it of items) {
       const name = (it.product_name || it.name || '').toLowerCase();
       const sku = (it.sku || '').toUpperCase();
@@ -1050,40 +1057,41 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
 
       // Inverter: 1 inverter = 1 kit
       if (cat === 'inverter' || name.includes('inverter') || sku.includes('HAV-') || sku.includes('INV-')) {
-        if ((it.ordered_qty || 0) > detectedFromItems) detectedFromItems = it.ordered_qty;
+        if ((it.ordered_qty || 0) > inverterCount) inverterCount = it.ordered_qty;
         const capMatch = (it.product_name || '').match(/(\d+)\s*k[wv]/i) || sku.match(/(\d+)KW/i);
         if (capMatch && !cap) cap = `${capMatch[1]} kW`;
       }
-      // ACDB: 1 ACDB = 1 kit
-      if (sku.includes('ACDB') || name.includes('acdb')) {
-        if ((it.ordered_qty || 0) > detectedFromItems) detectedFromItems = it.ordered_qty;
-      }
-      // Lightning arrestor: 1 = 1 kit
-      if (name.includes('lightning arrestor') || sku.includes('LIG-')) {
-        if ((it.ordered_qty || 0) > detectedFromItems) detectedFromItems = it.ordered_qty;
-      }
-      // Earthing rod: 3 rods = 1 kit
-      if (name.includes('earthing rod') || sku.includes('EAR-')) {
-        const fromRods = Math.round((it.ordered_qty || 0) / 3);
-        if (fromRods > detectedFromItems) detectedFromItems = fromRods;
-      }
+
       // Panels: 9 panels = 1 kit (e.g. 225 panels = 25 kits, 630 panels = 70 kits)
       if (cat.includes('panel') || name.includes('module') || name.includes('panel')) {
         const pQty = it.ordered_qty || 0;
         if (pQty > 0) {
           const fromPanels = Math.round(pQty / 9);
-          if (fromPanels > detectedFromItems) detectedFromItems = fromPanels;
+          if (fromPanels > panelKits) panelKits = fromPanels;
+        }
+      }
+
+      // Strict hardware check: NEVER match cables (e.g. "Lightning Arrestor Cable" is a cable, NOT an arrestor!)
+      const isCableOrClamp = name.includes('cable') || sku.includes('CAB-') || sku.includes('CLA-') || sku.includes('UVR-') || sku.includes('PVC-') || sku.includes('SCR-');
+      if (!isCableOrClamp) {
+        if (sku.includes('ACDB') || name.includes('acdb')) {
+          if ((it.ordered_qty || 0) > fallbackHardwareKits) fallbackHardwareKits = it.ordered_qty;
+        }
+        if (sku.startsWith('LIG-') || (name.includes('lightning arrestor') && !name.includes('cable'))) {
+          if ((it.ordered_qty || 0) > fallbackHardwareKits) fallbackHardwareKits = it.ordered_qty;
         }
       }
     }
 
-    // 3. Resolve true totalKits dynamically (taking max so that epc or item quantities always govern)
-    let kits = Math.max(
-      epcKits,
-      detectedFromItems,
-      Number(ord.num_kits) || 0,
-      Number(ord.total_kits) || 0
-    );
+    // 3. Resolve true totalKits dynamically
+    // Highest priority: EPC kit count, Inverter count, or explicit order count
+    let kits = epcKits || 
+               inverterCount || 
+               Number(ord.total_kits) || 
+               Number(ord.num_kits) || 
+               panelKits || 
+               fallbackHardwareKits || 
+               1;
 
     if (!kits) kits = 1;
     if (!cap) cap = '3 kW';
@@ -1957,12 +1965,12 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   )}
 
                   <div className="flex items-center gap-3 text-text-muted text-[11px]">
-                    {ord.incoming_truck_group?.vehicle_number && (
-                      <span className="flex items-center gap-1.5 font-mono text-text-primary bg-surface px-2 py-0.5 rounded border border-border">
-                        <FaTruck className="text-primary text-[10px]" />
-                        <strong>{ord.incoming_truck_group.vehicle_number}</strong>
-                        {ord.incoming_truck_group.transporter_name && (
-                          <span className="text-text-muted font-sans hidden md:inline">({ord.incoming_truck_group.transporter_name})</span>
+                    {(ord.incoming_truck_group?.vehicle_number || ord.transport_details?.vehicle_number || ord.required_vehicle || ord.transport_details?.vehicle_type) && (
+                      <span className="flex items-center gap-1.5 font-mono text-text-primary bg-surface px-2.5 py-1 rounded-lg border border-border shadow-2xs" title="Assigned Delivery Truck / Vehicle from Account Manager">
+                        <FaTruck className="text-primary text-[11px]" />
+                        <strong>{ord.incoming_truck_group?.vehicle_number || ord.transport_details?.vehicle_number || ord.required_vehicle || ord.transport_details?.vehicle_type}</strong>
+                        {(ord.incoming_truck_group?.transporter_name || ord.transport_details?.transporter_name) && (
+                          <span className="text-text-muted font-sans hidden md:inline">({ord.incoming_truck_group?.transporter_name || ord.transport_details?.transporter_name})</span>
                         )}
                       </span>
                     )}
@@ -3915,6 +3923,35 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                     </button>
                   </div>
 
+                  {/* Order Composition Clarity Banner */}
+                  {(() => {
+                    const { totalKits, capacity } = getOrderKitMetrics(selectedOrderForInward);
+                    const rawItems = (modalInwardItems || []).filter(it => !isBosKitItem(it) && !it.sku?.toLowerCase().includes('inverter') && !(it.category || '').toLowerCase().includes('inverter') && !(it.category || '').toLowerCase().includes('panel') && !it.sku?.toLowerCase().includes('war-bif'));
+                    const totalRawParts = rawItems.reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
+                    
+                    if (totalRawParts > 0) {
+                      return (
+                        <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-200 rounded-xl text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-2xs">
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-xl">📦</span>
+                            <div>
+                              <div className="font-black text-purple-950 flex flex-wrap items-center gap-2">
+                                <span>Customer Order Requirement: <strong>{totalKits} Complete SolarKits ({capacity})</strong></span>
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-700 text-white shadow-2xs">
+                                  Exactly {totalKits} Finished BOS Kits Needed
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-purple-900 font-semibold mt-1">
+                                Notice the {rawItems.length} loose hardware lines below (cables, clamps, screws, lugs = {totalRawParts.toLocaleString('en-IN')} total parts): These are the <strong>Supplier Raw BOM Materials</strong> unloaded at the dock to be assembled into the {totalKits} Finished BOS Kits at your Workstation (or allocate {totalKits} kits from Buffer Stock).
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   {/* Items Input Table */}
                   <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-white max-h-[460px] overflow-y-auto shadow-xs">
                     <table className="w-full text-left text-xs">
@@ -4251,7 +4288,38 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               <td className="p-3">
                                 <div className="font-mono font-black text-primary text-xs">{it.sku}</div>
                                 <div className="font-black text-slate-950 text-xs mt-0.5">{it.product_name}</div>
-                                <div className="text-[10px] text-slate-600 font-bold mt-0.5">{it.category || 'Component'}</div>
+                                {(() => {
+                                  const { totalKits } = getOrderKitMetrics(selectedOrderForInward);
+                                  const isRawBomPart = !isBos && (
+                                    (it.category || '').toLowerCase().includes('bos') ||
+                                    (it.sku || '').toLowerCase().includes('cab-') ||
+                                    (it.sku || '').toLowerCase().includes('cla-') ||
+                                    (it.sku || '').toLowerCase().includes('pvc-') ||
+                                    (it.sku || '').toLowerCase().includes('uvr-') ||
+                                    (it.sku || '').toLowerCase().includes('scr-') ||
+                                    (it.sku || '').toLowerCase().includes('ear-') ||
+                                    (it.sku || '').toLowerCase().includes('lig-') ||
+                                    (it.sku || '').toLowerCase().includes('mc4-') ||
+                                    (it.sku || '').toLowerCase().includes('dcd-') ||
+                                    (it.sku || '').toLowerCase().includes('ac-')
+                                  );
+
+                                  return (
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                      <span className="text-[10px] text-slate-600 font-bold">{it.category || 'Component'}</span>
+                                      {isRawBomPart && (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs">
+                                          <span>🔩 BOM Raw Material for {totalKits} Kits</span>
+                                          {totalKits > 0 && it.ordered_qty > 0 && (
+                                            <span className="text-purple-700 font-bold">
+                                              ({(it.ordered_qty / totalKits).toFixed(1).replace('.0', '')} per kit)
+                                            </span>
+                                          )}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
 
                                 {/* Live Scanned QR & Serial Tags Display */}
                                 {itemScans.length > 0 && (

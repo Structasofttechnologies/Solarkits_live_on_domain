@@ -884,6 +884,9 @@ export default function CheckOut() {
           orderData.payment_method === "icici_ecollection" ||
           orderData.payment_gateway_used === "icici_ecollection";
 
+        // Instantly clear cart in Redux & sync empty cart to backend
+        dispatch(clearCart());
+
         dispatch(
           setAlert({
             type: "success",
@@ -1014,11 +1017,18 @@ export default function CheckOut() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
           <Button
-            onClick={() => navigate("/dashboard/order-status")}
+            onClick={() =>
+              navigate("/track-status", {
+                state: {
+                  orderNumber: confirmedOrderData?.order_number,
+                  orderId: confirmedOrderData?._id || confirmedOrderData?.id,
+                },
+              })
+            }
             variant="primary"
             className="py-3.5 shadow-md font-bold text-sm"
           >
-            Track Live Order Status
+            Track Order Delivery Status
           </Button>
           <Button
             onClick={() => navigate("/preconfigured-combo-kit")}

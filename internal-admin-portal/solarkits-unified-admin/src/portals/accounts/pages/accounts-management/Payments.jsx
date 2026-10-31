@@ -1601,6 +1601,9 @@ export default function Payments() {
         return Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
       });
 
+      const explicitKits = grp.pis.find(p => p.num_kits || p.total_kits)?.num_kits || grp.pis.find(p => p.num_kits || p.total_kits)?.total_kits;
+      const inferredKitsCount = explicitKits || totalInverterUnits || (totalPanelUnits > 0 ? (Math.round(totalPanelUnits / 9) || Math.round(totalPanelUnits / 4)) : 0) || 1;
+
       result.push({
         ...grp,
         totalValue,
@@ -1619,6 +1622,7 @@ export default function Payments() {
         totalPanelUnits,
         totalInverterUnits,
         totalBosUnits,
+        inferredKitsCount,
       });
     });
 
@@ -5185,7 +5189,14 @@ export default function Payments() {
                             </span>
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-900 border border-purple-200 shadow-2xs">
                               <span>📦</span>
-                              <span>Complete BOS Kit: <strong>{grp.totalBosUnits > 0 ? `${grp.totalBosUnits} Sets` : `${grp.bosPiCount} PI`}</strong></span>
+                              <span>
+                                Complete BOS Kit: <strong>{grp.inferredKitsCount > 0 ? `${grp.inferredKitsCount} Kits` : `${grp.bosPiCount} PI`}</strong>
+                                {grp.totalBosUnits > 0 && (
+                                  <span className="ml-1 text-[10px] text-purple-700 font-normal">
+                                    ({grp.totalBosUnits.toLocaleString("en-IN")} Raw Parts)
+                                  </span>
+                                )}
+                              </span>
                             </span>
                           </div>
 
@@ -5293,12 +5304,25 @@ export default function Payments() {
                                       </div>
                                     </td>
                                     <td className="py-3.5 px-4 text-center">
-                                      <div className="font-bold text-gray-900">
-                                        {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
-                                      </div>
-                                      <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
-                                        {(pi.items || []).map(it => it.sku_code).join(", ")}
-                                      </span>
+                                      {compLabel === "Complete BOS Kit" ? (
+                                        <div>
+                                          <div className="font-bold text-purple-950">
+                                            {grp.inferredKitsCount || 1} Kits
+                                          </div>
+                                          <span className="text-[10px] text-purple-700 font-bold block">
+                                            {(pi.items || []).length} SKUs • {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0).toLocaleString("en-IN")} Raw Parts
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div>
+                                          <div className="font-bold text-gray-900">
+                                            {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
+                                          </div>
+                                          <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
+                                            {(pi.items || []).map(it => it.sku_code).join(", ")}
+                                          </span>
+                                        </div>
+                                      )}
                                     </td>
 
                                     {/* 30% Advance */}
