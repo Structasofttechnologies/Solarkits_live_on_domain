@@ -112,19 +112,21 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
         // Pre-populate transport forms
         const forms = {};
         allOrders.forEach(ord => {
+          const incTruck = ord.incoming_truck_group || {};
+          const trans = ord.transport_details || {};
           forms[ord._id] = {
             delivery_method: ord.delivery_method || 'manual',
-            vehicle_number: ord.transport_details?.vehicle_number || '',
-            vehicle_type: ord.transport_details?.vehicle_type || ord.required_vehicle || 'Tata Ace (1.5 Ton)',
-            transporter_name: ord.transport_details?.transporter_name || '',
-            transporter_id: ord.transport_details?.transporter_id || '',
-            driver_name: ord.transport_details?.driver_name || '',
-            driver_mobile: ord.transport_details?.driver_mobile || '',
-            dispatch_date: ord.transport_details?.dispatch_date ? new Date(ord.transport_details.dispatch_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-            expected_delivery_date: ord.transport_details?.expected_delivery_date ? new Date(ord.transport_details.expected_delivery_date).toISOString().slice(0, 10) : new Date(Date.now() + 48 * 3600 * 1000).toISOString().slice(0, 10),
-            docket_number: ord.transport_details?.docket_number || '',
-            lr_number: ord.transport_details?.lr_number || '',
-            notes: ord.transport_details?.notes || '',
+            vehicle_number: trans.vehicle_number || incTruck.vehicle_number || '',
+            vehicle_type: trans.vehicle_type || ord.required_vehicle || incTruck.vehicle_type || 'Tata Ace (1.5 Ton)',
+            transporter_name: trans.transporter_name || incTruck.transporter_name || '',
+            transporter_id: trans.transporter_id || '',
+            driver_name: trans.driver_name || incTruck.driver_name || '',
+            driver_mobile: trans.driver_mobile || incTruck.driver_mobile || '',
+            dispatch_date: trans.dispatch_date ? new Date(trans.dispatch_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+            expected_delivery_date: trans.expected_delivery_date ? new Date(trans.expected_delivery_date).toISOString().slice(0, 10) : new Date(Date.now() + 48 * 3600 * 1000).toISOString().slice(0, 10),
+            docket_number: trans.docket_number || incTruck.lr_number || '',
+            lr_number: trans.lr_number || incTruck.lr_number || '',
+            notes: trans.notes || '',
             vehicle_rear_photo: ord.dispatch_evidence?.vehicle_rear_photo || '',
             docket_doc: ord.dispatch_evidence?.docket_doc || ''
           };
@@ -1216,84 +1218,164 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
               {/* ── STEP 3 VIEW: E-WAY BILL & AM VERIFICATION ── */}
               {currentStep === 3 && (
                 <div className="space-y-4 animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">3</span>
-                    <h4 className="text-sm font-bold text-text-primary">Step 3: Request & Verify E-Way Bill (Account Manager Approval)</h4>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">3</span>
+                      <h4 className="text-sm font-bold text-text-primary">Step 3: Request & Verify E-Way Bill (Government GST Compliance)</h4>
+                    </div>
+                    {activeOrder.eway_bill?.status === 'generated' ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1.5">
+                        <FaCheckCircle /> Approved & Issued
+                      </span>
+                    ) : activeOrder.eway_bill?.status === 'pending' ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase bg-amber-500/15 text-amber-500 border border-amber-500/30 flex items-center gap-1.5 animate-pulse">
+                        <HiOutlineClock /> Awaiting Accounts Clearance
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold uppercase bg-surface-hover border border-border text-text-muted">
+                        Pending Request
+                      </span>
+                    )}
                   </div>
 
                   <div className="pl-8 space-y-3 text-xs">
-                    <div className="p-4 bg-surface-hover/60 border border-border rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase text-text-muted tracking-wider">E-Way Bill Status:</span>
-                          {activeOrder.eway_bill?.status === 'generated' ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-success/15 text-success border border-success/30 flex items-center gap-1">
-                              <FaCheckCircle /> Approved & Issued
+                    {/* STATE 1: E-Way Bill ALREADY ISSUED & COMPLIANT */}
+                    {activeOrder.eway_bill?.status === 'generated' ? (
+                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/30 rounded-xl space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider block mb-0.5">
+                              Government E-Way Bill Issued
                             </span>
-                          ) : activeOrder.eway_bill?.status === 'pending' ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-warning/15 text-warning border border-warning/30 flex items-center gap-1 animate-pulse">
-                              <HiOutlineClock /> Awaiting Account Manager Action
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-surface border border-border text-text-muted">
-                              Not Requested Yet
-                            </span>
-                          )}
-                        </div>
-
-                        {activeOrder.eway_bill?.status === 'generated' ? (
-                          <div className="mt-2 space-y-1">
-                            <div className="font-mono text-sm font-black text-text-primary">
-                              E-Way Bill #: {activeOrder.eway_bill.eway_bill_number}
+                            <div className="font-mono text-base sm:text-lg font-black text-text-primary flex items-center gap-2">
+                              <span>EWB #{activeOrder.eway_bill.eway_bill_number}</span>
+                              <span className="text-[10px] font-sans font-bold bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                Validated
+                              </span>
                             </div>
-                            <div className="text-[11px] text-text-muted">
-                              Valid until: {new Date(activeOrder.eway_bill.valid_until).toLocaleString('en-IN')}
-                            </div>
+                            <p className="text-[11px] text-text-muted mt-1">
+                              Valid until: <strong className="text-text-primary">{new Date(activeOrder.eway_bill.valid_until).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong> (Compliant for Transit)
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
                             {activeOrder.eway_bill.eway_bill_pdf && (
                               <a
                                 href={activeOrder.eway_bill.eway_bill_pdf}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline mt-1"
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-surface border border-border hover:border-primary text-text-primary hover:text-primary transition-all flex items-center gap-1.5 shadow-2xs"
                               >
-                                <FaFilePdf className="text-danger" /> View E-Way Bill Document
+                                <FaFilePdf className="text-danger" />
+                                <span>View / Print PDF</span>
                               </a>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => setCurrentStep(4)}
+                              className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-primary text-white hover:bg-primary/90 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <span>Next: Gate Evidence</span>
+                              <span>→</span>
+                            </button>
                           </div>
-                        ) : (
-                          <p className="text-[11px] text-text-muted mt-1 max-w-md">
-                            Account Manager verifies invoice, GST, and transport info before generating E-Way Bill. Dispatch remains strictly disabled until verified.
-                          </p>
-                        )}
-                      </div>
+                        </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        {activeOrder.eway_bill?.status !== 'generated' && (
-                          <button
-                            type="button"
-                            onClick={() => handleRequestEwayBill(activeOrder._id)}
-                            disabled={requestingEway}
-                            className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-warning text-black hover:bg-warning/90 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            {requestingEway ? <FaSpinner className="animate-spin" /> : <HiOutlineDocumentText className="text-sm" />}
-                            <span>Request E-Way Bill</span>
-                          </button>
-                        )}
-
-                        {activeOrder.eway_bill?.status !== 'generated' && (
-                          <button
-                            type="button"
-                            onClick={() => handleVerifyEwayBill(activeOrder._id)}
-                            disabled={verifyingEway}
-                            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all flex items-center gap-1 cursor-pointer"
-                            title="Simulate Account Manager generating E-Way Bill"
-                          >
-                            {verifyingEway ? <FaSpinner className="animate-spin" /> : <FaCheckCircle className="text-xs" />}
-                            <span>Verify & Issue (AM)</span>
-                          </button>
-                        )}
+                        <div className="text-[11px] text-text-secondary flex items-center gap-2">
+                          <FaCheckCircle className="text-emerald-500 shrink-0" />
+                          <span>GST compliance cleared. Transporter is authorized to move cargo on road. Proceed to Step 4 to attach vehicle photo and dispatch.</span>
+                        </div>
                       </div>
-                    </div>
+                    ) : activeOrder.eway_bill?.status === 'pending' ? (
+                      /* STATE 2: REQUEST IS PENDING WITH ACCOUNT MANAGER */
+                      <div className="p-4 bg-amber-500/5 border border-amber-500/30 rounded-xl space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-500/20">
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-wider block mb-0.5">
+                              Request Sent to Account Manager
+                            </span>
+                            <div className="font-semibold text-sm text-text-primary">
+                              E-Way Bill request submitted on {activeOrder.eway_bill?.requested_at ? new Date(activeOrder.eway_bill.requested_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'recently'}.
+                            </div>
+                            <p className="text-[11px] text-text-muted mt-1 max-w-xl">
+                              Account Manager has been notified with vehicle & transport details to verify GST invoice and generate the E-Way bill. Dispatch remains locked until issued.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleRequestEwayBill(activeOrder._id)}
+                              disabled={requestingEway}
+                              className="px-3 py-2 rounded-xl text-xs font-bold bg-surface border border-border hover:border-amber-500 text-text-secondary hover:text-text-primary transition-all flex items-center gap-1.5 cursor-pointer"
+                              title="Re-send notification alert to Account Manager"
+                            >
+                              {requestingEway ? <FaSpinner className="animate-spin text-xs" /> : <HiOutlineClock className="text-sm" />}
+                              <span>Re-send Alert</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyEwayBill(activeOrder._id)}
+                              disabled={verifyingEway}
+                              className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              title="Directly verify & generate E-Way Bill immediately"
+                            >
+                              {verifyingEway ? <FaSpinner className="animate-spin text-xs" /> : <FaCheckCircle className="text-xs" />}
+                              <span>⚡ Verify & Issue Now (AM Action)</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-text-secondary bg-surface/50 p-2.5 rounded-lg border border-border/50 flex items-center justify-between gap-2">
+                          <span>💡 <strong>Quick Clearance:</strong> If Account Manager confirmed over phone or during testing, click <strong>"Verify & Issue Now"</strong> to immediately generate the 12-digit E-Way Bill and unlock Step 4.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      /* STATE 3: NOT REQUESTED YET */
+                      <div className="p-4 bg-surface-hover/60 border border-border rounded-xl space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-text-muted tracking-wider block mb-0.5">
+                              Action Required
+                            </span>
+                            <div className="font-semibold text-sm text-text-primary">
+                              E-Way Bill not requested yet
+                            </div>
+                            <p className="text-[11px] text-text-muted mt-1 max-w-xl">
+                              Vehicle & transport details from Step 2 are ready. Submit request to Account Manager to prepare the GST E-Way Bill for transport.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleRequestEwayBill(activeOrder._id)}
+                              disabled={requestingEway}
+                              className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-warning text-black hover:bg-warning/90 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                              {requestingEway ? <FaSpinner className="animate-spin" /> : <HiOutlineDocumentText className="text-sm" />}
+                              <span>Request E-Way Bill from Accounts</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyEwayBill(activeOrder._id)}
+                              disabled={verifyingEway}
+                              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                              title="Instant verification & direct issue bypass"
+                            >
+                              {verifyingEway ? <FaSpinner className="animate-spin text-xs" /> : <FaCheckCircle className="text-xs" />}
+                              <span>Direct Issue (AM)</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-text-muted">
+                          Government compliance mandates a valid E-Way Bill for consignments over ₹50,000 before leaving the warehouse dock.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
