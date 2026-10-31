@@ -1129,10 +1129,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const items = (ord.items || []).map(it => ({ ...it }));
     const existingBosIndex = items.findIndex(it => isBosKitItem(it));
 
-    const isKitReady = ord.kit_preparation_status === 'kit_ready' || 
-                       ord.kit_assembly_details?.assembly_status === 'completed';
-    const receivedKits = isKitReady ? totalKits : 0;
-    const pendingKits = Math.max(0, totalKits - receivedKits);
+    const actualReceivedKits = existingBosIndex >= 0
+      ? (items[existingBosIndex].received_qty || 0)
+      : (ord.inward_status === 'fully_inwarded' ? totalKits : 0);
+    const pendingKits = Math.max(0, totalKits - actualReceivedKits);
+    const receivedKits = actualReceivedKits;
 
     const cleanCap = (capacity || '3 kW').replace(/\s+/g, '');
     const bosSku = `BOS-KIT-${cleanCap.toUpperCase()}-STD`;
@@ -1172,9 +1173,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const items = [...(order.items || [])].map(it => ({ ...it }));
 
     const existingBosIndex = items.findIndex(it => isBosKitItem(it));
-    const isKitReady = order.kit_preparation_status === 'kit_ready' || order.kit_assembly_details?.assembly_status === 'completed';
-    const receivedKits = isKitReady ? totalKits : 0;
-    const pendingKits = Math.max(0, totalKits - receivedKits);
+    const actualReceivedKits = existingBosIndex >= 0
+      ? (items[existingBosIndex].received_qty || 0)
+      : (order.inward_status === 'fully_inwarded' ? totalKits : 0);
+    const pendingKits = Math.max(0, totalKits - actualReceivedKits);
+    const receivedKits = actualReceivedKits;
     const cleanCap = (capacity || '3 kW').replace(/\s+/g, '');
     const bosSku = `BOS-KIT-${cleanCap.toUpperCase()}-STD`;
     const bosProductName = `BOS Kit (${capacity || '3 kW'} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`;
@@ -4035,7 +4038,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                       ) || preassembledStock.find(m => m.name?.toLowerCase().includes('3 kw')) || preassembledStock[0];
                                       const stockAvailable = matchedModel?.ready_stock || 0;
                                       const currentQty = parseInt(input.qty) || 0;
-                                      const isKitAssembledForThisOrder = selectedOrderForInward?.kit_preparation_status === 'kit_ready' || selectedOrderForInward?.kit_assembly_details?.assembly_status === 'completed';
+                                      const isKitAssembledForThisOrder = (selectedOrderForInward?.kit_preparation_status === 'kit_ready' || selectedOrderForInward?.kit_assembly_details?.assembly_status === 'completed') && selectedOrderForInward?.kit_preparation_status !== 'awaiting_components';
                                       const canAllocate = Math.min(it.pending_qty, stockAvailable);
                                       const remainingToAssemble = Math.max(0, it.pending_qty - currentQty);
 
@@ -5146,9 +5149,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           const itemsWithBosKit = (() => {
             const list = [...(ord.items || [])].map(it => ({ ...it }));
             const existingBosIndex = list.findIndex(it => isBosKitItem(it));
-            const isKitReady = ord.kit_preparation_status === 'kit_ready' || ord.kit_assembly_details?.assembly_status === 'completed';
-            const receivedKits = isKitReady ? totalKits : 0;
-            const pendingKits = Math.max(0, totalKits - receivedKits);
+            const actualReceivedKits = existingBosIndex >= 0
+              ? (list[existingBosIndex].received_qty || 0)
+              : (ord.inward_status === 'fully_inwarded' ? totalKits : 0);
+            const pendingKits = Math.max(0, totalKits - actualReceivedKits);
+            const receivedKits = actualReceivedKits;
 
             if (existingBosIndex >= 0) {
               if (list[existingBosIndex].ordered_qty < totalKits) {
