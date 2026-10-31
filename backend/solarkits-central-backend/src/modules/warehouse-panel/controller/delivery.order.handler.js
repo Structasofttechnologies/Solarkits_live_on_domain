@@ -190,6 +190,33 @@ exports.get_delivery_orders = async (req, res) => {
         };
       });
 
+      // Ensure BOS Kit line item exists in items if order requires kit preparation
+      const hasBosItem = enrichedItems.some(it => 
+        it.sku?.startsWith('BOS-KIT-') || 
+        it.category === 'BOS Kit' || 
+        (it.product_name && it.product_name.toLowerCase().includes('bos kit'))
+      );
+      if (!hasBosItem && ordObj.kit_preparation_status && ordObj.kit_preparation_status !== 'not_required') {
+        const cleanCap = detectedCap.replace(/\s+/g, '').toUpperCase();
+        const isDelivered = ordObj.delivery_status === 'delivered';
+        const isReady = ordObj.kit_preparation_status === 'kit_ready';
+        const receivedQty = isDelivered ? totalKits : 0;
+        const pendingQty = Math.max(0, totalKits - receivedQty);
+
+        enrichedItems.push({
+          sku: `BOS-KIT-${cleanCap}-STD`,
+          product_name: `BOS Kit (${detectedCap} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`,
+          category: 'BOS Kit',
+          ordered_qty: totalKits,
+          received_qty: receivedQty,
+          pending_qty: pendingQty,
+          rack_location: ordObj.kit_assembly_details?.storage_location || 'BAY-BOS-STOCK',
+          qc_status: isReady ? 'Passed' : 'Pending',
+          base_warehouse_stock: 100,
+          available_inventory_stock: 100
+        });
+      }
+
       const epcsList = (ordObj.epcs && ordObj.epcs.length > 0)
         ? ordObj.epcs.map(epc => ({
             ...epc,
@@ -269,13 +296,7 @@ exports.get_delivery_orders = async (req, res) => {
         kit_preparation_status: { $in: ['awaiting_components', 'ready_for_assembly', 'in_assembly'] },
         delivery_status: { $ne: 'delivered' }
       }),
-      material_inward: await DeliveryOrder.countDocuments({
-        ...baseQuery,
-        $or: [
-          { sent_for_delivery_at: null, delivery_status: { $in: ['new_order', 'partially_inwarded', 'inward_completed', 'inward_done'] } },
-          { 'items.pending_qty': { $gt: 0 } }
-        ]
-      }),
+      material_inward: 0,
       pending_inward: await DeliveryOrder.countDocuments({
         ...baseQuery,
         $or: [
@@ -369,10 +390,38 @@ exports.get_delivery_order_by_id = async (req, res) => {
         }))
       : ordObj.epcs;
 
+    let itemsList = (ordObj.items || []).map(it => ({ ...it }));
+    const hasBos = itemsList.some(it => 
+      it.sku?.startsWith('BOS-KIT-') || 
+      it.category === 'BOS Kit' || 
+      (it.product_name && it.product_name.toLowerCase().includes('bos kit'))
+    );
+    if (!hasBos && ordObj.kit_preparation_status && ordObj.kit_preparation_status !== 'not_required') {
+      const cleanCap = detectedCap.replace(/\s+/g, '').toUpperCase();
+      const isDelivered = ordObj.delivery_status === 'delivered';
+      const isReady = ordObj.kit_preparation_status === 'kit_ready';
+      const receivedQty = isDelivered ? totalKits : 0;
+      const pendingQty = Math.max(0, totalKits - receivedQty);
+
+      itemsList.push({
+        sku: `BOS-KIT-${cleanCap}-STD`,
+        product_name: `BOS Kit (${detectedCap} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`,
+        category: 'BOS Kit',
+        ordered_qty: totalKits,
+        received_qty: receivedQty,
+        pending_qty: pendingQty,
+        rack_location: ordObj.kit_assembly_details?.storage_location || 'BAY-BOS-STOCK',
+        qc_status: isReady ? 'Passed' : 'Pending',
+        base_warehouse_stock: 100,
+        available_inventory_stock: 100
+      });
+    }
+
     return res.status(200).json({
       status: 'success',
       data: {
         ...ordObj,
+        items: itemsList,
         num_kits: totalKits,
         system_capacity: detectedCap,
         solarkit_model: detectedModel,
@@ -1241,7 +1290,6 @@ exports.send_for_delivery = async (req, res) => {
 
     // Check: BOS Kit must be inwarded/ready if required for this order
     const isKitReady = order.kit_preparation_status === 'kit_ready' ||
-                       order.kit_assembly_details?.assembly_status === 'completed' ||
                        order.kit_preparation_status === 'not_required';
     if (!isKitReady) {
       return res.status(400).json({
@@ -1645,37 +1693,43 @@ exports.update_kit_assembly = async (req, res) => {
     if (stage === 'picked' || stage === 'in_assembly') {
       order.kit_assembly_details.picked_at = order.kit_assembly_details.picked_at || new Date();
       order.kit_assembly_details.picked_by = order.kit_assembly_details.picked_by || (req.user?.name || 'Delivery Manager');
-      order.kit_assembly_details.assembly_status = order.kit_assembly_details.assembly_status === 'completed' ? 'completed' : 'in_progress';
+      order.kit_assembly_details.assembly_status = 'in_progress';
       order.kit_preparation_status = 'in_assembly';
     }
-    // 2. Assembly Station Completed
+    // 2. Assembly Station Completed (Wiring & Enclosure Assembled)
     else if (stage === 'assembled') {
       order.kit_assembly_details.picked_at = order.kit_assembly_details.picked_at || new Date();
       order.kit_assembly_details.assembled_at = new Date();
       order.kit_assembly_details.assembled_by = req.user?.name || 'Delivery Manager';
-      order.kit_assembly_details.assembly_status = 'completed';
+      order.kit_assembly_details.wiring_completed = true;
+      order.kit_assembly_details.assembly_status = 'in_progress';
       order.kit_preparation_status = 'in_assembly';
     }
     // 3. QC Inspection Passed
     else if (stage === 'qc_verified' || stage === 'quality_check') {
       order.kit_assembly_details.assembled_at = order.kit_assembly_details.assembled_at || new Date();
-      order.kit_assembly_details.assembly_status = 'completed';
+      order.kit_assembly_details.wiring_completed = true;
+      order.kit_assembly_details.assembly_status = 'in_progress';
       order.kit_assembly_details.qc_verified = true;
       order.kit_assembly_details.qc_status = 'passed';
+      order.kit_assembly_details.qc_verified_at = new Date();
       order.kit_assembly_details.qc_verified_by = req.user?.name || 'QC Inspector (Ramesh Shinde)';
       order.kit_preparation_status = 'in_assembly';
     }
     // 4. Packaging & Barcode Label
     else if (stage === 'packed_and_labeled' || stage === 'packed') {
+      order.kit_assembly_details.wiring_completed = true;
       order.kit_assembly_details.qc_verified = true;
       order.kit_assembly_details.qc_status = 'passed';
       order.kit_assembly_details.packed_and_labeled = true;
       order.kit_assembly_details.packed_at = new Date();
+      order.kit_assembly_details.assembly_status = 'in_progress';
       order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || order.kit_assembly_details.kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
       order.kit_preparation_status = 'in_assembly';
     }
     // 5. Assembly Completed & Marked Ready for this Order (Staged at Workstation)
     else if (stage === 'mark_kit_ready' || stage === 'kit_ready') {
+      order.kit_assembly_details.wiring_completed = true;
       order.kit_assembly_details.qc_verified = true;
       order.kit_assembly_details.qc_status = 'passed';
       order.kit_assembly_details.packed_and_labeled = true;
@@ -1735,21 +1789,37 @@ exports.allocate_preassembled_kit = async (req, res) => {
     const totalKits = order.num_kits || (order.epcs?.[0]?.boskit_qty ? (parseInt(order.epcs[0].boskit_qty, 10) || 1) : 1);
     const qtyToAllocate = allocated_qty || totalKits;
 
-    let bosItemPending = 0;
-    (order.items || []).forEach(it => {
+    let bosItem = (order.items || []).find(it => {
       const sku = (it.sku || '').toUpperCase();
       const name = (it.product_name || '').toLowerCase();
       const cat = (it.category || '').toLowerCase();
-      if (cat.includes('bos kit') || sku.startsWith('BOS-KIT-') || name.startsWith('bos kit')) {
-        if (it.ordered_qty < totalKits) {
-          it.ordered_qty = totalKits;
-        }
-        const prevReceived = it.received_qty || 0;
-        it.received_qty = Math.min(it.ordered_qty, prevReceived + qtyToAllocate);
-        it.pending_qty = Math.max(0, it.ordered_qty - it.received_qty);
-        bosItemPending = it.pending_qty;
-      }
+      return cat.includes('bos kit') || sku.startsWith('BOS-KIT-') || name.startsWith('bos kit');
     });
+
+    if (!bosItem) {
+      const cap = order.epcs?.[0]?.capacity || '3 kW';
+      const cleanCap = cap.replace(/\s+/g, '').toUpperCase();
+      bosItem = {
+        sku: `BOS-KIT-${cleanCap}-STD`,
+        product_name: `BOS Kit (${cap} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`,
+        category: 'BOS Kit',
+        ordered_qty: totalKits,
+        received_qty: 0,
+        pending_qty: totalKits,
+        rack_location: 'BAY-BOS-STOCK',
+        qc_status: 'Pending'
+      };
+      order.items = order.items || [];
+      order.items.push(bosItem);
+    }
+
+    if (bosItem.ordered_qty < totalKits) {
+      bosItem.ordered_qty = totalKits;
+    }
+    const prevReceived = bosItem.received_qty || 0;
+    bosItem.received_qty = Math.min(bosItem.ordered_qty, prevReceived + qtyToAllocate);
+    bosItem.pending_qty = Math.max(0, bosItem.ordered_qty - bosItem.received_qty);
+    const bosItemPending = bosItem.pending_qty;
 
     const isFullyAllocated = bosItemPending === 0;
     const kitBarcode = batch_code || `SK-WH-STOCK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
@@ -2051,62 +2121,45 @@ exports.get_vehicle_presets = async (req, res) => {
       console.warn('Could not fetch DeliveryServiceProvider:', err.message);
     }
 
-    // Map Vehicle Types uniquely
+    // Map Vehicle Types uniquely from Admin Vehicle Masters (Live Catalog)
     const vehicleTypeMap = new Map();
 
-    // From Admin Masters
-    adminMasters.forEach(m => {
-      const capStr = m.max_load_kg ? (m.max_load_kg >= 1000 ? `${(m.max_load_kg / 1000).toFixed(1)} Ton` : `${m.max_load_kg} Kg`) : '';
-      const label = capStr ? `${m.name} (${capStr})` : m.name;
-      vehicleTypeMap.set(label, {
-        value: label,
-        label,
-        name: m.name,
-        brand_make: m.brand_make,
-        model: m.model,
-        capacity_kg: m.max_load_kg,
-        source: 'Admin Vehicle Master'
+    if (adminMasters && adminMasters.length > 0) {
+      adminMasters.forEach(m => {
+        const capStr = m.max_load_kg ? (m.max_load_kg >= 1000 ? `${(m.max_load_kg / 1000).toFixed(1).replace('.0', '')} Ton` : `${m.max_load_kg} Kg`) : '';
+        const label = capStr ? `${m.name} (${capStr})` : m.name;
+        vehicleTypeMap.set(m.name, {
+          value: m.name,
+          label: label,
+          name: m.name,
+          brand_make: m.brand_make,
+          model: m.model,
+          capacity_kg: m.max_load_kg,
+          source: 'Admin Vehicle Master'
+        });
       });
-    });
-
-    // From Warehouse Vehicles
-    warehouseVehicles.forEach(wv => {
-      const typeName = wv.vehicle_type || wv.name;
-      if (typeName) {
-        const capStr = wv.capacity_kg ? (wv.capacity_kg >= 1000 ? `${(wv.capacity_kg / 1000).toFixed(1)} Ton` : `${wv.capacity_kg} Kg`) : '';
-        const label = capStr ? `${typeName} (${capStr})` : typeName;
-        if (!vehicleTypeMap.has(label)) {
-          vehicleTypeMap.set(label, {
-            value: label,
-            label,
-            name: typeName,
-            capacity_kg: wv.capacity_kg,
-            source: 'Warehouse Fleet'
-          });
-        }
-      }
-    });
-
-    // Fallback standard options to ensure dropdown is never empty
-    const defaultTypes = [
-      { name: '3-Wheeler Electric', label: '3-Wheeler Electric (500 Kg)', capacity_kg: 500 },
-      { name: 'Tata Ace', label: 'Tata Ace (1.5 Ton)', capacity_kg: 1500 },
-      { name: 'Mahindra Bolero Pickup', label: 'Mahindra Bolero Pickup (1.7 Ton)', capacity_kg: 1700 },
-      { name: '14ft Eicher', label: '14ft Eicher (4.0 Ton)', capacity_kg: 4000 },
-      { name: '17ft Canter', label: '17ft Canter (5.0 Ton)', capacity_kg: 5000 },
-      { name: '20ft Container', label: '20ft Container (7.0 Ton)', capacity_kg: 7000 },
-    ];
-    defaultTypes.forEach(dt => {
-      if (!vehicleTypeMap.has(dt.label)) {
-        vehicleTypeMap.set(dt.label, {
-          value: dt.label,
+    } else {
+      // Fallback only if no admin vehicle masters configured
+      const defaultTypes = [
+        { name: 'Tata Ace (Chota Hathi)', label: 'Tata Ace (Chota Hathi) (750 Kg)', capacity_kg: 750 },
+        { name: 'Mahindra Bolero Pickup', label: 'Mahindra Bolero Pickup (1.3 Ton)', capacity_kg: 1300 },
+        { name: 'Ashok Leyland Dost+', label: 'Ashok Leyland Dost+ (1.5 Ton)', capacity_kg: 1500 },
+        { name: 'Tata 407 (10 Ft LCV)', label: 'Tata 407 (10 Ft LCV) (2.5 Ton)', capacity_kg: 2500 },
+        { name: 'Eicher Pro 2049 (12 Ft Canter)', label: 'Eicher Pro 2049 (12 Ft Canter) (3.5 Ton)', capacity_kg: 3500 },
+        { name: 'Tata 1109 (14 Ft Canter)', label: 'Tata 1109 (14 Ft Canter) (6 Ton)', capacity_kg: 6000 },
+        { name: 'Tata 1613 (19 Ft Open Truck)', label: 'Tata 1613 (19 Ft Open Truck) (10 Ton)', capacity_kg: 10000 },
+        { name: '1924 / BB1924', label: '1924 / BB1924 (20 Ton)', capacity_kg: 20000 }
+      ];
+      defaultTypes.forEach(dt => {
+        vehicleTypeMap.set(dt.name, {
+          value: dt.name,
           label: dt.label,
           name: dt.name,
           capacity_kg: dt.capacity_kg,
           source: 'Standard Preset'
         });
-      }
-    });
+      });
+    }
 
     // Deduplicate and sort vehicle types by capacity
     const uniqueVehicleTypes = Array.from(vehicleTypeMap.values());
@@ -2431,49 +2484,6 @@ exports.get_dashboard_overview = async (req, res) => {
           supply_status: grn.status || 'received',
           destination_district: 'Ahmedabad Hub'
         });
-      });
-    });
-
-    // B. Delivery orders item-level supplier tracking
-    deliveryOrders.forEach(ord => {
-      (ord.items || []).forEach(it => {
-        const isSupplier = it.sourcing_type === 'supplier_procurement' || Boolean(it.supplier_name);
-        const pending = it.pending_qty || 0;
-        const damaged = it.damaged_qty || 0;
-        const missing = it.missing_qty || 0;
-        if (damaged > 0 || missing > 0) damagedOrMissingCount += (damaged + missing);
-        if (it.supply_status === 'inward_discrepancy' || damaged > 0) inwardDiscrepancyCount++;
-
-        const expDate = it.expected_inward_date ? new Date(it.expected_inward_date) : null;
-        if (expDate && expDate >= todayStart && expDate < new Date(todayStart.getTime() + 24 * 3600 * 1000)) {
-          supplierExpectedTodayCount++;
-        }
-        if (expDate && expDate < now && pending > 0) {
-          inwardOverdueCount++;
-        }
-
-        if (pending > 0 || it.received_qty > 0 || isSupplier) {
-          inwardTable.push({
-            order_id: ord._id,
-            order_number: ord.order_number,
-            supplier_name: it.supplier_name || '',
-            po_number: ord.incoming_truck_group?.lr_number || (ord.po_number || ''),
-            product_name: it.product_name || 'Solar Kit Component',
-            sku: it.sku,
-            category: it.category || 'BOS Kit',
-            expected_qty: it.ordered_qty || 0,
-            received_qty: it.received_qty || 0,
-            pending_qty: pending,
-            short_damaged: (damaged + missing),
-            warehouse: ord.warehouse_code || 'WH-IND-GJ-001',
-            expected_inward_date: it.expected_inward_date || ord.order_date,
-            inward_status: (pending === 0 && it.received_qty > 0) 
-              ? 'Completed' 
-              : (it.received_qty > 0 ? 'Partial' : (damaged > 0 ? 'Discrepancy' : 'Pending')),
-            supply_status: it.supply_status || 'pending',
-            destination_district: ord.destination?.district || ''
-          });
-        }
       });
     });
 

@@ -13,7 +13,7 @@ export default function NewOrdersPage() {
     : '/warehouse';
 
   const handleNavigateToBosKit = (ord) => {
-    navigate(`${prefix}/bos-kit-assembly`);
+    navigate(`${prefix}/bos-kit-assembly${ord?._id ? `?orderId=${ord._id}` : ''}`);
   };
 
   const handleNavigateToOutward = (ord) => {

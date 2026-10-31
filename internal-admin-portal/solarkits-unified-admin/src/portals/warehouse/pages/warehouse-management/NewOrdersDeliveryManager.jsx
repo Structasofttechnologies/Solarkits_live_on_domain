@@ -379,6 +379,19 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
   const handleAdvanceAssembly = async (stage, targetOrder = null) => {
     const orderToUpdate = targetOrder || selectedOrderForAssembly;
     if (!orderToUpdate) return;
+
+    // Prerequisite: Check if supplier raw materials have been inwarded in New Orders
+    const nonBosPending = (orderToUpdate.items || [])
+      .filter(it => !isBosKitItem(it))
+      .reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+    if (nonBosPending > 0) {
+      dispatch(setAlert({
+        message: `⚠️ Pehle New Orders tab me 'Inward Material' button se ${nonBosPending} units raw material inward karein, uske baad kit assembly shuru karein!`,
+        type: 'warning'
+      }));
+      return;
+    }
+
     try {
       setSubmittingAssembly(true);
       const barcode = kitBarcodeLabel || orderToUpdate.kit_assembly_details?.kit_serial_barcode || `SK-KIT-${orderToUpdate.order_number}-${Date.now().toString().slice(-4)}`;
@@ -1129,10 +1142,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const items = (ord.items || []).map(it => ({ ...it }));
     const existingBosIndex = items.findIndex(it => isBosKitItem(it));
 
-    const isKitReady = ord.kit_preparation_status === 'kit_ready' || 
-                       ord.kit_assembly_details?.assembly_status === 'completed';
-    const receivedKits = isKitReady ? totalKits : 0;
-    const pendingKits = Math.max(0, totalKits - receivedKits);
+    const actualReceivedKits = existingBosIndex >= 0
+      ? (items[existingBosIndex].received_qty || 0)
+      : (ord.inward_status === 'fully_inwarded' ? totalKits : 0);
+    const pendingKits = Math.max(0, totalKits - actualReceivedKits);
+    const receivedKits = actualReceivedKits;
 
     const cleanCap = (capacity || '3 kW').replace(/\s+/g, '');
     const bosSku = `BOS-KIT-${cleanCap.toUpperCase()}-STD`;
@@ -1172,9 +1186,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
     const items = [...(order.items || [])].map(it => ({ ...it }));
 
     const existingBosIndex = items.findIndex(it => isBosKitItem(it));
-    const isKitReady = order.kit_preparation_status === 'kit_ready' || order.kit_assembly_details?.assembly_status === 'completed';
-    const receivedKits = isKitReady ? totalKits : 0;
-    const pendingKits = Math.max(0, totalKits - receivedKits);
+    const actualReceivedKits = existingBosIndex >= 0
+      ? (items[existingBosIndex].received_qty || 0)
+      : (order.inward_status === 'fully_inwarded' ? totalKits : 0);
+    const pendingKits = Math.max(0, totalKits - actualReceivedKits);
+    const receivedKits = actualReceivedKits;
     const cleanCap = (capacity || '3 kW').replace(/\s+/g, '');
     const bosSku = `BOS-KIT-${cleanCap.toUpperCase()}-STD`;
     const bosProductName = `BOS Kit (${capacity || '3 kW'} Pre-assembled Electrical Package - ACDB/DCDB/Cables)`;
@@ -2973,6 +2989,9 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   const isKitDone = isOrderKitFullyDone(ord);
                   const assemblyDetails = ord.kit_assembly_details || {};
                   const kitStatus = isKitDone ? 'kit_ready' : (ord.kit_preparation_status || 'in_assembly');
+                  const nonBosPending = (ord.items || [])
+                    .filter(it => !isBosKitItem(it))
+                    .reduce((acc, it) => acc + (it.pending_qty || 0), 0);
 
                   // Strict Linear 5-Stage Stepper Calculation:
                   // 1 = Picking, 2 = Wiring & Enclosure, 3 = Electrical QC, 4 = Pack & Barcode, 5 = Kit Ready
@@ -3105,6 +3124,40 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                       ) : (
                         /* Active On-Demand Kit Assembly Station for this Order */
                         <div className="space-y-4">
+                          {/* Raw Material Inward Warning Banner: If components not inwarded yet */}
+                          {nonBosPending > 0 && (
+                            <div className="p-4 rounded-2xl bg-amber-500/15 border-2 border-amber-500/50 text-amber-300 space-y-2.5 shadow-sm">
+                              <div className="flex items-start gap-3">
+                                <FaExclamationTriangle className="text-xl text-amber-400 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                  <div className="font-black text-sm text-amber-200 uppercase tracking-wide">
+                                    ⚠️ Pehle Raw Material Inward Karein New Orders Tab Me!
+                                  </div>
+                                  <p className="text-xs text-amber-300/90 leading-relaxed">
+                                    Is order ke liye <strong>{nonBosPending} units</strong> raw materials / components supplier se warehouse me physical inward hona baaki hain. Pehle <strong>New Orders</strong> tab me jakar <strong>"Inward Material"</strong> button se components inward karein, uske baad workstation par BOS kit assembly shuru karein.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (standaloneBoskit || location.pathname.includes('bos-kit-assembly')) {
+                                      navigate(`${prefix}/new-orders`);
+                                    } else {
+                                      setMainSectionTab('orders');
+                                    }
+                                    handleOpenInwardModal(ord);
+                                  }}
+                                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-500 hover:bg-amber-400 text-black shadow-md flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                                >
+                                  <HiOutlineClipboardCheck className="text-base" />
+                                  <span>📦 Go to New Orders & Inward Material Now →</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Banner with kit counts and optional buffer allocation */}
                           <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-surface to-indigo-950/30 border-2 border-purple-500/40 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                             <div className="space-y-1.5">
@@ -3325,10 +3378,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               {currentStage === 1 && (
                                 <button
                                   type="button"
-                                  disabled={submittingAssembly}
+                                  disabled={submittingAssembly || nonBosPending > 0}
                                   onClick={() => handleAdvanceAssembly('in_assembly', ord)}
                                   className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                                  title="Move verified components to assembly station"
+                                  title={nonBosPending > 0 ? "Pehle New Orders tab me Inward button se raw material inward karein!" : "Move verified components to assembly station"}
                                 >
                                   {submittingAssembly ? <FaSpinner className="animate-spin text-xs" /> : <FaTools className="text-xs" />}
                                   <span>👉 Next: Move to Assembly & Start Wiring (Stage 2)</span>
@@ -3339,10 +3392,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               {currentStage === 2 && (
                                 <button
                                   type="button"
-                                  disabled={submittingAssembly}
+                                  disabled={submittingAssembly || nonBosPending > 0}
                                   onClick={() => handleAdvanceAssembly('assembled', ord)}
                                   className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                                  title="Mark electrical wiring & mechanical assembly complete"
+                                  title={nonBosPending > 0 ? "Pehle New Orders tab me Inward button se raw material inward karein!" : "Mark electrical wiring & mechanical assembly complete"}
                                 >
                                   {submittingAssembly ? <FaSpinner className="animate-spin text-xs" /> : <FaWrench className="text-xs" />}
                                   <span>👉 Next: Complete Wiring & Move to QC (Stage 3)</span>
@@ -3353,10 +3406,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               {currentStage === 3 && (
                                 <button
                                   type="button"
-                                  disabled={submittingAssembly}
+                                  disabled={submittingAssembly || nonBosPending > 0}
                                   onClick={() => handleAdvanceAssembly('qc_verified', ord)}
                                   className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-teal-600 hover:bg-teal-500 text-white cursor-pointer shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                                  title="Record electrical testing and QC inspection pass"
+                                  title={nonBosPending > 0 ? "Pehle New Orders tab me Inward button se raw material inward karein!" : "Record electrical testing and QC inspection pass"}
                                 >
                                   {submittingAssembly ? <FaSpinner className="animate-spin text-xs" /> : <FaClipboardCheck className="text-xs" />}
                                   <span>👉 Next: Pass QC Inspection & Move to Pack (Stage 4)</span>
@@ -3367,10 +3420,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               {currentStage === 4 && (
                                 <button
                                   type="button"
-                                  disabled={submittingAssembly}
+                                  disabled={submittingAssembly || nonBosPending > 0}
                                   onClick={() => handleAdvanceAssembly('packed_and_labeled', ord)}
                                   className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                                  title="Package kit and attach SolarKits QR/barcode label"
+                                  title={nonBosPending > 0 ? "Pehle New Orders tab me Inward button se raw material inward karein!" : "Package kit and attach SolarKits QR/barcode label"}
                                 >
                                   {submittingAssembly ? <FaSpinner className="animate-spin text-xs" /> : <FaBarcode className="text-xs" />}
                                   <span>👉 Next: Attach Barcode & Pack (Stage 5)</span>
@@ -3381,10 +3434,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                               {currentStage === 5 && !isKitDone && (
                                 <button
                                   type="button"
-                                  disabled={submittingAssembly}
+                                  disabled={submittingAssembly || nonBosPending > 0}
                                   onClick={() => handleAdvanceAssembly('kit_ready', ord)}
                                   className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 disabled:opacity-50"
-                                  title="Finalize assembly and mark all kits ready in warehouse"
+                                  title={nonBosPending > 0 ? "Pehle New Orders tab me Inward button se raw material inward karein!" : "Finalize assembly and mark all kits ready in warehouse"}
                                 >
                                   {submittingAssembly ? <FaSpinner className="animate-spin text-xs" /> : <FaCheckDouble className="text-xs" />}
                                   <span>✓ Complete Assembly & Mark {pendingKits} Kits Ready</span>
@@ -4035,7 +4088,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                       ) || preassembledStock.find(m => m.name?.toLowerCase().includes('3 kw')) || preassembledStock[0];
                                       const stockAvailable = matchedModel?.ready_stock || 0;
                                       const currentQty = parseInt(input.qty) || 0;
-                                      const isKitAssembledForThisOrder = selectedOrderForInward?.kit_preparation_status === 'kit_ready' || selectedOrderForInward?.kit_assembly_details?.assembly_status === 'completed';
+                                      const isKitAssembledForThisOrder = (selectedOrderForInward?.kit_preparation_status === 'kit_ready' || selectedOrderForInward?.kit_assembly_details?.assembly_status === 'completed') && selectedOrderForInward?.kit_preparation_status !== 'awaiting_components';
                                       const canAllocate = Math.min(it.pending_qty, stockAvailable);
                                       const remainingToAssemble = Math.max(0, it.pending_qty - currentQty);
 
@@ -4134,7 +4187,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                                                 type="button"
                                                 onClick={() => {
                                                   setInwardModalOpen(false);
-                                                  handleOpenAssemblyModal(selectedOrderForInward);
+                                                  if (onNavigateToBosKit) {
+                                                    onNavigateToBosKit(selectedOrderForInward);
+                                                  } else {
+                                                    navigate(`${prefix}/bos-kit-assembly?orderId=${selectedOrderForInward._id}`);
+                                                  }
                                                 }}
                                                 className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-white hover:bg-purple-100 text-purple-900 border-2 border-purple-500 shadow-xs flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ml-auto"
                                               >
@@ -4837,12 +4894,22 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
         {selectedOrderForAssembly && (() => {
           const ord = selectedOrderForAssembly;
           const kitStatus = ord.kit_preparation_status || 'not_required';
+          const { totalKits, capacity, modelName } = getOrderKitMetrics(ord);
+          const existingBos = (ord.items || []).find(it => isBosKitItem(it));
+          const orderedKits = existingBos ? (existingBos.ordered_qty || totalKits) : totalKits;
+          const receivedKits = existingBos ? (existingBos.received_qty || 0) : (kitStatus === 'kit_ready' ? totalKits : 0);
+          const pendingKits = Math.max(0, orderedKits - receivedKits);
+
+          const nonBosPending = (ord.items || [])
+            .filter(it => !isBosKitItem(it))
+            .reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+
           const unallocatedShortage = (ord.items || []).reduce((acc, it) => {
             const pending = it.pending_qty || 0;
             const allocated = it.allocated_stock || 0;
             return acc + Math.max(0, pending - allocated);
           }, 0);
-          const hasShortage = unallocatedShortage > 0;
+          const hasShortage = unallocatedShortage > 0 || nonBosPending > 0;
           const assemblyDetails = ord.kit_assembly_details || {};
 
           return (
@@ -4872,12 +4939,34 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
               </div>
 
               {/* Shortage Alert Banner if items pending */}
-              {hasShortage && (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-center gap-2">
-                  <FaExclamationTriangle className="text-sm shrink-0" />
-                  <div>
-                    <strong>Component Shortage Alert:</strong> {unallocatedShortage} units are still unallocated from inventory. Complete inward or allocate stock before marking the BOSKIT ready for dispatch.
+              {(hasShortage || nonBosPending > 0) && (
+                <div className="p-3.5 rounded-xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-start gap-2.5">
+                    <FaExclamationTriangle className="text-base text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-black text-amber-200 uppercase tracking-wide">
+                        ⚠️ Pehle Raw Material Inward Karein New Orders Tab Me!
+                      </div>
+                      <div className="text-amber-300/90 mt-0.5">
+                        Is order ke {nonBosPending || unallocatedShortage} units raw materials / components abhi physical inward hona baaki hain. Pehle New Orders me "Inward Material" button se unhe inward karein, uske baad kit assembly complete karein.
+                      </div>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssemblyModalOpen(false);
+                      if (standaloneBoskit || location.pathname.includes('bos-kit-assembly')) {
+                        navigate(`${prefix}/new-orders`);
+                      } else {
+                        setMainSectionTab('orders');
+                      }
+                      handleOpenInwardModal(ord);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs cursor-pointer shadow-sm transition-all whitespace-nowrap active:scale-95 shrink-0"
+                  >
+                    📦 Inward Material Now →
+                  </button>
                 </div>
               )}
 
@@ -5085,9 +5174,10 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
                   {kitStatus !== 'kit_ready' && (assemblyDetails.packed_and_labeled || !!assemblyDetails.kit_serial_barcode) && (
                     <button
                       type="button"
-                      disabled={submittingAssembly || hasShortage}
+                      disabled={submittingAssembly || hasShortage || nonBosPending > 0}
                       onClick={() => handleAdvanceAssembly('kit_ready')}
-                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      title={nonBosPending > 0 ? "Pehle New Orders tab me Inward button se raw material inward karein!" : "Mark kits assembled and ready"}
+                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50"
                     >
                       {submittingAssembly ? <FaSpinner className="animate-spin" /> : <FaCheckDouble />}
                       <span>Step 5: Mark {pendingKits} Kits Assembled & Ready for this Order</span>
@@ -5146,9 +5236,11 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward, onNaviga
           const itemsWithBosKit = (() => {
             const list = [...(ord.items || [])].map(it => ({ ...it }));
             const existingBosIndex = list.findIndex(it => isBosKitItem(it));
-            const isKitReady = ord.kit_preparation_status === 'kit_ready' || ord.kit_assembly_details?.assembly_status === 'completed';
-            const receivedKits = isKitReady ? totalKits : 0;
-            const pendingKits = Math.max(0, totalKits - receivedKits);
+            const actualReceivedKits = existingBosIndex >= 0
+              ? (list[existingBosIndex].received_qty || 0)
+              : (ord.inward_status === 'fully_inwarded' ? totalKits : 0);
+            const pendingKits = Math.max(0, totalKits - actualReceivedKits);
+            const receivedKits = actualReceivedKits;
 
             if (existingBosIndex >= 0) {
               if (list[existingBosIndex].ordered_qty < totalKits) {

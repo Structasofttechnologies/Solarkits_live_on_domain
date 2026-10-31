@@ -678,10 +678,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-text-muted uppercase">Recommended:</span>
-                      <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary font-bold text-xs border border-primary/20">
-                        {ord.required_vehicle || 'Tata Ace (1.5 Ton)'}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-text-muted uppercase">Vehicle (Assigned by Accounts):</span>
+                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs border border-emerald-500/20 inline-flex items-center gap-1.5">
+                        <FaTruck size={10} />
+                        <span>{ord.transport_details?.vehicle_type || ord.required_vehicle || 'Standard Vehicle'}</span>
                       </span>
                     </div>
                   </div>
@@ -1047,16 +1048,27 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
               {/* ── STEP 2 VIEW: VEHICLE & TRANSPORT DETAILS ── */}
               {currentStep === 2 && (
                 <div className="space-y-4 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">2</span>
-                      <h4 className="text-sm font-bold text-text-primary">Step 2: Enter Vehicle & Transport Details</h4>
+                      <div>
+                        <h4 className="text-sm font-bold text-text-primary">Step 2: Enter Vehicle & Transport Details</h4>
+                        {(activeOrder.transport_details?.vehicle_type || activeOrder.required_vehicle) && (
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-text-muted">
+                            <span>Accounts Pre-Assigned Vehicle:</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                              <FaTruck size={10} />
+                              <span>{activeOrder.transport_details?.vehicle_type || activeOrder.required_vehicle}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleSaveTransport(activeOrder._id)}
                       disabled={savingTransport}
-                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
                     >
                       {savingTransport ? <FaSpinner className="animate-spin text-xs" /> : <FaCheckCircle className="text-xs" />}
                       <span>Save Transport Info</span>
@@ -1107,17 +1119,20 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                         className="w-full p-2 bg-surface-hover border border-border rounded-lg text-text-primary font-medium focus:outline-none focus:border-primary"
                       >
                         <option value="">-- Select Configured Vehicle --</option>
-                        {/* Preserve currently pre-selected vehicle if from Account Manager / Procurement Group */}
-                        {activeForm.vehicle_type && !vehiclePresets.vehicle_types.some(vt => vt.value === activeForm.vehicle_type || vt.label === activeForm.vehicle_type) && (
+                        {/* Preserve currently pre-selected vehicle if from Account Manager / Procurement Group and not in preset list */}
+                        {activeForm.vehicle_type && !vehiclePresets.vehicle_types.some(vt => (vt.value || vt.name) === activeForm.vehicle_type || (vt.label || '') === activeForm.vehicle_type) && (
                           <option value={activeForm.vehicle_type}>
-                            {activeForm.vehicle_type} (Assigned by Account Manager)
+                            {activeForm.vehicle_type} ★ (Assigned by Accounts)
                           </option>
                         )}
-                        {vehiclePresets.vehicle_types.map((vt) => (
-                          <option key={vt.value || vt.label} value={vt.value || vt.label}>
-                            {vt.label || vt.value}
-                          </option>
-                        ))}
+                        {vehiclePresets.vehicle_types.map((vt) => {
+                          const isAssigned = (activeOrder.transport_details?.vehicle_type === (vt.value || vt.name) || activeOrder.required_vehicle === (vt.value || vt.name));
+                          return (
+                            <option key={vt.value || vt.name || vt.label} value={vt.value || vt.name}>
+                              {vt.label || vt.name || vt.value} {isAssigned ? '★ (Assigned by Accounts)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
 
