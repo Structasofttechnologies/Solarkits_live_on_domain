@@ -56,6 +56,8 @@ router.put('/drivers/:id', check_auth, vehicle_handler.update_driver);
 router.delete('/drivers/:id', check_auth, vehicle_handler.delete_driver);
 
 // ─── Delivery Manager Workflow (New Orders, Inward, Out for Delivery, Track Delivery) ───
+router.get('/dashboard-overview', check_auth, delivery_order_handler.get_dashboard_overview);
+router.post('/dashboard-tasks/:id/status', check_auth, delivery_order_handler.update_dashboard_task_status);
 router.get('/delivery-orders/vehicle-presets', delivery_order_handler.get_vehicle_presets);
 router.get('/delivery-orders/bos-kit-catalog', delivery_order_handler.get_bos_kit_catalog);
 router.get('/delivery-orders', check_auth, delivery_order_handler.get_delivery_orders);

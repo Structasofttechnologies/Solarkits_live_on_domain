@@ -254,6 +254,30 @@ export const getVehiclePresets = async () => {
   return res.data;
 };
 
+export const getWarehouseDashboardOverview = async (params = {}) => {
+  const queryParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, val]) => {
+    if (val !== undefined && val !== null && val !== "") {
+      queryParams.append(key, val);
+    }
+  });
+  const res = await axios.get(`${API_URL}/warehouse/dashboard-overview?${queryParams.toString()}`, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+export const updateWarehouseDashboardTaskStatus = async (taskId, { status, remarks } = {}) => {
+  const res = await axios.post(`${API_URL}/warehouse/dashboard-tasks/${taskId}/status`, {
+    status,
+    remarks
+  }, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+
 
 
 
