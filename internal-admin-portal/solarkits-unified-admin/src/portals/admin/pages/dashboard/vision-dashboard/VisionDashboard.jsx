@@ -15,16 +15,17 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiRefreshCw, FiWifi, FiAlertCircle } from 'react-icons/fi';
 
-import { useVisionData }         from './useVisionData';
-import VisionFilterPanel         from './VisionFilterPanel';
-import KpiCards                  from './KpiCards';
-import ExpansionBreadcrumbs      from './ExpansionBreadcrumbs';
-import LocationDrillDown         from './LocationDrillDown';
+import { useVisionData } from './useVisionData';
+import VisionFilterPanel from './VisionFilterPanel';
+import KpiCards from './KpiCards';
+import ExpansionBreadcrumbs from './ExpansionBreadcrumbs';
+import LocationDrillDown from './LocationDrillDown';
 import FranchiseeGoalAchievement from './FranchiseeGoalAchievement';
-import KitSalesAdoption          from './KitSalesAdoption';
-import IndustryProjectAdoption   from './IndustryProjectAdoption';
-import WarehouseShopCoverage     from './WarehouseShopCoverage';
-import DetailDrawer              from './DetailDrawer';
+import KitSalesAdoption from './KitSalesAdoption';
+import IndustryProjectAdoption from './IndustryProjectAdoption';
+import WarehouseShopCoverage from './WarehouseShopCoverage';
+import EpcTypeBifurcation from './EpcTypeBifurcation';
+import DetailDrawer from './DetailDrawer';
 
 // ── Section wrapper with heading ─────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ export default function VisionDashboard() {
     franchiseeList, warehouses, industryTypes, allStates, allDistricts,
     projectCategories, projectSubcategories, systemTypes, projectRanges,
     kits,
+    epcTypes, epcTypesSummary,
     kpiData,
     loading, errors,
     refetch,
@@ -107,7 +109,7 @@ export default function VisionDashboard() {
   const isInitialLoading = loading.summary && !networkSummary;
   const hasErrors = Object.values(errors).filter(Boolean).length > 0;
 
-  const currentYear  = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
   const currentMonth = new Date().toLocaleString('default', { month: 'long' });
 
   return (
@@ -124,6 +126,14 @@ export default function VisionDashboard() {
           <p className="text-sm text-text-secondary">
             Expansion network overview · India → Cluster → State → District → Franchisee → Warehouse
           </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[11px] text-text-muted bg-surface-hover border border-border px-2 py-0.5 rounded-full">
+              Stage: EPC Ecosystem Live
+            </span>
+            <span className="text-[11px] text-text-muted bg-surface-hover border border-border px-2 py-0.5 rounded-full">
+              EPC Types Bifurcation Active
+            </span>
+          </div>
         </div>
 
         {/* Refresh all */}
@@ -137,12 +147,13 @@ export default function VisionDashboard() {
               refetch.performance();
               refetch.franchisees();
               refetch.warehouses();
+              refetch.epcTypes?.();
             }}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm text-text-secondary
               hover:text-primary hover:border-primary/40 transition-colors
-              ${(loading.summary || loading.performance) ? 'opacity-60 pointer-events-none' : ''}`}
+              ${(loading.summary || loading.performance || loading.epcTypes) ? 'opacity-60 pointer-events-none' : ''}`}
           >
-            <FiRefreshCw size={13} className={loading.summary || loading.performance ? 'animate-spin' : ''} />
+            <FiRefreshCw size={13} className={loading.summary || loading.performance || loading.epcTypes ? 'animate-spin' : ''} />
             Refresh
           </button>
         </div>
@@ -181,6 +192,7 @@ export default function VisionDashboard() {
           franchiseeList={franchiseeList}
           warehouses={warehouses}
           kits={kits}
+          epcTypes={epcTypes}
           loading={loading}
         />
       </DashSection>
@@ -246,6 +258,7 @@ export default function VisionDashboard() {
               performanceTracker={performanceTracker}
               industryTypes={industryTypes}
               allStates={allStates}
+              epcTypes={epcTypes}
               loading={loading.performance}
             />
           </DashSection>
@@ -255,7 +268,21 @@ export default function VisionDashboard() {
             <WarehouseShopCoverage
               warehouses={warehouses}
               franchiseeList={franchiseeList}
+              allStates={allStates}
+              allDistricts={allDistricts}
               loading={loading.warehouses || loading.franchisees}
+            />
+          </DashSection>
+
+          {/* ── EPC Type Bifurcation ─────────────────────────────────── */}
+          <DashSection id="vision-epc-types">
+            <EpcTypeBifurcation
+              epcTypes={epcTypes}
+              epcTypesSummary={epcTypesSummary}
+              loading={loading.epcTypes}
+              filters={filters}
+              setFilter={setFilter}
+              onViewEpcType={(typeItem) => openDrawer('epcType', typeItem)}
             />
           </DashSection>
         </>
@@ -267,7 +294,9 @@ export default function VisionDashboard() {
         onClose={closeDrawer}
         type={drawer.type}
         item={drawer.item}
+        allStates={allStates}
+        allDistricts={allDistricts}
       />
     </div>
   );
-}
+}

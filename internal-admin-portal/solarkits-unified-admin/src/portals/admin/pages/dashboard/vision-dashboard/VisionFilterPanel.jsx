@@ -16,9 +16,9 @@ import { FiFilter, FiX, FiChevronDown, FiSearch, FiRefreshCw, FiCalendar, FiChec
 // ── Searchable Dropdown ───────────────────────────────────────────────────────
 
 function SearchDropdown({ label, value, onChange, options = [], placeholder = 'All', disabled = false }) {
-  const [open, setOpen]     = useState(false);
+  const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
-  const [query, setQuery]   = useState('');
+  const [query, setQuery] = useState('');
   const ref = useRef(null);
 
   useEffect(() => {
@@ -102,11 +102,12 @@ function SearchDropdown({ label, value, onChange, options = [], placeholder = 'A
             <div className="max-h-60 overflow-y-auto scrollbar-hover divide-y divide-border/20">
               {filtered.length === 0 ? (
                 <p className="px-3 py-4 text-xs text-text-muted text-center">No options found</p>
-              ) : filtered.map(o => {
+              ) : filtered.map((o, idx) => {
                 const isSelected = String(value) === String(o.value);
+                const optKey = o.value ? String(o.value) : `opt-${idx}`;
                 return (
                   <button
-                    key={o.value}
+                    key={optKey}
                     type="button"
                     onClick={() => { onChange(o.value); setQuery(''); setOpen(false); }}
                     className={`w-full flex items-center justify-between px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors text-left
@@ -129,10 +130,10 @@ function SearchDropdown({ label, value, onChange, options = [], placeholder = 'A
 
 function PeriodPicker({ period, setPeriod }) {
   const tabs = [
-    { value: 'this_month',   label: 'Month' },
+    { value: 'this_month', label: 'Month' },
     { value: 'this_quarter', label: 'Quarter' },
-    { value: 'this_year',    label: 'Year' },
-    { value: 'custom',       label: 'Custom' },
+    { value: 'this_year', label: 'Year' },
+    { value: 'custom', label: 'Custom' },
   ];
   return (
     <div>
@@ -223,31 +224,47 @@ export default function VisionFilterPanel({
   franchiseeList = [],
   warehouses = [],
   kits = [],
+  epcTypes = [],
   loading = {},
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
-  // Convert data to dropdown options
-  const stateOptions    = allStates.map(s => ({ value: s._id || s.id, label: s.name }));
-  const districtOptions = allDistricts.map(d => ({ value: d._id || d.id, label: d.name }));
-  const industryOptions = industryTypes.map(i => ({ value: i._id || i.id, label: i.name }));
-  const categoryOptions = projectCategories.map(c => ({ value: c._id || c.id, label: c.name }));
-  const subcategoryOptions = projectSubcategories.map(s => ({ value: s._id || s.id, label: s.name }));
-  const systemTypeOptions = systemTypes.map(t => ({ value: t._id || t.id, label: t.name || t.type?.name || t.type }));
-  const rangeOptions = projectRanges.map(r => ({
-    value: r._id || r.id,
+  // Convert data to dropdown options (filter out invalid or empty entries)
+  const stateOptions = allStates.filter(s => s && (s._id || s.id)).map(s => ({ value: String(s._id || s.id), label: s.name }));
+  const districtOptions = allDistricts.filter(d => d && (d._id || d.id)).map(d => ({ value: String(d._id || d.id), label: d.name }));
+  const industryOptions = industryTypes.filter(i => i && (i._id || i.id)).map(i => ({ value: String(i._id || i.id), label: i.name }));
+  const categoryOptions = projectCategories.filter(c => c && (c._id || c.id)).map(c => ({ value: String(c._id || c.id), label: c.name }));
+  const subcategoryOptions = projectSubcategories.filter(s => s && (s._id || s.id)).map(s => ({ value: String(s._id || s.id), label: s.name }));
+  const systemTypeOptions = systemTypes.filter(t => t && (t._id || t.id || t.subcategory_type_id)).map(t => ({ value: String(t._id || t.id || t.subcategory_type_id), label: t.name || t.type?.name || t.type }));
+  const rangeOptions = projectRanges.filter(r => r && (r._id || r.id)).map(r => ({
+    value: String(r._id || r.id),
     label: r.range_label || `${r.min_value}–${r.max_value} ${r.unit_symbol || r.unit_id?.symbol || 'kW'}`
   }));
-  const kitOptions = kits.map(k => ({
-    value: k._id || k.id,
+  const kitOptions = kits.filter(k => k && (k._id || k.id)).map(k => ({
+    value: String(k._id || k.id),
     label: k.name || k.kit_name || k.combo_name || k.title || 'Solar Kit'
   }));
   const franchiseeDropOptions = franchiseeList
-    .filter(f => f.activation_status === 'active')
+    .filter(f => {
+      if (f.activation_status !== 'active') return false;
+      if (filters.state_id && String(f.address?.state_id || '') !== String(filters.state_id)) return false;
+      if (filters.district_id && String(f.address?.district_id || '') !== String(filters.district_id)) return false;
+      return true;
+    })
     .map(f => ({ value: f._id || f.id, label: f.business_name }));
+
   const warehouseDropOptions = warehouses
-    .filter(w => w.is_active)
+    .filter(w => {
+      if (!w.is_active) return false;
+      if (filters.state_id && String(w.state_id || w.level_1 || '') !== String(filters.state_id)) return false;
+      if (filters.district_id && String(w.district_id || w.level_2 || '') !== String(filters.district_id)) return false;
+      if (filters.franchisee_id && String(w.reseller_id || w.franchisee_id || '') !== String(filters.franchisee_id)) return false;
+      return true;
+    })
     .map(w => ({ value: w._id || w.id, label: w.name || w.warehouse_name }));
+  const epcTypeOptions = epcTypes
+    .filter(et => et.is_active !== false)
+    .map(et => ({ value: et._id || et.id, label: et.name }));
 
   // Chip remove handler
   const handleRemoveChip = useCallback((key) => {
@@ -406,8 +423,9 @@ export default function VisionFilterPanel({
 
             <div className="h-px bg-border" />
 
-            {/* Kit + Additional Group */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Kit + Additional + EPC Group */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Kit */}
               <div>
                 <p className="text-[11px] font-bold text-text-muted uppercase tracking-widest mb-2">⚡ Kit</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -433,6 +451,19 @@ export default function VisionFilterPanel({
                   />
                 </div>
               </div>
+              {/* EPC Type */}
+              <div>
+                <p className="text-[11px] font-bold text-text-muted uppercase tracking-widest mb-2">🏗️ EPC</p>
+                <SearchDropdown
+                  label="EPC Type"
+                  value={filters.epc_type_id}
+                  onChange={v => setFilter('epc_type_id', v)}
+                  options={epcTypeOptions}
+                  placeholder="All EPC Types"
+                  disabled={epcTypeOptions.length === 0}
+                />
+              </div>
+              {/* Additional */}
               <div className="col-span-1 sm:col-span-2">
                 <p className="text-[11px] font-bold text-text-muted uppercase tracking-widest mb-2">➕ Additional</p>
                 <div className="grid grid-cols-2 gap-3">

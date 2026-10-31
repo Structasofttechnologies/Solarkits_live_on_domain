@@ -253,4 +253,40 @@ export const visionApi = {
     const res = await axios.get(`${API_BASE}/reseller-mgmt/orders?${q}`, headers());
     return res.data;
   },
+
+  // ── EPC Types (classification master with live usage counts) ─────────────
+  getEpcTypes: async (params = {}) => {
+    const q = buildQuery(params, 'ADM_EPC_TYPES', 'view');
+    const res = await axios.get(
+      `${API_BASE}/epc-types/list?${q}`,
+      headers()
+    );
+    return res.data;
+  },
+
+  // ── EPC Accounts summary (for KPI count) ─────────────────────────────────
+  getEpcAccountsSummary: async () => {
+    try {
+      const res = await axios.get(
+        `${API_BASE}/epcs/list?unique_id=ADM_EPC_MGMT&req_for=view&limit=1`,
+        headers()
+      );
+      return res.data;
+    } catch (e) {
+      return { status: 'error', data: [] };
+    }
+  },
+
+  // ── Reseller Onboarded EPC Buyers ─────────────────────────────────────────
+  getResellerEpcBuyers: async (resellerId) => {
+    try {
+      const res = await axios.get(
+        `${API_BASE}/reseller-mgmt/epc-buyers/list?reseller_id=${resellerId}&unique_id=ADM_RESELLER&req_for=view`,
+        headers()
+      );
+      return res.data;
+    } catch (e) {
+      return { status: 'error', data: [] };
+    }
+  },
 };

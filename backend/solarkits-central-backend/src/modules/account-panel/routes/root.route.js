@@ -95,4 +95,8 @@ router.post('/accounts/procurement/inward-verify', check_auth, procurement_handl
 router.post('/accounts/procurement/handover-delivery', check_auth, procurement_handler.handover_to_delivery_manager);
 router.post('/accounts/procurement/sync-warehouse-delivery-orders', check_auth, procurement_handler.sync_all_advance_paid_pis);
 
+// Centralized Account Manager Dashboard Overview
+router.get('/accounts/dashboard-overview', check_auth, accounts_handler.get_dashboard_overview);
+router.post('/accounts/dashboard-tasks/:id/status', check_auth, accounts_handler.update_dashboard_task_status);
+
 module.exports = router;

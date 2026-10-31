@@ -23,6 +23,111 @@ const list_epc_types = async (req, res) => {
     // Ensure defaults exist
     await seedEpcTypesIfNeeded();
 
+    const { state_id, district_id, reseller_id } = req.query;
+
+    // Resolve state/district names for multi-field geographic matching
+    let stateDoc = null;
+    let districtDoc = null;
+    try {
+      if (state_id && mongoose.Types.ObjectId.isValid(state_id)) {
+        stateDoc = await mongoose.model('geolocation_level_1').findById(state_id).lean();
+      }
+      if (district_id && mongoose.Types.ObjectId.isValid(district_id)) {
+        districtDoc = await mongoose.model('geolocation_level_2').findById(district_id).lean();
+      }
+    } catch (_) {}
+
+    // Build geo conditions for EpcAccount
+    const acctGeoConditions = [];
+    if (state_id) {
+      const sRegex = stateDoc?.name ? new RegExp(`^${stateDoc.name.trim()}$`, 'i') : null;
+      const sConds = [
+        { states: state_id },
+        ...(mongoose.Types.ObjectId.isValid(state_id) ? [{ states: new mongoose.Types.ObjectId(state_id) }] : []),
+        ...(sRegex ? [{ state_name: sRegex }] : []),
+      ];
+      acctGeoConditions.push({ $or: sConds });
+    }
+    if (district_id) {
+      const dRegex = districtDoc?.name ? new RegExp(`^${districtDoc.name.trim()}$`, 'i') : null;
+      const dConds = [
+        { districts: district_id },
+        ...(mongoose.Types.ObjectId.isValid(district_id) ? [{ districts: new mongoose.Types.ObjectId(district_id) }] : []),
+        ...(dRegex ? [{ district_name: dRegex }] : []),
+      ];
+      acctGeoConditions.push({ $or: dConds });
+    }
+    if (reseller_id) {
+      const rConds = [
+        { primary_reseller_id: reseller_id },
+        { onboarded_by_reseller_id: reseller_id },
+        ...(mongoose.Types.ObjectId.isValid(reseller_id) ? [
+          { primary_reseller_id: new mongoose.Types.ObjectId(reseller_id) },
+          { onboarded_by_reseller_id: new mongoose.Types.ObjectId(reseller_id) },
+        ] : []),
+      ];
+      acctGeoConditions.push({ $or: rConds });
+    }
+
+    // Build geo conditions for EPCLead
+    const leadGeoConditions = [];
+    if (state_id) {
+      const sRegex = stateDoc?.name ? new RegExp(`^${stateDoc.name.trim()}$`, 'i') : null;
+      const sConds = [
+        { state_id: state_id },
+        ...(mongoose.Types.ObjectId.isValid(state_id) ? [{ state_id: new mongoose.Types.ObjectId(state_id) }] : []),
+        ...(sRegex ? [{ state_name: sRegex }] : []),
+      ];
+      leadGeoConditions.push({ $or: sConds });
+    }
+    if (district_id) {
+      const dRegex = districtDoc?.name ? new RegExp(`^${districtDoc.name.trim()}$`, 'i') : null;
+      const dConds = [
+        { district_id: district_id },
+        ...(mongoose.Types.ObjectId.isValid(district_id) ? [{ district_id: new mongoose.Types.ObjectId(district_id) }] : []),
+        ...(dRegex ? [{ district_name: dRegex }] : []),
+      ];
+      leadGeoConditions.push({ $or: dConds });
+    }
+    if (reseller_id) {
+      const rConds = [
+        { assigned_franchisee_id: reseller_id },
+        ...(mongoose.Types.ObjectId.isValid(reseller_id) ? [{ assigned_franchisee_id: new mongoose.Types.ObjectId(reseller_id) }] : []),
+      ];
+      leadGeoConditions.push({ $or: rConds });
+    }
+
+    // Build geo conditions for EpcSignupRequest
+    const reqGeoConditions = [];
+    if (state_id) {
+      const sRegex = stateDoc?.name ? new RegExp(`^${stateDoc.name.trim()}$`, 'i') : null;
+      reqGeoConditions.push({
+        $or: [
+          { state_id: state_id },
+          ...(mongoose.Types.ObjectId.isValid(state_id) ? [{ state_id: new mongoose.Types.ObjectId(state_id) }] : []),
+          ...(sRegex ? [{ state_name: sRegex }] : []),
+        ],
+      });
+    }
+    if (district_id) {
+      const dRegex = districtDoc?.name ? new RegExp(`^${districtDoc.name.trim()}$`, 'i') : null;
+      reqGeoConditions.push({
+        $or: [
+          { district_id: district_id },
+          ...(mongoose.Types.ObjectId.isValid(district_id) ? [{ district_id: new mongoose.Types.ObjectId(district_id) }] : []),
+          ...(dRegex ? [{ district_name: dRegex }] : []),
+        ],
+      });
+    }
+    if (reseller_id) {
+      reqGeoConditions.push({
+        $or: [
+          { reseller_id: reseller_id },
+          ...(mongoose.Types.ObjectId.isValid(reseller_id) ? [{ reseller_id: new mongoose.Types.ObjectId(reseller_id) }] : []),
+        ],
+      });
+    }
+
     const types = await EpcType.find({ deleted_at: null })
       .sort({ display_order: 1, created_at: 1 })
       .lean();
@@ -31,17 +136,45 @@ const list_epc_types = async (req, res) => {
     const typeNames = types.map((t) => t.name);
     const typeIds = types.map((t) => t._id);
 
+    const acctMatch = {
+      deleted_at: null,
+      $or: [
+        { epc_type: { $in: typeNames } },
+        { epc_type_id: { $in: typeIds } },
+      ],
+      ...(acctGeoConditions.length > 0 ? { $and: acctGeoConditions } : {}),
+    };
+
+    const reqMatch = {
+      $or: [
+        { epc_type: { $in: typeNames } },
+        { epc_type_id: { $in: typeIds } },
+      ],
+      ...(reqGeoConditions.length > 0 ? { $and: reqGeoConditions } : {}),
+    };
+
+    const leadMatch = {
+      deleted_at: null,
+      $or: [
+        { epc_type: { $in: typeNames } },
+        { epc_type_id: { $in: typeIds } },
+      ],
+      ...(leadGeoConditions.length > 0 ? { $and: leadGeoConditions } : {}),
+    };
+
+    const totalAcctQuery = {
+      deleted_at: null,
+      ...(acctGeoConditions.length > 0 ? { $and: acctGeoConditions } : {}),
+    };
+
+    const totalLeadQuery = {
+      deleted_at: null,
+      ...(leadGeoConditions.length > 0 ? { $and: leadGeoConditions } : {}),
+    };
+
     const [accountCounts, requestCounts, leadCounts, totalAccounts, totalLeads] = await Promise.all([
       EpcAccount.aggregate([
-        {
-          $match: {
-            deleted_at: null,
-            $or: [
-              { epc_type: { $in: typeNames } },
-              { epc_type_id: { $in: typeIds } },
-            ],
-          },
-        },
+        { $match: acctMatch },
         {
           $group: {
             _id: { $ifNull: ['$epc_type', '$epc_type_id'] },
@@ -50,14 +183,7 @@ const list_epc_types = async (req, res) => {
         },
       ]),
       EpcSignupRequest.aggregate([
-        {
-          $match: {
-            $or: [
-              { epc_type: { $in: typeNames } },
-              { epc_type_id: { $in: typeIds } },
-            ],
-          },
-        },
+        { $match: reqMatch },
         {
           $group: {
             _id: { $ifNull: ['$epc_type', '$epc_type_id'] },
@@ -66,15 +192,7 @@ const list_epc_types = async (req, res) => {
         },
       ]),
       EPCLead.aggregate([
-        {
-          $match: {
-            deleted_at: null,
-            $or: [
-              { epc_type: { $in: typeNames } },
-              { epc_type_id: { $in: typeIds } },
-            ],
-          },
-        },
+        { $match: leadMatch },
         {
           $group: {
             _id: { $ifNull: ['$epc_type', '$epc_type_id'] },
@@ -82,8 +200,8 @@ const list_epc_types = async (req, res) => {
           },
         },
       ]),
-      EpcAccount.countDocuments({ deleted_at: null }),
-      EPCLead.countDocuments({ deleted_at: null }),
+      EpcAccount.countDocuments(totalAcctQuery),
+      EPCLead.countDocuments(totalLeadQuery),
     ]);
 
     const acctMap = {};

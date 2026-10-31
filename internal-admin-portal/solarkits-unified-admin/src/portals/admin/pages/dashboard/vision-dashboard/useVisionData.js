@@ -23,10 +23,10 @@ import { visionApi } from './visionDashboardApi';
 export const DRILL_LEVELS = ['india', 'cluster', 'state', 'district', 'franchisee', 'warehouse'];
 
 export const PERIOD_OPTIONS = [
-  { value: 'this_month',   label: 'This Month' },
+  { value: 'this_month', label: 'This Month' },
   { value: 'this_quarter', label: 'This Quarter' },
-  { value: 'this_year',    label: 'This Year' },
-  { value: 'custom',       label: 'Custom Range' },
+  { value: 'this_year', label: 'This Year' },
+  { value: 'custom', label: 'Custom Range' },
 ];
 
 // Excluded order statuses — these are NOT qualifying sales
@@ -42,30 +42,32 @@ const now = new Date();
 
 const getInitialPeriod = () => ({
   period: 'this_month',
-  month:  now.getMonth() + 1,
-  year:   now.getFullYear(),
+  month: now.getMonth() + 1,
+  year: now.getFullYear(),
   start_date: null,
-  end_date:   null,
+  end_date: null,
 });
 
 const INITIAL_FILTERS = {
   // Network
-  cluster_id:    null,
-  state_id:      null,
-  district_id:   null,
+  cluster_id: null,
+  state_id: null,
+  district_id: null,
   franchisee_id: null,
-  warehouse_id:  null,
+  warehouse_id: null,
   // Catalog
-  industry_type_id:  null,
-  category_id:       null,
-  subcategory_id:    null,
-  system_type_id:    null,
-  project_range_id:  null,
+  industry_type_id: null,
+  category_id: null,
+  subcategory_id: null,
+  system_type_id: null,
+  project_range_id: null,
   // Kit
-  kit_id:     null,
+  kit_id: null,
   kw_capacity: null,
+  // EPC
+  epc_type_id: null,
   // Additional
-  project_type_id:   null,
+  project_type_id: null,
   application_type_id: null,
 };
 
@@ -74,55 +76,59 @@ const INITIAL_FILTERS = {
 export function useVisionData() {
   // ── Filter state ────────────────────────────────────────────────────────
   const [filters, setFiltersState] = useState(INITIAL_FILTERS);
-  const [period, setPeriodState]   = useState(getInitialPeriod());
+  const [period, setPeriodState] = useState(getInitialPeriod());
 
   // ── Drill-down state ────────────────────────────────────────────────────
   const [drillLevel, setDrillLevel] = useState('india');
   // drillPath: array of { level, id, name }
-  const [drillPath, setDrillPath]   = useState([]);
+  const [drillPath, setDrillPath] = useState([]);
 
   // ── Catalog reference data ──────────────────────────────────────────────
-  const [industryTypes,   setIndustryTypes]   = useState([]);
-  const [allStates,       setAllStates]       = useState([]);
-  const [allDistricts,    setAllDistricts]    = useState([]);
-  const [catalogTree,     setCatalogTree]     = useState([]);
-  const [kits,            setKits]            = useState([]);
+  const [industryTypes, setIndustryTypes] = useState([]);
+  const [allStates, setAllStates] = useState([]);
+  const [allDistricts, setAllDistricts] = useState([]);
+  const [catalogTree, setCatalogTree] = useState([]);
+  const [kits, setKits] = useState([]);
 
   // Dependent catalog options
-  const [projectCategories,  setProjectCategories]  = useState([]);
+  const [projectCategories, setProjectCategories] = useState([]);
   const [projectSubcategories, setProjectSubcategories] = useState([]);
-  const [systemTypes,        setSystemTypes]         = useState([]);
-  const [projectRanges,      setProjectRanges]       = useState([]);
+  const [systemTypes, setSystemTypes] = useState([]);
+  const [projectRanges, setProjectRanges] = useState([]);
+
+  // EPC Types (classification master — bifurcated by type with live counts)
+  const [epcTypes, setEpcTypes] = useState([]);
+  const [epcTypesSummary, setEpcTypesSummary] = useState(null);
 
   // Franchisee and warehouse options for filter dropdowns
-  const [franchiseeOptions,  setFranchiseeOptions]  = useState([]);
-  const [warehouseOptions,   setWarehouseOptions]   = useState([]);
+  const [franchiseeOptions, setFranchiseeOptions] = useState([]);
+  const [warehouseOptions, setWarehouseOptions] = useState([]);
 
   // ── Network & Performance data ──────────────────────────────────────────
-  const [networkSummary,     setNetworkSummary]     = useState(null);
+  const [networkSummary, setNetworkSummary] = useState(null);
   const [performanceTracker, setPerformanceTracker] = useState(null);
-  const [locationPerformance,setLocationPerformance]= useState(null);
-  const [franchiseeList,     setFranchiseeList]     = useState([]);
-  const [warehouses,         setWarehouses]         = useState([]);
+  const [locationPerformance, setLocationPerformance] = useState(null);
+  const [franchiseeList, setFranchiseeList] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
 
   // ── Loading / Error ─────────────────────────────────────────────────────
-  const [loading, setLoading]   = useState({ summary: false, performance: false, location: false, franchisees: false, warehouses: false });
-  const [errors,  setErrors]    = useState({});
+  const [loading, setLoading] = useState({ summary: false, performance: false, location: false, franchisees: false, warehouses: false, epcTypes: false });
+  const [errors, setErrors] = useState({});
 
-// Sort industries so core Solar PV and solar sectors appear first
-const sortIndustries = (list) => {
-  const priority = ['solar pv', 'solar agriculture', 'solar ev', 'solar lighting', 'solar thermal', 'energy storage', 'rural solar'];
-  return [...list].sort((a, b) => {
-    const aName = (a.name || '').toLowerCase();
-    const bName = (b.name || '').toLowerCase();
-    const aIdx = priority.findIndex(p => aName.includes(p));
-    const bIdx = priority.findIndex(p => bName.includes(p));
-    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-    if (aIdx !== -1) return -1;
-    if (bIdx !== -1) return 1;
-    return aName.localeCompare(bName);
-  });
-};
+  // Sort industries so core Solar PV and solar sectors appear first
+  const sortIndustries = (list) => {
+    const priority = ['solar pv', 'solar agriculture', 'solar ev', 'solar lighting', 'solar thermal', 'energy storage', 'rural solar'];
+    return [...list].sort((a, b) => {
+      const aName = (a.name || '').toLowerCase();
+      const bName = (b.name || '').toLowerCase();
+      const aIdx = priority.findIndex(p => aName.includes(p));
+      const bIdx = priority.findIndex(p => bName.includes(p));
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+      return aName.localeCompare(bName);
+    });
+  };
 
   // ── Fetch catalog reference data and initial geo/kits once ─────────────────
   useEffect(() => {
@@ -168,6 +174,16 @@ const sortIndustries = (list) => {
       const mergedKits = [...(Array.isArray(cKits) ? cKits : []), ...(Array.isArray(sKits) ? sKits : [])];
       setKits(mergedKits);
     });
+
+    // 5. EPC Types — classification master with live usage counts
+    setLoading(l => ({ ...l, epcTypes: true }));
+    visionApi.getEpcTypes().then(r => {
+      if (r?.status === 'success') {
+        setEpcTypes(r.data || []);
+        setEpcTypesSummary(r.summary || null);
+      }
+    }).catch(err => console.warn('EPC types fetch error:', err))
+      .finally(() => setLoading(l => ({ ...l, epcTypes: false })));
   }, []);
 
   // ── Fetch districts when state filter changes ──────────────────────────
@@ -202,7 +218,7 @@ const sortIndustries = (list) => {
         visionApi.getProjectCategories().then(r => {
           const data = r?.data || r?.categories || [];
           if (Array.isArray(data)) setProjectCategories(data);
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return;
     }
@@ -218,7 +234,7 @@ const sortIndustries = (list) => {
     visionApi.getProjectCategories({ industry_type_id: filters.industry_type_id }).then(r => {
       const data = r?.data || r?.categories || [];
       if (Array.isArray(data)) setProjectCategories(data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [filters.industry_type_id, catalogTree]);
 
   // ── Cascade: Subcategories when category_id changes ────────────────────
@@ -242,7 +258,7 @@ const sortIndustries = (list) => {
     visionApi.getProjectSubcategories({ category_id: filters.category_id }).then(r => {
       const data = r?.data || r?.subcategories || [];
       if (Array.isArray(data)) setProjectSubcategories(data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [filters.category_id, catalogTree]);
 
   // ── Cascade: System types when subcategory_id changes ──────────────────
@@ -267,7 +283,7 @@ const sortIndustries = (list) => {
     visionApi.getSystemTypes({ subcategory_id: filters.subcategory_id }).then(r => {
       const data = r?.data || r?.types || [];
       if (Array.isArray(data)) setSystemTypes(data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [filters.subcategory_id, catalogTree]);
 
   // ── Cascade: Project ranges when system_type_id changes ────────────────
@@ -297,7 +313,7 @@ const sortIndustries = (list) => {
     visionApi.getProjectRanges({ subcategory_type_id: filters.system_type_id }).then(r => {
       const data = r?.data || r?.ranges || [];
       if (Array.isArray(data)) setProjectRanges(data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [filters.system_type_id, catalogTree]);
 
   // ── Build period params for API calls ──────────────────────────────────
@@ -338,7 +354,7 @@ const sortIndustries = (list) => {
     try {
       const params = {
         ...periodParams,
-        ...(filters.state_id    ? { state_id:    filters.state_id    } : {}),
+        ...(filters.state_id ? { state_id: filters.state_id } : {}),
         ...(filters.district_id ? { district_id: filters.district_id } : {}),
         ...(filters.franchisee_id ? { franchisee_id: filters.franchisee_id } : {}),
       };
@@ -346,7 +362,7 @@ const sortIndustries = (list) => {
         visionApi.getPerformanceTracker(params),
         visionApi.getLocationPerformance(params),
       ]);
-      if (tracker?.status === 'success')  setPerformanceTracker(tracker.data);
+      if (tracker?.status === 'success') setPerformanceTracker(tracker.data);
       if (location?.status === 'success') setLocationPerformance(location.data);
       setErrors(e => ({ ...e, performance: null }));
     } catch (err) {
@@ -362,12 +378,20 @@ const sortIndustries = (list) => {
     try {
       const params = {
         activation_status: 'active',
-        ...(filters.state_id    ? { state_id:    filters.state_id    } : {}),
+        ...(filters.state_id ? { state_id: filters.state_id } : {}),
         ...(filters.district_id ? { district_id: filters.district_id } : {}),
         limit: 200,
       };
       const r = await visionApi.getFranchiseeList(params);
-      if (r?.status === 'success') setFranchiseeList(r.data || []);
+      let list = r?.data || [];
+      // Client-side defense-in-depth fallback filtering:
+      if (filters.state_id) {
+        list = list.filter(f => String(f.address?.state_id || '') === String(filters.state_id));
+      }
+      if (filters.district_id) {
+        list = list.filter(f => String(f.address?.district_id || '') === String(filters.district_id));
+      }
+      if (r?.status === 'success' || Array.isArray(r?.data)) setFranchiseeList(list);
       setErrors(e => ({ ...e, franchisees: null }));
     } catch (err) {
       setErrors(e => ({ ...e, franchisees: err?.response?.data?.message || 'Failed to load franchisees' }));
@@ -390,16 +414,41 @@ const sortIndustries = (list) => {
     }
   }, []);
 
+  // ── Fetch EPC Types ────────────────────────────────────────────────────
+  const fetchEpcTypes = useCallback(async () => {
+    setLoading(l => ({ ...l, epcTypes: true }));
+    try {
+      const params = {
+        ...(filters.state_id ? { state_id: filters.state_id } : {}),
+        ...(filters.district_id ? { district_id: filters.district_id } : {}),
+        ...(filters.franchisee_id ? { reseller_id: filters.franchisee_id } : {}),
+      };
+      const r = await visionApi.getEpcTypes(params);
+      if (r?.status === 'success') {
+        setEpcTypes(r.data || []);
+        setEpcTypesSummary(r.summary || null);
+      }
+      setErrors(e => ({ ...e, epcTypes: null }));
+    } catch (err) {
+      console.warn('EPC types fetch error:', err);
+      setErrors(e => ({ ...e, epcTypes: err?.response?.data?.message || 'Failed to load EPC types' }));
+    } finally {
+      setLoading(l => ({ ...l, epcTypes: false }));
+    }
+  }, [filters.state_id, filters.district_id, filters.franchisee_id]);
+
   // ── Initial load ────────────────────────────────────────────────────────
   useEffect(() => {
     fetchNetworkSummary();
     fetchWarehouses();
-  }, [fetchNetworkSummary, fetchWarehouses]);
+    fetchEpcTypes();
+  }, [fetchNetworkSummary, fetchWarehouses, fetchEpcTypes]);
 
   useEffect(() => {
     fetchPerformance();
     fetchFranchisees();
-  }, [fetchPerformance, fetchFranchisees]);
+    fetchEpcTypes();
+  }, [fetchPerformance, fetchFranchisees, fetchEpcTypes]);
 
   // ── Set a single filter (with cascade reset) ────────────────────────────
   const setFilter = useCallback((key, value) => {
@@ -408,33 +457,33 @@ const sortIndustries = (list) => {
 
       // Catalog cascade: parent change → clear incompatible children
       if (key === 'industry_type_id') {
-        next.category_id      = null;
-        next.subcategory_id   = null;
-        next.system_type_id   = null;
+        next.category_id = null;
+        next.subcategory_id = null;
+        next.system_type_id = null;
         next.project_range_id = null;
-        next.kit_id           = null;
+        next.kit_id = null;
       } else if (key === 'category_id') {
-        next.subcategory_id   = null;
-        next.system_type_id   = null;
+        next.subcategory_id = null;
+        next.system_type_id = null;
         next.project_range_id = null;
-        next.kit_id           = null;
+        next.kit_id = null;
       } else if (key === 'subcategory_id') {
-        next.system_type_id   = null;
+        next.system_type_id = null;
         next.project_range_id = null;
-        next.kit_id           = null;
+        next.kit_id = null;
       } else if (key === 'system_type_id') {
         next.project_range_id = null;
-        next.kit_id           = null;
+        next.kit_id = null;
       }
 
       // Network cascade: state change → clear district, franchisee, warehouse
       if (key === 'state_id') {
-        next.district_id   = null;
+        next.district_id = null;
         next.franchisee_id = null;
-        next.warehouse_id  = null;
+        next.warehouse_id = null;
       } else if (key === 'district_id') {
         next.franchisee_id = null;
-        next.warehouse_id  = null;
+        next.warehouse_id = null;
       } else if (key === 'franchisee_id') {
         next.warehouse_id = null;
       }
@@ -467,10 +516,10 @@ const sortIndustries = (list) => {
     });
 
     // Sync network filter
-    if (level === 'state')       setFilter('state_id',    id);
-    if (level === 'district')    setFilter('district_id', id);
-    if (level === 'franchisee')  setFilter('franchisee_id', id);
-    if (level === 'warehouse')   setFilter('warehouse_id', id);
+    if (level === 'state') setFilter('state_id', id);
+    if (level === 'district') setFilter('district_id', id);
+    if (level === 'franchisee') setFilter('franchisee_id', id);
+    if (level === 'warehouse') setFilter('warehouse_id', id);
   }, [setFilter]);
 
   const drillBackTo = useCallback((levelOrIndex) => {
@@ -491,10 +540,10 @@ const sortIndustries = (list) => {
     const targetIdx = DRILL_LEVELS.indexOf(targetLevel);
     setFiltersState(prev => ({
       ...prev,
-      state_id:     targetIdx >= DRILL_LEVELS.indexOf('state')      ? prev.state_id      : null,
-      district_id:  targetIdx >= DRILL_LEVELS.indexOf('district')   ? prev.district_id   : null,
-      franchisee_id:targetIdx >= DRILL_LEVELS.indexOf('franchisee') ? prev.franchisee_id : null,
-      warehouse_id: targetIdx >= DRILL_LEVELS.indexOf('warehouse')  ? prev.warehouse_id  : null,
+      state_id: targetIdx >= DRILL_LEVELS.indexOf('state') ? prev.state_id : null,
+      district_id: targetIdx >= DRILL_LEVELS.indexOf('district') ? prev.district_id : null,
+      franchisee_id: targetIdx >= DRILL_LEVELS.indexOf('franchisee') ? prev.franchisee_id : null,
+      warehouse_id: targetIdx >= DRILL_LEVELS.indexOf('warehouse') ? prev.warehouse_id : null,
     }));
   }, [drillPath]);
 
@@ -644,6 +693,12 @@ const sortIndustries = (list) => {
       add('application_type_id', `Application: ${filters.application_type_id}`);
     }
 
+    // 15. EPC Type
+    if (filters.epc_type_id) {
+      const et = epcTypes.find(item => String(item._id || item.id) === String(filters.epc_type_id));
+      add('epc_type_id', `EPC Type: ${et?.name || filters.epc_type_id}`);
+    }
+
     return chips;
   }, [
     filters,
@@ -658,22 +713,23 @@ const sortIndustries = (list) => {
     projectRanges,
     kits,
     catalogTree,
+    epcTypes,
   ]);
 
   // ── Derived aggregations ────────────────────────────────────────────────
   const kpiData = useMemo(() => {
-    const summary  = networkSummary;
-    const tracker  = performanceTracker;
-    const whs      = warehouses;
+    const summary = networkSummary;
+    const tracker = performanceTracker;
+    const whs = warehouses;
 
-    const activeWarehouses  = whs.filter(w => w.is_active).length;
-    const totalFranchisees  = summary?.network_overview?.total_resellers        || 0;
-    const activeFranchisees = summary?.network_overview?.active_resellers       || 0;
-    const totalOrders       = summary?.order_metrics?.b2b_procurement_orders_count || 0;
+    const activeWarehouses = whs.filter(w => w.is_active).length;
+    const totalFranchisees = summary?.network_overview?.total_resellers || 0;
+    const activeFranchisees = summary?.network_overview?.active_resellers || 0;
+    const totalOrders = summary?.order_metrics?.b2b_procurement_orders_count || 0;
 
-    const totalTarget   = tracker?.summary?.total_target   || 0;
+    const totalTarget = tracker?.summary?.total_target || 0;
     const totalEligible = tracker?.summary?.total_eligible || 0;
-    const avgAchievement= tracker?.summary?.avg_achievement|| 0;
+    const avgAchievement = tracker?.summary?.avg_achievement || 0;
 
     const adoptingCount = tracker?.franchisees?.filter(f =>
       f.eligible_quantity > 0
@@ -687,22 +743,28 @@ const sortIndustries = (list) => {
       : 0;
 
     return {
-      clusterCoverage:    { covered: 0, planned: 0, note: 'Calculated from geolocation data' },
-      stateCoverage:      { covered: allStates.filter(s => s.is_active).length, planned: allStates.length },
-      districtCoverage:   { covered: allDistricts.filter(d => d.is_active).length, planned: allDistricts.length },
+      clusterCoverage: { covered: 0, planned: 0, note: 'Calculated from geolocation data' },
+      stateCoverage: { covered: allStates.filter(s => s.is_active).length, planned: allStates.length },
+      districtCoverage: { covered: allDistricts.filter(d => d.is_active).length, planned: allDistricts.length },
       activeFranchisees,
       totalFranchisees,
-      kitGoal:            totalTarget,
-      kitAchievement:     totalEligible,
-      achievementPct:     avgAchievement,
+      kitGoal: totalTarget,
+      kitAchievement: totalEligible,
+      achievementPct: avgAchievement,
       activeWarehouses,
-      operationalShops:   franchiseeList.filter(f => f.is_operational).length,
+      operationalShops: franchiseeList.filter(f => f.is_operational).length,
       totalOrders,
-      kitsSold:           totalEligible,
-      kitAdoptionPct:     adoptionPct,
+      kitsSold: totalEligible,
+      kitAdoptionPct: adoptionPct,
       expansionPct,
+      // EPC derived metrics
+      totalEpcAccounts: epcTypesSummary?.total_accounts || 0,
+      totalEpcLeads: epcTypesSummary?.total_leads || 0,
+      totalEpcTypes: epcTypesSummary?.total_types || 0,
+      classifiedEpcs: epcTypesSummary?.total_classified_epcs || 0,
+      unclassifiedEpcs: epcTypesSummary?.total_unclassified_epcs || 0,
     };
-  }, [networkSummary, performanceTracker, warehouses, allStates, allDistricts, franchiseeList]);
+  }, [networkSummary, performanceTracker, warehouses, allStates, allDistricts, franchiseeList, epcTypesSummary]);
 
   return {
     // Filter state
@@ -737,6 +799,10 @@ const sortIndustries = (list) => {
     catalogTree,
     kits,
 
+    // EPC Types (bifurcated classification master — live counts from backend)
+    epcTypes,
+    epcTypesSummary,
+
     // Derived
     kpiData,
 
@@ -744,10 +810,11 @@ const sortIndustries = (list) => {
     loading,
     errors,
     refetch: {
-      summary:      fetchNetworkSummary,
-      performance:  fetchPerformance,
-      franchisees:  fetchFranchisees,
-      warehouses:   fetchWarehouses,
+      summary: fetchNetworkSummary,
+      performance: fetchPerformance,
+      franchisees: fetchFranchisees,
+      warehouses: fetchWarehouses,
+      epcTypes: fetchEpcTypes,
     },
   };
 }
