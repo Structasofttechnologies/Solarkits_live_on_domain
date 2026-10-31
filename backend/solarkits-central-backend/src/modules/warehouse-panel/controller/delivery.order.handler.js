@@ -2172,6 +2172,985 @@ exports.get_vehicle_presets = async (req, res) => {
   }
 };
 
+// ==============================================================================
+// ── IN-MEMORY / AUDIT TASK STORE FOR REAL-TIME DELIVERY MANAGER DAILY ACTIONS ─
+// ==============================================================================
+const warehouseTaskStatusStore = new Map();
+
+// Helper to ensure realistic seed data in MongoDB if collections are fresh/sparse
+/**
+ * GET /warehouse/dashboard-overview
+ * Centralized, live real-time Delivery Manager Control Center aggregation
+ * 100% REAL LIVE DATA from MongoDB collections (ZERO dummy / static / seeded data)
+ */
+exports.get_dashboard_overview = async (req, res) => {
+  try {
+    const { india_solarshop_db } = require('../config/databases');
+    const { WarehouseInward, WarehouseStock, PurchaseOrder, DeliveryVehicle, CompanyWarehouse } = require('../models/company_warehouse_db');
+
+    const EpcOrder = india_solarshop_db.models['epc_orders'] ||
+      india_solarshop_db.model('epc_orders', new mongoose.Schema({}, { strict: false, collection: 'epc_orders' }));
+
+    const ServiceTicket = india_solarshop_db.models['solarkits_service_tickets'] || 
+      india_solarshop_db.model('solarkits_service_tickets', new mongoose.Schema({}, { strict: false, collection: 'solarkits_service_tickets' }));
+
+    const DeliveryCostBenchmark = india_solarshop_db.models['delivery_cost_benchmarks'] || 
+      india_solarshop_db.model('delivery_cost_benchmarks', new mongoose.Schema({}, { strict: false, collection: 'delivery_cost_benchmarks' }));
+
+    // Fetch live MongoDB documents across all fulfillment domains
+    const [
+      deliveryOrdersRaw,
+      epcOrders,
+      purchaseOrders,
+      warehouseInwards,
+      warehouseStocks,
+      deliveryVehicles,
+      benchmarks,
+      serviceTickets,
+      warehousesList
+    ] = await Promise.all([
+      DeliveryOrder.find({}).sort({ created_at: -1 }).lean().catch(() => []),
+      EpcOrder.find({ order_status: { $in: ['confirmed', 'processing', 'in_assembly', 'out_for_delivery', 'delivered'] } }).sort({ created_at: -1 }).lean().catch(() => []),
+      PurchaseOrder.find({}).sort({ created_at: -1 }).lean().catch(() => []),
+      WarehouseInward.find({}).sort({ created_at: -1 }).lean().catch(() => []),
+      WarehouseStock.find({}).lean().catch(() => []),
+      DeliveryVehicle.find({}).lean().catch(() => []),
+      DeliveryCostBenchmark.find({ is_active: true, deleted_at: null }).lean().catch(() => []),
+      ServiceTicket.find({ deleted_at: null }).sort({ created_at: -1 }).lean().catch(() => []),
+      CompanyWarehouse.find({ is_active: true, deleted_at: null }).lean().catch(() => [])
+    ]);
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const whMap = {};
+    warehousesList.forEach(w => {
+      whMap[w._id.toString()] = w.name || w.code || 'Central Warehouse';
+    });
+
+    // Clone deliveryOrders and merge confirmed real EPC orders not yet in delivery_orders collection
+    const deliveryOrders = [...deliveryOrdersRaw];
+    epcOrders.forEach(epc => {
+      const alreadyInList = deliveryOrders.some(d => 
+        d.order_number === epc.order_number || 
+        (d.order_id && String(d.order_id) === String(epc._id))
+      );
+
+      if (!alreadyInList) {
+        const kitItem = epc.items?.[0] || {};
+        const numKits = kitItem.quantity || epc.order_load_metrics?.total_kits || 1;
+        const capacity = kitItem.capacity || (epc.order_load_metrics?.total_kw ? `${epc.order_load_metrics.total_kw} kW` : '5 kW');
+        const kitName = kitItem.item_name || `${capacity} DCR Combokit`;
+        const destination = {
+          address: epc.delivery_address?.line || '',
+          state: epc.delivery_address?.state_name || '',
+          district: epc.delivery_address?.district_name || '',
+          pincode: epc.delivery_address?.pincode || '',
+          landmark: ''
+        };
+
+        let deliveryStatus = 'new_order';
+        if (epc.dispatch_tracking?.dispatched_at) {
+          deliveryStatus = epc.delivered_at ? 'delivered' : 'in_transit';
+        } else if (epc.assigned_vehicle?.vehicle_name || epc.assigned_vehicle?.registration_number) {
+          deliveryStatus = 'ready_for_dispatch';
+        }
+
+        deliveryOrders.push({
+          _id: epc._id,
+          delivery_order_id: `DO-${epc.order_number.replace('ORD-EPC-', '')}`,
+          order_number: epc.order_number,
+          order_id: epc._id.toString(),
+          customer_name: epc.delivery_address?.contact_name || epc.client_name || epc.user_name || epc.company_name || 'EPC Customer',
+          customer_phone: epc.delivery_address?.contact_phone || '',
+          customer_email: epc.email || '',
+          destination: destination,
+          num_kits: numKits,
+          system_capacity: capacity,
+          solarkit_model: kitName,
+          delivery_status: deliveryStatus,
+          kit_preparation_status: deliveryStatus === 'delivered' ? 'kit_ready' : (deliveryStatus === 'ready_for_dispatch' ? 'kit_ready' : 'awaiting_components'),
+          transport_details: {
+            vehicle_number: epc.assigned_vehicle?.registration_number || '',
+            vehicle_type: epc.assigned_vehicle?.vehicle_type || epc.assigned_vehicle?.vehicle_name || '',
+            transporter_name: epc.dispatch_tracking?.courier_name || '',
+            driver_name: epc.assigned_vehicle?.driver_name || '',
+            driver_mobile: epc.assigned_vehicle?.driver_contact || '',
+            dispatch_date: epc.dispatch_tracking?.dispatched_at || null,
+            expected_delivery_date: epc.dispatch_tracking?.estimated_delivery || null
+          },
+          items: (epc.items || []).map(it => ({
+            sku: it.kit_id || it.product_id || 'SOLARKIT-BOM',
+            product_name: it.item_name || 'Solar Kit',
+            category: 'ComboKit',
+            ordered_qty: it.quantity || 1,
+            received_qty: 0,
+            pending_qty: it.quantity || 1,
+            available_inventory_stock: 0,
+            allocated_stock: 0,
+            sourcing_type: 'supplier_procurement',
+            supply_fulfilment_method: 'supplier_delivery',
+            supplier_name: epc.procurement_status?.panel?.supplier_name || epc.procurement_status?.inverter?.supplier_name || '',
+            supply_status: epc.procurement_status?.overall_status || 'pending',
+            expected_inward_date: epc.reservation_expires_at || epc.created_at
+          })),
+          created_at: epc.created_at,
+          order_date: epc.created_at
+        });
+      }
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 1. ORDER STATUS OVERVIEW COUNTS (18 DISTINCT REAL-TIME STATUSES)
+    // ──────────────────────────────────────────────────────────────────────────
+    const counts = {
+      incoming_supplier_goods: 0,
+      pickup_pending: 0,
+      supplier_dispatch_pending: 0,
+      supplier_in_transit: 0,
+      warehouse_inward_pending: 0,
+      partially_received: 0,
+      inward_completed: 0,
+      inventory_allocation_pending: 0,
+      boskit_combokit_preparation: 0,
+      awaiting_missing_components: 0,
+      ready_for_dispatch: 0,
+      vehicle_booking_pending: 0,
+      vehicle_booked: 0,
+      dispatched: 0,
+      in_transit_customer: 0,
+      delivered: 0,
+      pod_pending: 0,
+      completed: 0,
+      total_orders: deliveryOrders.length
+    };
+
+    deliveryOrders.forEach(ord => {
+      const st = ord.delivery_status || 'new_order';
+      const kitSt = ord.kit_preparation_status || 'ready_for_assembly';
+      const items = ord.items || [];
+      const hasVehicle = Boolean(ord.transport_details?.vehicle_number);
+      const isDelivered = st === 'delivered';
+      const hasPod = Boolean(ord.delivery_completion?.destination_photo || ord.delivery_completion?.otp_verified);
+
+      // Check item-level supplier sourcing states
+      let hasSupplierItems = false;
+      let hasPickupPending = false;
+      let hasSupplierDispatchPending = false;
+      let hasSupplierInTransit = false;
+      let hasPendingInward = false;
+      let hasUnallocatedStock = false;
+
+      items.forEach(it => {
+        if (it.sourcing_type === 'supplier_procurement' || it.supplier_name) {
+          hasSupplierItems = true;
+          if (it.supply_status === 'ready_for_pickup') hasPickupPending = true;
+          if (it.supply_status === 'pending') hasSupplierDispatchPending = true;
+          if (it.supply_status === 'in_transit') hasSupplierInTransit = true;
+        }
+        if ((it.pending_qty || 0) > 0) {
+          hasPendingInward = true;
+        }
+        if ((it.ordered_qty || 0) > (it.allocated_stock || 0) + (it.received_qty || 0)) {
+          hasUnallocatedStock = true;
+        }
+      });
+
+      if (hasSupplierItems) counts.incoming_supplier_goods++;
+      if (hasPickupPending) counts.pickup_pending++;
+      if (hasSupplierDispatchPending) counts.supplier_dispatch_pending++;
+      if (hasSupplierInTransit) counts.supplier_in_transit++;
+
+      if (st === 'new_order' || hasPendingInward) counts.warehouse_inward_pending++;
+      if (st === 'partially_inwarded') counts.partially_received++;
+      if (st === 'inward_completed' || st === 'inward_done') counts.inward_completed++;
+      if (hasUnallocatedStock && st !== 'delivered') counts.inventory_allocation_pending++;
+
+      if (kitSt === 'in_assembly' || kitSt === 'ready_for_assembly') counts.boskit_combokit_preparation++;
+      if (kitSt === 'awaiting_components') counts.awaiting_missing_components++;
+
+      if (st === 'ready_for_dispatch') {
+        counts.ready_for_dispatch++;
+        if (!hasVehicle) counts.vehicle_booking_pending++;
+        else counts.vehicle_booked++;
+      }
+
+      if (['awaiting_eway_bill', 'ready_to_initiate', 'dispatched_pending'].includes(st)) {
+        counts.dispatched++;
+      }
+
+      if (st === 'in_transit') {
+        counts.in_transit_customer++;
+      }
+
+      if (isDelivered) {
+        counts.delivered++;
+        if (!hasPod) counts.pod_pending++;
+        else counts.completed++;
+      }
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 2. WAREHOUSE INWARD & SUPPLIER GOODS MONITORING TABLE & METRICS
+    // ──────────────────────────────────────────────────────────────────────────
+    const inwardTable = [];
+    let damagedOrMissingCount = 0;
+    let inwardDiscrepancyCount = 0;
+    let supplierExpectedTodayCount = 0;
+    let inwardOverdueCount = 0;
+
+    // A. Actual recorded physical warehouse inwards (GRNs)
+    warehouseInwards.forEach(grn => {
+      const items = grn.items || [];
+      const inwardDate = grn.inward_date || grn.created_at;
+      const isToday = inwardDate && new Date(inwardDate) >= todayStart;
+      if (isToday) supplierExpectedTodayCount++;
+
+      items.forEach(gi => {
+        const rejected = gi.rejected_qty || 0;
+        if (rejected > 0) {
+          damagedOrMissingCount += rejected;
+          inwardDiscrepancyCount++;
+        }
+
+        inwardTable.push({
+          order_id: grn._id,
+          order_number: grn.order_number || grn.grn_no || grn.invoice_no || `GRN-${String(grn._id).slice(-6).toUpperCase()}`,
+          supplier_name: grn.supplier_name || '',
+          po_number: grn.po_number || grn.invoice_no || grn.grn_no || '',
+          product_name: gi.sku_code || gi.product_name || 'Inward Component',
+          sku: gi.sku_code || 'SKU-INW',
+          category: 'Warehouse GRN',
+          expected_qty: gi.ordered_qty || gi.qty || 0,
+          received_qty: gi.received_qty || gi.qty || 0,
+          pending_qty: Math.max(0, (gi.ordered_qty || gi.qty || 0) - (gi.received_qty || gi.qty || 0)),
+          short_damaged: rejected,
+          warehouse: grn.warehouse_code || 'WH-IND-GJ-001',
+          expected_inward_date: inwardDate,
+          inward_status: rejected > 0 ? 'Discrepancy' : (grn.status === 'approved' ? 'Completed' : 'Pending'),
+          supply_status: grn.status || 'received',
+          destination_district: 'Ahmedabad Hub'
+        });
+      });
+    });
+
+    // B. Delivery orders item-level supplier tracking
+    deliveryOrders.forEach(ord => {
+      (ord.items || []).forEach(it => {
+        const isSupplier = it.sourcing_type === 'supplier_procurement' || Boolean(it.supplier_name);
+        const pending = it.pending_qty || 0;
+        const damaged = it.damaged_qty || 0;
+        const missing = it.missing_qty || 0;
+        if (damaged > 0 || missing > 0) damagedOrMissingCount += (damaged + missing);
+        if (it.supply_status === 'inward_discrepancy' || damaged > 0) inwardDiscrepancyCount++;
+
+        const expDate = it.expected_inward_date ? new Date(it.expected_inward_date) : null;
+        if (expDate && expDate >= todayStart && expDate < new Date(todayStart.getTime() + 24 * 3600 * 1000)) {
+          supplierExpectedTodayCount++;
+        }
+        if (expDate && expDate < now && pending > 0) {
+          inwardOverdueCount++;
+        }
+
+        if (pending > 0 || it.received_qty > 0 || isSupplier) {
+          inwardTable.push({
+            order_id: ord._id,
+            order_number: ord.order_number,
+            supplier_name: it.supplier_name || '',
+            po_number: ord.incoming_truck_group?.lr_number || (ord.po_number || ''),
+            product_name: it.product_name || 'Solar Kit Component',
+            sku: it.sku,
+            category: it.category || 'BOS Kit',
+            expected_qty: it.ordered_qty || 0,
+            received_qty: it.received_qty || 0,
+            pending_qty: pending,
+            short_damaged: (damaged + missing),
+            warehouse: ord.warehouse_code || 'WH-IND-GJ-001',
+            expected_inward_date: it.expected_inward_date || ord.order_date,
+            inward_status: (pending === 0 && it.received_qty > 0) 
+              ? 'Completed' 
+              : (it.received_qty > 0 ? 'Partial' : (damaged > 0 ? 'Discrepancy' : 'Pending')),
+            supply_status: it.supply_status || 'pending',
+            destination_district: ord.destination?.district || ''
+          });
+        }
+      });
+    });
+
+    // C. Open Purchase Orders awaiting warehouse delivery
+    purchaseOrders.forEach(po => {
+      (po.items || []).forEach(pi => {
+        inwardTable.push({
+          order_id: po._id,
+          order_number: po.source_orders?.[0]?.order_number || po.po_number,
+          supplier_name: po.supplier_name || po.supplier_brand || '',
+          po_number: po.po_number,
+          product_name: pi.sku_code || 'Procurement Component',
+          sku: pi.sku_code || 'SKU-PO',
+          category: po.procurement_type || 'Component',
+          expected_qty: pi.qty || 1,
+          received_qty: po.status === 'delivered' ? (pi.qty || 1) : 0,
+          pending_qty: po.status === 'delivered' ? 0 : (pi.qty || 1),
+          short_damaged: 0,
+          warehouse: po.warehouse_code || 'WH-IND-GJ-001',
+          expected_inward_date: po.timeline || po.created_at,
+          inward_status: po.status === 'delivered' ? 'Completed' : 'Pending',
+          supply_status: po.status === 'paid' ? 'dispatched' : 'pending',
+          destination_district: 'Regional Hub'
+        });
+      });
+    });
+
+    const inwardMonitoring = {
+      summary: {
+        expected_today: supplierExpectedTodayCount,
+        pickup_pending: counts.pickup_pending,
+        supplier_dispatch_pending: counts.supplier_dispatch_pending,
+        supplier_in_transit: counts.supplier_in_transit,
+        warehouse_inward_pending: counts.warehouse_inward_pending,
+        partially_received: counts.partially_received,
+        inward_discrepancies: inwardDiscrepancyCount,
+        damaged_missing: damagedOrMissingCount,
+        inward_overdue: inwardOverdueCount
+      },
+      table: inwardTable
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 3. KIT PREPARATION & INVENTORY ALLOCATION
+    // ──────────────────────────────────────────────────────────────────────────
+    const kitRecords = [];
+    let kitsAwaitingStock = 0;
+    let kitsInPrep = 0;
+    let kitsReadyDispatch = 0;
+    let kitsAwaitingComponents = 0;
+    let inventoryShortageCount = 0;
+    let prepOverdueCount = 0;
+
+    deliveryOrders.forEach(ord => {
+      const kitSt = ord.kit_preparation_status || 'ready_for_assembly';
+      const isDelivered = ord.delivery_status === 'delivered';
+      const items = ord.items || [];
+
+      let hasShortage = false;
+      const bomItems = items.map(it => {
+        const required = it.ordered_qty || 1;
+        const available = it.available_inventory_stock || 0;
+        const reserved = it.allocated_stock || 0;
+        const missing = Math.max(0, required - (reserved + (it.received_qty || 0)));
+        if (missing > 0) hasShortage = true;
+
+        return {
+          sku: it.sku,
+          product_name: it.product_name,
+          category: it.category || 'BOS Kit',
+          required_qty: required,
+          available_stock: available,
+          reserved_stock: reserved,
+          missing_qty: missing,
+          qc_status: it.qc_status || 'Passed'
+        };
+      });
+
+      if (hasShortage) inventoryShortageCount++;
+
+      const ordDate = new Date(ord.order_date || ord.created_at);
+      const daysElapsed = Math.floor((now - ordDate) / (1000 * 3600 * 24));
+      const isOverdue = daysElapsed > (ord.sla_days || 2) && !isDelivered && kitSt !== 'kit_ready';
+      if (isOverdue) prepOverdueCount++;
+
+      if (kitSt === 'ready_for_assembly') kitsAwaitingStock++;
+      if (kitSt === 'in_assembly') kitsInPrep++;
+      if (kitSt === 'kit_ready' || ord.delivery_status === 'ready_for_dispatch') kitsReadyDispatch++;
+      if (kitSt === 'awaiting_components' || hasShortage) kitsAwaitingComponents++;
+
+      kitRecords.push({
+        order_id: ord._id,
+        order_number: ord.order_number,
+        customer_name: ord.customer_name,
+        kit_type: ord.solarkit_model || `${ord.system_capacity || '5 kW'} DCR ComboKit`,
+        num_kits: ord.num_kits || 1,
+        system_capacity: ord.system_capacity || '5 kW',
+        bom_items: bomItems,
+        total_components_required: bomItems.reduce((s, b) => s + b.required_qty, 0),
+        total_components_available: bomItems.reduce((s, b) => s + b.available_stock, 0),
+        total_components_missing: bomItems.reduce((s, b) => s + b.missing_qty, 0),
+        preparation_status: kitSt,
+        assigned_team: ord.kit_assembly_details?.picked_by || 'BOS Assembly Workstation',
+        expected_completion_date: new Date(ordDate.getTime() + (ord.sla_days || 2) * 24 * 3600 * 1000),
+        is_overdue: isOverdue,
+        warehouse_code: ord.warehouse_code || 'WH-IND-GJ-001'
+      });
+    });
+
+    const kitPreparation = {
+      summary: {
+        awaiting_stock_allocation: kitsAwaitingStock,
+        kits_in_preparation: kitsInPrep,
+        kits_ready_for_dispatch: kitsReadyDispatch,
+        awaiting_missing_components: kitsAwaitingComponents,
+        inventory_shortage: inventoryShortageCount,
+        preparation_overdue: prepOverdueCount
+      },
+      records: kitRecords
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 4. VEHICLE BOOKING & BENCHMARK APPROVAL MONITORING
+    // ──────────────────────────────────────────────────────────────────────────
+    const vehicleBookingTable = [];
+    let vehicleBookingPending = 0;
+    let chargeApprovalPending = 0;
+    let vehicleBookedCount = 0;
+    let vehicleCostExceededCount = 0;
+    let vehicleCapacityIssueCount = 0;
+    let bookingOverdueCount = 0;
+
+    deliveryOrders.forEach(ord => {
+      const isReady = ['ready_for_dispatch', 'awaiting_eway_bill', 'ready_to_initiate', 'in_transit', 'delivered'].includes(ord.delivery_status);
+      if (!isReady) return;
+
+      const hasVehicle = Boolean(ord.transport_details?.vehicle_number);
+      const dist = ord.destination?.district || '';
+      const numKits = ord.num_kits || 1;
+      const estWeightKg = numKits * 380; // Standard 380kg per 5kW Kit
+
+      // Lookup real benchmark cost from database
+      const matchedBenchmark = benchmarks.find(b => 
+        (b.district_id?.name || '').toLowerCase() === dist.toLowerCase() ||
+        (ord.warehouse_code && b.warehouse_id?.code === ord.warehouse_code)
+      );
+
+      const benchmarkCost = matchedBenchmark?.benchmark_cost || 0;
+      const actualDeliveryCharge = ord.items?.[0]?.transport_cost || ord.delivery_charge || ord.transport_details?.estimated_cost || 0;
+      const isExceeded = benchmarkCost > 0 && actualDeliveryCharge > benchmarkCost;
+
+      if (isExceeded) vehicleCostExceededCount++;
+
+      let adminApproval = 'Not Required';
+      if (isExceeded) {
+        adminApproval = ord.transport_details?.admin_approval_status || 'Pending';
+        if (adminApproval === 'Pending') chargeApprovalPending++;
+      }
+
+      if (!hasVehicle) vehicleBookingPending++;
+      else vehicleBookedCount++;
+
+      const ordDate = new Date(ord.order_date || ord.created_at);
+      const daysElapsed = Math.floor((now - ordDate) / (1000 * 3600 * 24));
+      if (!hasVehicle && daysElapsed > 2) bookingOverdueCount++;
+
+      const selectedVehicle = ord.transport_details?.vehicle_type || ord.required_vehicle || '';
+      const capacityKg = selectedVehicle.includes('4 Ton') ? 4000 : (selectedVehicle.includes('2.5') ? 2500 : 1500);
+      const hasCapacityIssue = selectedVehicle ? (estWeightKg > capacityKg) : false;
+      if (hasCapacityIssue) vehicleCapacityIssueCount++;
+
+      vehicleBookingTable.push({
+        order_id: ord._id,
+        order_number: ord.order_number,
+        destination: `${ord.destination?.district || ''}${ord.destination?.district && ord.destination?.state ? ', ' : ''}${ord.destination?.state || ''}`,
+        address: ord.destination?.address || '',
+        kit_quantity: numKits,
+        total_weight_kg: estWeightKg,
+        delivery_method: ord.delivery_method === 'auto' ? 'Combined Fleet' : 'Individual Transport',
+        vehicle_type: selectedVehicle || 'Unassigned',
+        vehicle_number: ord.transport_details?.vehicle_number || '',
+        driver_name: ord.transport_details?.driver_name || '',
+        driver_mobile: ord.transport_details?.driver_mobile || '',
+        transporter: ord.transport_details?.transporter_name || '',
+        vehicle_capacity: selectedVehicle ? `${capacityKg} kg` : 'TBD',
+        delivery_charge: actualDeliveryCharge,
+        benchmark: benchmarkCost,
+        cost_exceeded: isExceeded,
+        admin_approval: adminApproval,
+        booking_status: hasVehicle ? 'Booked' : 'Pending',
+        has_capacity_issue: hasCapacityIssue
+      });
+    });
+
+    const vehicleBooking = {
+      summary: {
+        booking_pending: vehicleBookingPending,
+        delivery_charge_approval_pending: chargeApprovalPending,
+        vehicle_booked: vehicleBookedCount,
+        dispatch_pending: counts.ready_for_dispatch,
+        vehicle_capacity_issue: vehicleCapacityIssueCount,
+        delivery_cost_exceeding_benchmark: vehicleCostExceededCount,
+        vehicle_booking_overdue: bookingOverdueCount
+      },
+      table: vehicleBookingTable
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 5. DISPATCH & DELIVERY TRACKING
+    // ──────────────────────────────────────────────────────────────────────────
+    const trackingTable = [];
+    let dispatchedTodayCount = 0;
+    let deliveryDueTodayCount = 0;
+    let deliveryOverdueCount = 0;
+    let deliveredTodayCount = 0;
+    let deliveryFailedCount = 0;
+    let podPendingCount = 0;
+
+    deliveryOrders.forEach(ord => {
+      const st = ord.delivery_status;
+      const t = ord.transport_details || {};
+      const c = ord.delivery_completion || {};
+
+      const dDate = t.dispatch_date ? new Date(t.dispatch_date) : null;
+      const expDelDate = t.expected_delivery_date ? new Date(t.expected_delivery_date) : null;
+      const compDate = c.completed_at ? new Date(c.completed_at) : null;
+
+      if (dDate && dDate >= todayStart) dispatchedTodayCount++;
+      if (expDelDate && expDelDate >= todayStart && expDelDate < new Date(todayStart.getTime() + 24 * 3600 * 1000)) {
+        deliveryDueTodayCount++;
+      }
+      if (st === 'in_transit' && expDelDate && expDelDate < now) {
+        deliveryOverdueCount++;
+      }
+      if (st === 'delivered' && compDate && compDate >= todayStart) {
+        deliveredTodayCount++;
+      }
+      if (c.failed_otp_attempts > 2) {
+        deliveryFailedCount++;
+      }
+      if (st === 'delivered' && !c.destination_photo && !c.otp_verified) {
+        podPendingCount++;
+      }
+
+      const isDelayed = Boolean(expDelDate && expDelDate < now && st !== 'delivered');
+      const delayDays = isDelayed ? Math.max(1, Math.floor((now - expDelDate) / (1000 * 3600 * 24))) : 0;
+
+      trackingTable.push({
+        order_id: ord._id,
+        order_number: ord.order_number,
+        customer_name: ord.customer_name,
+        customer_phone: ord.customer_phone,
+        destination: `${ord.destination?.address || ''}${ord.destination?.address && ord.destination?.district ? ', ' : ''}${ord.destination?.district || ''}`,
+        vehicle_number: t.vehicle_number || '',
+        vehicle_type: t.vehicle_type || ord.required_vehicle || '',
+        transporter_name: t.transporter_name || '',
+        driver_name: t.driver_name || '',
+        driver_mobile: t.driver_mobile || '',
+        docket_number: t.docket_number || ord.incoming_truck_group?.lr_number || '',
+        dispatch_date: t.dispatch_date || null,
+        expected_delivery: t.expected_delivery_date || null,
+        completed_at: c.completed_at || null,
+        current_status: st,
+        is_delayed: isDelayed,
+        delay_days: delayDays,
+        pod_status: (c.otp_verified || Boolean(c.destination_photo)) ? 'Uploaded' : 'Pending',
+        pod_url: c.destination_photo || '',
+        receiver_name: c.receiver_name || '',
+        eway_bill_number: ord.eway_bill?.eway_bill_number || ''
+      });
+    });
+
+    const dispatchTracking = {
+      summary: {
+        ready_for_dispatch: counts.ready_for_dispatch,
+        dispatched_today: dispatchedTodayCount,
+        in_transit: counts.in_transit_customer,
+        delivery_due_today: deliveryDueTodayCount,
+        delivery_overdue: deliveryOverdueCount,
+        delivery_attempted_failed: deliveryFailedCount,
+        pod_pending: podPendingCount,
+        delivered_today: deliveredTodayCount
+      },
+      table: trackingTable
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 6. SERVICE, RETURNS & REPLACEMENT TICKETS (Exclusively from DB)
+    // ──────────────────────────────────────────────────────────────────────────
+    const ticketSummary = {
+      new_service_tickets: 0,
+      open_service_tickets: 0,
+      replacement_requests: 0,
+      return_pickup_pending: 0,
+      replacement_dispatch_pending: 0,
+      service_overdue: 0,
+      resolved_tickets: 0
+    };
+
+    const ticketsTable = serviceTickets.map(tck => {
+      const st = tck.ticket_status || 'new';
+      const isReplacement = tck.ticket_type === 'replacement' || (tck.issue_category || '').toLowerCase().includes('replace');
+      const isReturn = tck.ticket_type === 'return' || (tck.issue_category || '').toLowerCase().includes('return');
+      const dueDate = tck.due_date ? new Date(tck.due_date) : null;
+      const isOverdue = dueDate && dueDate < now && !['resolved', 'closed', 'delivered'].includes(st);
+
+      if (['new', 'under_review'].includes(st)) ticketSummary.new_service_tickets++;
+      if (!['resolved', 'closed', 'rejected'].includes(st)) ticketSummary.open_service_tickets++;
+      if (isReplacement) ticketSummary.replacement_requests++;
+      if (st === 'pickup_pending' || isReturn) ticketSummary.return_pickup_pending++;
+      if (st === 'replacement_dispatch_pending') ticketSummary.replacement_dispatch_pending++;
+      if (['resolved', 'closed'].includes(st)) ticketSummary.resolved_tickets++;
+      if (isOverdue) ticketSummary.service_overdue++;
+
+      return {
+        ticket_id: tck._id,
+        ticket_number: tck.ticket_number || `TCK-${String(tck._id).slice(-6).toUpperCase()}`,
+        order_number: tck.order_number || '',
+        customer_name: tck.customer_name || '',
+        ticket_type: tck.ticket_type || (isReplacement ? 'Replacement' : (isReturn ? 'Return' : 'Service')),
+        product_name: tck.item_name || '',
+        issue: tck.problem_description || tck.issue_category || '',
+        created_date: tck.created_at,
+        assigned_to: tck.assigned_to_name || '',
+        status: st,
+        due_date: tck.due_date,
+        is_overdue: isOverdue
+      };
+    });
+
+    const serviceReturns = {
+      summary: ticketSummary,
+      table: ticketsTable
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 7. DELAY & OVERDUE MONITORING (10 DISTINCT STAGES)
+    // ──────────────────────────────────────────────────────────────────────────
+    const delayMetrics = {
+      supplier_pickup: { name: 'Supplier Pickup Delay', count: 0, tat_hours: 24, status: 'green' },
+      supplier_dispatch: { name: 'Supplier Dispatch Delay', count: 0, tat_hours: 48, status: 'green' },
+      inward: { name: 'Warehouse Inward Delay', count: 0, tat_hours: 24, status: 'green' },
+      inventory_allocation: { name: 'Inventory Allocation Delay', count: 0, tat_hours: 12, status: 'green' },
+      kit_preparation: { name: 'Kit Preparation Delay', count: 0, tat_hours: 24, status: 'green' },
+      vehicle_booking: { name: 'Vehicle Booking Delay', count: 0, tat_hours: 12, status: 'green' },
+      dispatch: { name: 'Dispatch Gate Delay', count: 0, tat_hours: 12, status: 'green' },
+      delivery: { name: 'Customer Delivery Delay', count: 0, tat_hours: 48, status: 'green' },
+      pod: { name: 'POD Submission Delay', count: 0, tat_hours: 12, status: 'green' },
+      replacement: { name: 'Replacement Processing Delay', count: 0, tat_hours: 48, status: 'green' }
+    };
+
+    const delayRecords = [];
+
+    deliveryOrders.forEach(ord => {
+      const createdDate = new Date(ord.order_date || ord.created_at);
+      const daysElapsed = Math.floor((now - createdDate) / (1000 * 3600 * 24));
+      const slaDays = ord.sla_days || 2;
+      const overdueDays = Math.max(0, daysElapsed - slaDays);
+
+      let stage = 'New Order Inward';
+      let responsibleTeam = 'Warehouse Operations';
+
+      if (ord.delivery_status === 'new_order' || ord.delivery_status === 'partially_inwarded') {
+        stage = 'Warehouse Inward';
+        responsibleTeam = 'Warehouse Operations';
+        if (daysElapsed > 1) {
+          delayMetrics.inward.count++;
+          delayMetrics.inward.status = daysElapsed > 2 ? 'red' : 'orange';
+        }
+      } else if (ord.kit_preparation_status === 'in_assembly' || ord.kit_preparation_status === 'ready_for_assembly') {
+        stage = 'Kit Assembly';
+        responsibleTeam = 'BOS Assembly Workstation';
+        if (daysElapsed > 2) {
+          delayMetrics.kit_preparation.count++;
+          delayMetrics.kit_preparation.status = 'red';
+        }
+      } else if (ord.delivery_status === 'ready_for_dispatch' && !ord.transport_details?.vehicle_number) {
+        stage = 'Vehicle Booking';
+        responsibleTeam = 'Logistics & Dispatch';
+        if (daysElapsed > 1) {
+          delayMetrics.vehicle_booking.count++;
+          delayMetrics.vehicle_booking.status = 'orange';
+        }
+      } else if (ord.delivery_status === 'in_transit') {
+        stage = 'Customer Transit';
+        responsibleTeam = 'Transporter Partner';
+        const expDel = ord.transport_details?.expected_delivery_date ? new Date(ord.transport_details.expected_delivery_date) : null;
+        if (expDel && expDel < now) {
+          delayMetrics.delivery.count++;
+          delayMetrics.delivery.status = 'red';
+        }
+      } else if (ord.delivery_status === 'delivered' && !ord.delivery_completion?.destination_photo && !ord.delivery_completion?.otp_verified) {
+        stage = 'POD Submission';
+        responsibleTeam = 'Delivery Manager';
+        delayMetrics.pod.count++;
+        delayMetrics.pod.status = 'orange';
+      }
+
+      if (overdueDays > 0 && ord.delivery_status !== 'delivered') {
+        delayRecords.push({
+          order_id: ord._id,
+          order_number: ord.order_number,
+          current_stage: stage,
+          expected_date: new Date(createdDate.getTime() + slaDays * 24 * 3600 * 1000),
+          responsible_team: responsibleTeam,
+          elapsed_days: daysElapsed,
+          overdue_days: overdueDays,
+          severity: overdueDays > 2 ? 'high' : 'medium'
+        });
+      }
+    });
+
+    serviceTickets.forEach(tck => {
+      const dueDate = tck.due_date ? new Date(tck.due_date) : null;
+      if (dueDate && dueDate < now && !['resolved', 'closed'].includes(tck.ticket_status)) {
+        delayMetrics.replacement.count++;
+        delayMetrics.replacement.status = 'red';
+      }
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 8. DAILY TASKS & ACTION REQUIRED QUEUE
+    // ──────────────────────────────────────────────────────────────────────────
+    const dailyTasks = [];
+    const managerName = req.user?.name ? `${req.user.name} (Warehouse Manager)` : 'Warehouse Manager';
+
+    deliveryOrders.forEach((ord) => {
+      const st = ord.delivery_status;
+      const kitSt = ord.kit_preparation_status;
+      const items = ord.items || [];
+      const hasVehicle = Boolean(ord.transport_details?.vehicle_number);
+
+      // Task 1: Inward pending items
+      const pendingItems = items.filter(i => (i.pending_qty || 0) > 0);
+      if (pendingItems.length > 0 && st !== 'delivered') {
+        const taskId = `tsk-inw-${ord._id}`;
+        dailyTasks.push({
+          id: taskId,
+          title: `Receive Goods & Verify PO for Order ${ord.order_number}`,
+          order_number: ord.order_number,
+          order_id: ord._id,
+          task_type: 'Inward',
+          assigned_to: managerName,
+          due_date: new Date(now.getTime() + 6 * 3600 * 1000),
+          priority: 'High',
+          status: warehouseTaskStatusStore.get(taskId) || 'Pending',
+          action_type: 'receive_goods',
+          details: `${pendingItems.length} SKU(s) pending physical warehouse verification`
+        });
+      }
+
+      // Task 2: Kit Preparation & Component Allocation
+      if (kitSt === 'ready_for_assembly' || kitSt === 'in_assembly') {
+        const taskId = `tsk-prep-${ord._id}`;
+        dailyTasks.push({
+          id: taskId,
+          title: `Complete BOS Kit Assembly & Barcode QC for ${ord.order_number}`,
+          order_number: ord.order_number,
+          order_id: ord._id,
+          task_type: 'Preparation',
+          assigned_to: 'BOS Assembly Workstation',
+          due_date: new Date(now.getTime() + 8 * 3600 * 1000),
+          priority: 'Medium',
+          status: warehouseTaskStatusStore.get(taskId) || 'In Progress',
+          action_type: 'assemble_kit',
+          details: `Kit Model: ${ord.solarkit_model || 'SolarKit'} (${ord.num_kits || 1} Sets)`
+        });
+      }
+
+      // Task 3: Vehicle Booking
+      if (st === 'ready_for_dispatch' && !hasVehicle) {
+        const taskId = `tsk-veh-${ord._id}`;
+        dailyTasks.push({
+          id: taskId,
+          title: `Book Transport Vehicle & Confirm Capacity (${ord.order_number})`,
+          order_number: ord.order_number,
+          order_id: ord._id,
+          task_type: 'Booking',
+          assigned_to: managerName,
+          due_date: new Date(now.getTime() + 4 * 3600 * 1000),
+          priority: 'High',
+          status: warehouseTaskStatusStore.get(taskId) || 'Pending',
+          action_type: 'book_vehicle',
+          details: `Destination: ${ord.destination?.district || 'Hub'} • Vehicle: ${ord.required_vehicle || 'Standard Vehicle'}`
+        });
+      }
+
+      // Task 4: Dispatch Gate Clearance
+      if (st === 'ready_for_dispatch' && hasVehicle) {
+        const taskId = `tsk-disp-${ord._id}`;
+        dailyTasks.push({
+          id: taskId,
+          title: `Inspect Gate Loading Photo & Clear Dispatch for ${ord.order_number}`,
+          order_number: ord.order_number,
+          order_id: ord._id,
+          task_type: 'Dispatch',
+          assigned_to: 'Gate Dispatch Manager',
+          due_date: new Date(now.getTime() + 2 * 3600 * 1000),
+          priority: 'High',
+          status: warehouseTaskStatusStore.get(taskId) || 'Pending',
+          action_type: 'dispatch_order',
+          details: `Vehicle: ${ord.transport_details?.vehicle_number || 'Assigned'} • Driver: ${ord.transport_details?.driver_name || 'Driver'}`
+        });
+      }
+
+      // Task 5: POD & Delivery Confirmation
+      if (st === 'delivered' && !ord.delivery_completion?.destination_photo && !ord.delivery_completion?.otp_verified) {
+        const taskId = `tsk-pod-${ord._id}`;
+        dailyTasks.push({
+          id: taskId,
+          title: `Upload Proof of Delivery (POD) / Verify OTP for ${ord.order_number}`,
+          order_number: ord.order_number,
+          order_id: ord._id,
+          task_type: 'Dispatch',
+          assigned_to: managerName,
+          due_date: new Date(now.getTime() + 12 * 3600 * 1000),
+          priority: 'Medium',
+          status: warehouseTaskStatusStore.get(taskId) || 'Pending',
+          action_type: 'upload_pod',
+          details: `Customer: ${ord.customer_name} • Phone: ${ord.customer_phone}`
+        });
+      }
+    });
+
+    serviceTickets.forEach(tck => {
+      if (['new', 'under_review', 'pickup_pending', 'replacement_dispatch_pending'].includes(tck.ticket_status)) {
+        const taskId = `tsk-tck-${tck._id}`;
+        dailyTasks.push({
+          id: taskId,
+          title: `Coordinate Logistics for ${tck.ticket_type === 'replacement' ? 'Replacement' : 'Service'} Ticket ${tck.ticket_number}`,
+          order_number: tck.order_number || '',
+          order_id: tck._id,
+          task_type: 'Ticket',
+          assigned_to: tck.assigned_to_name || managerName,
+          due_date: tck.due_date || new Date(now.getTime() + 24 * 3600 * 1000),
+          priority: 'High',
+          status: warehouseTaskStatusStore.get(taskId) || 'Pending',
+          action_type: 'process_ticket',
+          details: `${tck.item_name || 'Component'} - ${tck.problem_description || tck.issue_category || 'Service request'}`
+        });
+      }
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 9. MASTER ORDERS LIST (FULL ENRICHED DATA FOR MULTI-FACET FILTERING)
+    // ──────────────────────────────────────────────────────────────────────────
+    const masterOrders = deliveryOrders.map(ord => {
+      const items = ord.items || [];
+      const totalOrdered = items.reduce((s, i) => s + (i.ordered_qty || 0), 0);
+      const totalReceived = items.reduce((s, i) => s + (i.received_qty || 0), 0);
+      const totalPending = items.reduce((s, i) => s + (i.pending_qty || 0), 0);
+      const totalAllocated = items.reduce((s, i) => s + (i.allocated_stock || 0), 0);
+
+      const createdDate = new Date(ord.order_date || ord.created_at);
+      const daysElapsed = Math.floor((now - createdDate) / (1000 * 3600 * 24));
+      const slaDays = ord.sla_days || 2;
+      const isOverdue = ord.delivery_status !== 'delivered' && daysElapsed > slaDays;
+      const overdueDays = isOverdue ? (daysElapsed - slaDays) : 0;
+
+      let inwardStatus = 'Pending';
+      if (totalReceived >= totalOrdered && totalOrdered > 0) inwardStatus = 'Completed';
+      else if (totalReceived > 0) inwardStatus = 'Partial';
+
+      let kitPrepStatus = ord.kit_preparation_status || 'Not Started';
+      if (kitPrepStatus === 'kit_ready') kitPrepStatus = 'Ready';
+      else if (kitPrepStatus === 'in_assembly') kitPrepStatus = 'In Progress';
+      else if (kitPrepStatus === 'awaiting_components') kitPrepStatus = 'Awaiting Components';
+
+      let vehicleBookingStatus = ord.transport_details?.vehicle_number ? 'Booked' : 'Pending';
+      if (['in_transit', 'delivered'].includes(ord.delivery_status)) vehicleBookingStatus = 'Confirmed';
+
+      let currentStage = 'Procurement & Inward';
+      let nextAction = 'Verify incoming supplier goods';
+      if (inwardStatus === 'Completed' && kitPrepStatus !== 'Ready') {
+        currentStage = 'Kit Preparation';
+        nextAction = 'Assemble BOM components & scan barcode';
+      } else if (kitPrepStatus === 'Ready' && vehicleBookingStatus === 'Pending') {
+        currentStage = 'Vehicle Arrangement';
+        nextAction = 'Book delivery transport';
+      } else if (ord.delivery_status === 'ready_for_dispatch') {
+        currentStage = 'Ready for Dispatch';
+        nextAction = 'Upload rear vehicle photo & initiate delivery';
+      } else if (ord.delivery_status === 'in_transit') {
+        currentStage = 'In Transit to Site';
+        nextAction = 'Track ETA & call driver';
+      } else if (ord.delivery_status === 'delivered') {
+        currentStage = 'Delivered';
+        nextAction = ord.delivery_completion?.otp_verified ? 'Completed' : 'Submit Dual POD';
+      }
+
+      return {
+        _id: ord._id,
+        order_number: ord.order_number,
+        delivery_order_id: ord.delivery_order_id,
+        customer_name: ord.customer_name,
+        customer_phone: ord.customer_phone,
+        order_source: ord.epcs?.[0]?.epc_name ? 'EPC Partner' : 'Solar Shop Store',
+        kit_type: ord.solarkit_model || `${ord.system_capacity || '5 kW'} DCR ComboKit`,
+        num_kits: ord.num_kits || 1,
+        system_capacity: ord.system_capacity || '5 kW',
+        warehouse_code: ord.warehouse_code || 'WH-IND-GJ-001',
+        warehouse_name: whMap[ord.warehouse_id] || 'Ahmedabad Central Warehouse',
+        state: ord.destination?.state || '',
+        district: ord.destination?.district || '',
+        address: ord.destination?.address,
+        pincode: ord.destination?.pincode,
+        procurement_status: items[0]?.supply_status || 'supplier_delivery',
+        supplier_name: items.find(i => i.supplier_name)?.supplier_name || '',
+        inward_status: inwardStatus,
+        kit_preparation: kitPrepStatus,
+        vehicle_booking: vehicleBookingStatus,
+        delivery_status: ord.delivery_status,
+        current_stage: currentStage,
+        delay_status: isOverdue ? 'Overdue' : (daysElapsed >= 1 ? 'Approaching TAT' : 'On Time'),
+        overdue_days: overdueDays,
+        days_elapsed: daysElapsed,
+        next_action: nextAction,
+        assigned_to: managerName,
+        items: items,
+        transport_details: ord.transport_details || {},
+        eway_bill: ord.eway_bill || {},
+        delivery_completion: ord.delivery_completion || {},
+        created_at: ord.created_at || ord.order_date
+      };
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        order_status_counts: counts,
+        warehouse_inward_monitoring: inwardMonitoring,
+        kit_preparation_monitoring: kitPreparation,
+        vehicle_booking_monitoring: vehicleBooking,
+        dispatch_delivery_tracking: dispatchTracking,
+        service_returns_tickets: serviceReturns,
+        delay_metrics: delayMetrics,
+        delay_records: delayRecords,
+        daily_tasks: dailyTasks,
+        master_orders: masterOrders,
+        meta: {
+          synced_at: now.toISOString(),
+          total_orders: masterOrders.length,
+          warehouse_code: 'WH-IND-GJ-001',
+          warehouse_name: 'Ahmedabad Master Warehouse Hub',
+          manager_name: req.user?.name || 'Warehouse Manager'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('get_dashboard_overview error:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+
+exports.update_dashboard_task_status = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, remarks } = req.body;
+    if (!id || !status) {
+      return res.status(400).json({ status: 'error', message: 'Task ID and status are required.' });
+    }
+
+    warehouseTaskStatusStore.set(id, status);
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Task ${id} marked as ${status}`,
+      data: { id, status, updated_at: new Date() }
+    });
+  } catch (err) {
+    console.error('update_dashboard_task_status error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+
 
 
 

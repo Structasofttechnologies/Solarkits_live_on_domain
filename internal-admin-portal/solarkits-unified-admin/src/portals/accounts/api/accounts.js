@@ -437,6 +437,25 @@ export const syncWarehouseDeliveryOrders = async () => {
   return res.data;
 };
 
+// Dashboard API
+export const getAccountDashboardOverview = async (params = {}) => {
+  const cleanParams = Object.fromEntries(
+    Object.entries(params || {}).filter(([_, v]) => v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null')
+  );
+  const query = new URLSearchParams(cleanParams).toString();
+  const res = await axios.get(`${API_URL}/accounts/dashboard-overview${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const updateDashboardTaskStatus = async (taskId, payload = {}) => {
+  const res = await axios.post(`${API_URL}/accounts/dashboard-tasks/${taskId}/status`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 export const getSidebarBadgeCounts = async () => {
   const res = await axios.get(`${API_URL}/accounts/sidebar-badges`, {
     headers: authHeaderObj(),

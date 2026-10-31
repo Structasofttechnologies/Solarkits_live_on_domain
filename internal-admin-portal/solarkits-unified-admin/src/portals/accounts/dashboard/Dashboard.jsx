@@ -195,7 +195,7 @@ export default function Dashboard() {
     return filterMenusByPermission(rawMenus, allowedUniqueIds);
   }, [sidebarBadges, allowedUniqueIds]);
   return (
-    <div className="flex h-screen bg-bg w-screen theme-transition">
+    <div className="flex h-screen bg-bg w-full max-w-full overflow-hidden theme-transition">
       <Drawer
         isOpen={isOpen}
         setIsOpen={setIsOpen}
@@ -203,7 +203,7 @@ export default function Dashboard() {
         menuItems={filteredMenus}
       />
 
-      <div className="flex flex-col flex-1 max-w-full">
+      <div className="flex flex-col flex-1 min-w-0 max-w-full overflow-hidden">
         <Header
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -211,10 +211,10 @@ export default function Dashboard() {
           title="Account Panel"
         />
 
-        <main className="flex-1 relative overflow-hidden mesh-grid bg-bg transition-colors duration-300">
+        <main className="flex-1 relative overflow-hidden min-w-0 max-w-full mesh-grid bg-bg transition-colors duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
 
-          <div className="relative h-full overflow-y-auto scrollbar-hover p-4 md:p-6">
+          <div className="relative h-full overflow-y-auto overflow-x-hidden scrollbar-hover p-4 md:p-6 w-full max-w-full min-w-0">
 
             {/* Tier mismatch banner — shown when the panel has level-specific modules
                 but none of them match the user's currently selected active level. */}
@@ -245,7 +245,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.99 }}
                 transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                className="min-h-full"
+                className="min-h-full w-full max-w-full min-w-0"
               >
                 <Routes location={location}>
                   <Route

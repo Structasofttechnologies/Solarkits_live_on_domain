@@ -146,14 +146,14 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
             </p>
             <div className="flex items-center gap-2 pt-1 flex-wrap">
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${bde.status === 'active'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : bde.status === 'suspended'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                    : bde.status === 'inactive'
-                      ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                      : bde.status === 'kyc_verified'
-                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : bde.status === 'suspended'
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                  : bde.status === 'inactive'
+                    ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                    : bde.status === 'kyc_verified'
+                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                      : 'bg-amber-100 text-amber-900 border border-amber-300'
                 }`}>
                 Account: {bde.status === 'active'
                   ? 'Active'
@@ -166,10 +166,10 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                         : 'Pending Activation'}
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${kyc?.kyc_status === 'verified'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : kyc?.kyc_status === 'rejected'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                    : 'bg-amber-100 text-amber-900 border border-amber-300'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : kyc?.kyc_status === 'rejected'
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                  : 'bg-amber-100 text-amber-900 border border-amber-300'
                 }`}>
                 KYC: {kyc?.kyc_status === 'verified' ? 'Verified' : kyc?.kyc_status === 'rejected' ? 'Rejected' : 'Pending'}
               </span>
@@ -201,7 +201,7 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
             onClick={() => setResetLoginModalOpen(true)}
             className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-amber-600 font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
           >
-            <FaKey /> Reset Login
+            <FaKey /> Set / Reset PIN
           </button>
           {bde.status === 'active' ? (
             <button

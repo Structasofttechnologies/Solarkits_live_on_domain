@@ -1,9 +1,11 @@
 /**
  * KpiCards.jsx
  *
- * 11 KPI summary cards for the Vision Dashboard.
+ * KPI summary cards for the Vision Dashboard.
  * Each card shows: icon, value, label, sub-stat, tooltip, optional sparkline.
  * Data comes from the useVisionData() hook's kpiData object.
+ *
+ * Includes EPC metrics as of the EPC-types bifurcation stage.
  */
 
 import { useState } from 'react';
@@ -11,6 +13,7 @@ import { motion } from 'framer-motion';
 import {
   FiMapPin, FiUsers, FiTarget, FiPackage, FiTrendingUp,
   FiShoppingBag, FiHome, FiBarChart2, FiZap, FiPercent, FiGrid,
+  FiBriefcase, FiUserCheck,
 } from 'react-icons/fi';
 import { ProgressBar, DonutChart, MiniSparkline } from './VisionCharts';
 
@@ -225,6 +228,23 @@ export default function KpiCards({ kpiData, loading = false }) {
       progressPct: d.expansionPct ?? 0,
       color: (d.expansionPct ?? 0) >= 80 ? 'success' : (d.expansionPct ?? 0) >= 50 ? 'warning' : 'danger',
       tooltip: 'Franchisee expansion progress only. Territory coverage is shown separately in the Coverage section.',
+    },
+    // ── EPC metrics (new stage) ─────────────────────────────────────────────
+    {
+      icon: <FiBriefcase size={16} />,
+      label: 'EPC Accounts',
+      value: d.totalEpcAccounts ?? '—',
+      subLabel: 'Live registered EPC contractors',
+      color: 'primary',
+      tooltip: 'Total EPC accounts across all classification types (Government, Tender, New, Experienced, etc.).',
+    },
+    {
+      icon: <FiUserCheck size={16} />,
+      label: 'EPC Leads',
+      value: d.totalEpcLeads ?? '—',
+      subLabel: `${d.classifiedEpcs ?? 0} classified · ${d.unclassifiedEpcs ?? 0} unclassified`,
+      color: 'info',
+      tooltip: 'Total EPC leads in the pipeline. Classified = assigned an EPC type. Unclassified = type not yet set.',
     },
   ];
 

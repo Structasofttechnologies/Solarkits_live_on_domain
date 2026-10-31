@@ -37,13 +37,19 @@ const list_resellers = async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
-    const { search, kyc_status, activation_status, reseller_type_id } = req.query;
+    const { search, kyc_status, activation_status, reseller_type_id, state_id, district_id } = req.query;
     const query = { deleted_at: null };
 
     if (kyc_status) query.kyc_status = kyc_status;
     if (activation_status) query.activation_status = activation_status;
     if (reseller_type_id && mongoose.Types.ObjectId.isValid(reseller_type_id)) {
       query.reseller_type_id = reseller_type_id;
+    }
+    if (state_id && mongoose.Types.ObjectId.isValid(state_id)) {
+      query['address.state_id'] = new mongoose.Types.ObjectId(state_id);
+    }
+    if (district_id && mongoose.Types.ObjectId.isValid(district_id)) {
+      query['address.district_id'] = new mongoose.Types.ObjectId(district_id);
     }
 
     if (search && search.trim()) {
@@ -59,6 +65,8 @@ const list_resellers = async (req, res) => {
     const [rows, total] = await Promise.all([
       Reseller.find(query)
         .populate('reseller_type_id', 'name slug commercial_mode')
+        .populate('address.state_id', 'name state_code')
+        .populate('address.district_id', 'name district_code')
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limit)
@@ -67,26 +75,32 @@ const list_resellers = async (req, res) => {
     ]);
 
     const data = rows.map((r) => ({
-      id:                r._id,
-      business_name:     r.business_name,
-      contact_person:    r.contact_person,
-      gst_number:        r.gst_number,
-      pan_number:        r.pan_number,
-      aadhaar_masked:    r.aadhaar_masked,
-      mobile:            r.mobile,
-      email:             r.email,
-      commercial_mode:   r.commercial_mode,
-      reseller_type:     r.reseller_type_id ? { id: r.reseller_type_id._id, name: r.reseller_type_id.name, mode: r.reseller_type_id.commercial_mode } : null,
-      address:           r.address,
-      kyc_status:        r.kyc_status,
-      agreement_status:  r.agreement_status,
+      id: r._id,
+      business_name: r.business_name,
+      contact_person: r.contact_person,
+      gst_number: r.gst_number,
+      pan_number: r.pan_number,
+      aadhaar_masked: r.aadhaar_masked,
+      mobile: r.mobile,
+      email: r.email,
+      commercial_mode: r.commercial_mode,
+      reseller_type: r.reseller_type_id ? { id: r.reseller_type_id._id, name: r.reseller_type_id.name, mode: r.reseller_type_id.commercial_mode } : null,
+      address: r.address ? {
+        ...r.address,
+        state_id: r.address.state_id?._id ? String(r.address.state_id._id) : (r.address.state_id ? String(r.address.state_id) : null),
+        state_name: r.address.state_id?.name || null,
+        district_id: r.address.district_id?._id ? String(r.address.district_id._id) : (r.address.district_id ? String(r.address.district_id) : null),
+        district_name: r.address.district_id?.name || null,
+      } : null,
+      kyc_status: r.kyc_status,
+      agreement_status: r.agreement_status,
       fee_payment_status: r.fee_payment_status || 'pending_payment',
-      fee_payment_utr:    r.fee_payment_utr,
+      fee_payment_utr: r.fee_payment_utr,
       fee_payment_receipt_url: r.fee_payment_receipt_url,
       activation_status: r.activation_status,
       reseller_lifecycle_status: r.reseller_lifecycle_status || 'draft',
-      is_active:         r.is_active,
-      created_at:        r.created_at,
+      is_active: r.is_active,
+      created_at: r.created_at,
     }));
 
     return res.json({
@@ -146,59 +160,59 @@ const get_reseller_detail = async (req, res) => {
       status: 'success',
       data: {
         reseller: {
-          id:                reseller._id,
-          business_name:     reseller.business_name,
-          contact_person:    reseller.contact_person,
-          gst_number:        reseller.gst_number,
-          gst_legal_name:    reseller.gst_legal_name,
-          gst_trade_name:    reseller.gst_trade_name,
-          gst_verified_at:   reseller.gst_verified_at,
-          pan_number:        reseller.pan_number,
-          aadhaar_masked:    reseller.aadhaar_masked,
-          mobile:            reseller.mobile,
-          email:             reseller.email,
-          commercial_mode:   reseller.commercial_mode,
-          reseller_type:     reseller.reseller_type_id,
-          address:           reseller.address,
-          kyc_status:        reseller.kyc_status,
-          agreement_status:  reseller.agreement_status,
+          id: reseller._id,
+          business_name: reseller.business_name,
+          contact_person: reseller.contact_person,
+          gst_number: reseller.gst_number,
+          gst_legal_name: reseller.gst_legal_name,
+          gst_trade_name: reseller.gst_trade_name,
+          gst_verified_at: reseller.gst_verified_at,
+          pan_number: reseller.pan_number,
+          aadhaar_masked: reseller.aadhaar_masked,
+          mobile: reseller.mobile,
+          email: reseller.email,
+          commercial_mode: reseller.commercial_mode,
+          reseller_type: reseller.reseller_type_id,
+          address: reseller.address,
+          kyc_status: reseller.kyc_status,
+          agreement_status: reseller.agreement_status,
           agreement_signed_at: reseller.agreement_signed_at || agreement?.signed_at || null,
           agreement_signer_name: reseller.agreement_signer_name || agreement?.signer_name || null,
           fee_payment_status: reseller.fee_payment_status || subscription?.payment_status || 'pending_payment',
-          fee_payment_utr:    reseller.fee_payment_utr || subscription?.utr_number || null,
+          fee_payment_utr: reseller.fee_payment_utr || subscription?.utr_number || null,
           fee_payment_amount: reseller.fee_payment_amount || subscription?.amount_paid || null,
-          fee_payment_date:   reseller.fee_payment_date || subscription?.payment_date || null,
+          fee_payment_date: reseller.fee_payment_date || subscription?.payment_date || null,
           fee_payment_receipt_url: reseller.fee_payment_receipt_url || subscription?.receipt_url || null,
           fee_payment_verified_at: reseller.fee_payment_verified_at || subscription?.verified_at || null,
           fee_payment_remarks: reseller.fee_payment_remarks || subscription?.verification_remarks || null,
           activation_status: reseller.activation_status,
           reseller_lifecycle_status: reseller.reseller_lifecycle_status || 'draft',
-          is_email_verified:  reseller.is_email_verified,
+          is_email_verified: reseller.is_email_verified,
           is_mobile_verified: reseller.is_mobile_verified,
-          is_active:         reseller.is_active,
-          created_at:        reseller.created_at,
+          is_active: reseller.is_active,
+          created_at: reseller.created_at,
         },
         kyc: kyc || null,
         agreement: agreement || null,
         active_subscription: subscription || null,
         subscription: subscription || null,
         territories: territories.map((t) => ({
-          id:                t._id,
-          scope_level:       t.territory_level,
-          territory_level:   t.territory_level,
-          location_name:     t.district_id?.name ? `${t.district_id.name}, ${t.state_id?.name || ''}` : t.state_id?.name || 'Authorized Territory',
+          id: t._id,
+          scope_level: t.territory_level,
+          territory_level: t.territory_level,
+          location_name: t.district_id?.name ? `${t.district_id.name}, ${t.state_id?.name || ''}` : t.state_id?.name || 'Authorized Territory',
           precedence_source: t.source || 'admin_assigned',
-          source:            t.source || 'admin_assigned',
-          override_reason:   t.override_reason || null,
-          created_at:        t.created_at,
+          source: t.source || 'admin_assigned',
+          override_reason: t.override_reason || null,
+          created_at: t.created_at,
         })),
         audit_history: auditLogs.map(l => ({
-          id:          l._id,
-          action:      l.action,
-          actor_type:  l.actor_type,
-          actor_id:    l.actor_id,
-          created_at:  l.created_at,
-          snapshot:    l.after_snapshot,
+          id: l._id,
+          action: l.action,
+          actor_type: l.actor_type,
+          actor_id: l.actor_id,
+          created_at: l.created_at,
+          snapshot: l.after_snapshot,
         })),
       },
     });
@@ -310,7 +324,7 @@ const review_kyc = async (req, res) => {
       message: `KYC review decision recorded: ${targetKycStatus}`,
       data: {
         reseller_id: id,
-        kyc_status:  targetKycStatus,
+        kyc_status: targetKycStatus,
         lifecycle_status: reseller.reseller_lifecycle_status,
       },
     });

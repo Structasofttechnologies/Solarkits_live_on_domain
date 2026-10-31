@@ -31,6 +31,7 @@ export default function EditBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     district_id: '',
     district_name: '',
     joining_date: '',
+    pin: '',
   });
 
   useEffect(() => {
@@ -107,10 +108,22 @@ export default function EditBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    const cleanPin = formData.pin ? String(formData.pin).trim() : '';
+    if (cleanPin && !/^\d{4}$/.test(cleanPin)) {
+      setError('4-digit PIN must be exactly 4 numeric digits (0-9).');
+      return;
+    }
+
     setSaving(true);
 
     try {
-      await bdeApi.updateBde(id, formData, moduleUniqueId);
+      const payload = {
+        ...formData,
+        pin: cleanPin || undefined,
+        new_pin: cleanPin || undefined,
+      };
+      await bdeApi.updateBde(id, payload, moduleUniqueId);
       setSuccess('BDE profile updated successfully!');
       setTimeout(() => {
         navigate(`/admin-panel/bde-management/profile/${id}`);
@@ -251,6 +264,26 @@ export default function EditBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                 rows={2}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs focus:outline-none focus:border-[#0575B8] focus:bg-white resize-none font-medium"
               />
+            </div>
+
+            {/* Optional 4-Digit PIN Update */}
+            <div className="space-y-1.5 md:col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <label className="font-bold text-slate-700 uppercase tracking-wider block text-[11px]">
+                Update 4-Digit Login PIN <span className="text-slate-400 font-normal tracking-normal">(Leave blank to keep current PIN unchanged)</span>
+              </label>
+              <input
+                type="text"
+                maxLength={4}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={formData.pin}
+                onChange={(e) => handleChange('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="Enter new 4-digit PIN (e.g. 1234)"
+                className="w-full max-w-xs px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono font-bold text-base tracking-[0.25em] focus:outline-none focus:border-[#0575B8]"
+              />
+              <p className="text-[11px] text-slate-500 font-medium">
+                Changing this will update the BDE's login PIN immediately and terminate active sessions.
+              </p>
             </div>
           </div>
 

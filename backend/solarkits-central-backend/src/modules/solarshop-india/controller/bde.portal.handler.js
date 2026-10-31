@@ -171,16 +171,27 @@ async function _generateNextEpcLeadId() {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.login_bde = async (req, res) => {
   try {
-    const { identifier, email, mobile_number, password, remember_me } = req.body;
+    const { identifier, email, mobile_number, password, pin, remember_me } = req.body;
     const loginId = identifier || email || mobile_number;
-    if (!loginId || !password) {
+    const loginPin = pin || password;
+
+    if (!loginId || !loginPin) {
       return res.status(400).json({
         status: 'error',
-        message: 'Email / mobile number and password are required',
+        message: 'Identifier (Email / Mobile / BDE ID) and 4-digit PIN are required',
       });
     }
 
     const cleanLoginId = String(loginId).trim();
+    const cleanPin = String(loginPin).trim();
+
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'PIN must be exactly 4 digits (0-9)',
+      });
+    }
+
     const bde = await BDEProfile.findOne({
       $or: [
         { email: cleanLoginId.toLowerCase() },
@@ -197,11 +208,11 @@ exports.login_bde = async (req, res) => {
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, bde.password_hash || '');
-    if (!isPasswordValid) {
+    const isPinValid = await bcrypt.compare(cleanPin, bde.password_hash || '');
+    if (!isPinValid) {
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid password. Please check your credentials.',
+        message: 'Invalid 4-digit PIN. Please verify or contact administrator.',
       });
     }
 

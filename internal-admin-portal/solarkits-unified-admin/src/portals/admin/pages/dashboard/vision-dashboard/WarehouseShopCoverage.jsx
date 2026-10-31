@@ -44,22 +44,28 @@ function CoverageGap({ wActive, shopOp }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function WarehouseShopCoverage({ warehouses = [], franchiseeList = [], loading = false }) {
+export default function WarehouseShopCoverage({
+  warehouses = [],
+  franchiseeList = [],
+  allStates = [],
+  allDistricts = [],
+  loading = false,
+}) {
   const [activeTab, setActiveTab] = useState('warehouse');
 
   // Warehouse stats
   const whStats = useMemo(() => {
-    const total   = warehouses.length;
-    const active  = warehouses.filter(w => w.is_active).length;
-    const inactive= total - active;
+    const total = warehouses.length;
+    const active = warehouses.filter(w => w.is_active).length;
+    const inactive = total - active;
     return { total, active, inactive, pct: total > 0 ? Math.round((active / total) * 100) : 0 };
   }, [warehouses]);
 
   // Shop stats
   const shopStats = useMemo(() => {
-    const total      = franchiseeList.length;
-    const operational= franchiseeList.filter(f => f.is_operational).length;
-    const pending    = total - operational;
+    const total = franchiseeList.length;
+    const operational = franchiseeList.filter(f => f.is_operational).length;
+    const pending = total - operational;
     return { total, operational, pending, pct: total > 0 ? Math.round((operational / total) * 100) : 0 };
   }, [franchiseeList]);
 
@@ -69,18 +75,25 @@ export default function WarehouseShopCoverage({ warehouses = [], franchiseeList 
       const id = String(f._id || f.id);
       const fWhs = warehouses.filter(w => String(w.reseller_id || w.franchisee_id) === id);
       const hasActiveWh = fWhs.some(w => w.is_active);
+
+      // Safe state & district name resolution (populated string || cached lookup || fallback)
+      const stateName = f.address?.state_name ||
+        allStates.find(s => String(s._id || s.id) === String(f.address?.state_id))?.name || '—';
+      const districtName = f.address?.district_name ||
+        allDistricts.find(d => String(d._id || d.id) === String(f.address?.district_id))?.name || '—';
+
       return {
         franchisee: f.business_name || '—',
-        state:      f.address?.state_name    || '—',
-        district:   f.address?.district_name || '—',
+        state: stateName,
+        district: districtName,
         warehouseCount: fWhs.length,
         activeWarehouses: fWhs.filter(w => w.is_active).length,
-        shopOperational:  f.is_operational || false,
+        shopOperational: f.is_operational || false,
         hasActiveWh,
         activeFranchisee: f.activation_status === 'active',
       };
     });
-  }, [franchiseeList, warehouses]);
+  }, [franchiseeList, warehouses, allStates, allDistricts]);
 
   if (loading) return (
     <div className="card p-6 space-y-3">

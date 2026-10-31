@@ -27,10 +27,10 @@ function StatusBadge({ pct, noTarget = false }) {
   const { label, cls } = pct >= 100
     ? { label: '✓ Achieved', cls: 'bg-success-soft text-success border-success/20' }
     : pct >= 75
-    ? { label: '↑ On Track', cls: 'bg-info-soft text-info border-info/20' }
-    : pct >= 40
-    ? { label: '⚠ Behind',  cls: 'bg-warning-soft text-warning border-warning/20' }
-    : { label: '✗ Low',    cls: 'bg-danger-soft text-danger border-danger/20' };
+      ? { label: '↑ On Track', cls: 'bg-info-soft text-info border-info/20' }
+      : pct >= 40
+        ? { label: '⚠ Behind', cls: 'bg-warning-soft text-warning border-warning/20' }
+        : { label: '✗ Low', cls: 'bg-danger-soft text-danger border-danger/20' };
   return (
     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${cls}`}>{label}</span>
   );
@@ -145,7 +145,7 @@ export default function LocationDrillDown({
       // Group by state using performance tracker location data + allStates
       const stateMap = {};
       (allStates || []).forEach(s => {
-        const id = s._id || s.id;
+        const id = String(s._id || s.id);
         stateMap[id] = {
           _id: id,
           name: s.name,
@@ -162,16 +162,16 @@ export default function LocationDrillDown({
 
       // Merge franchisee data into state map
       (franchiseeList || []).forEach(f => {
-        const sid = f.address?.state_id;
+        const sid = String(f.address?.state_id || '');
         if (sid && stateMap[sid]) {
-          stateMap[sid].active_fpos  += f.activation_status === 'active' ? 1 : 0;
+          stateMap[sid].active_fpos += f.activation_status === 'active' ? 1 : 0;
           stateMap[sid].operational_shops += f.is_operational ? 1 : 0;
         }
       });
 
       // Merge warehouse data
       (warehouses || []).forEach(w => {
-        const sid = w.state_id;
+        const sid = String(w.state_id || w.level_1 || '');
         if (sid && stateMap[sid]) {
           stateMap[sid].active_warehouses += w.is_active ? 1 : 0;
         }
@@ -179,10 +179,10 @@ export default function LocationDrillDown({
 
       // Merge kit targets from performance tracker
       (performanceTracker?.franchisees || []).forEach(f => {
-        const sid = f.franchisee_id?.address?.state_id;
+        const sid = String(f.franchisee_id?.address?.state_id || '');
         if (sid && stateMap[sid]) {
           stateMap[sid].kit_target += f.target_quantity || 0;
-          stateMap[sid].kits_sold  += f.eligible_quantity || 0;
+          stateMap[sid].kits_sold += f.eligible_quantity || 0;
         }
       });
 
@@ -192,13 +192,15 @@ export default function LocationDrillDown({
         achievement_pct: s.kit_target > 0 ? Math.round((s.kits_sold / s.kit_target) * 100) : 0,
       }));
     } else if (drillLevel === 'state') {
-      // Seed with all districts of the selected state
+      const currentStateId = String(drillPath[drillPath.length - 1]?.id || '');
+
+      // Seed ONLY with legitimate districts of the selected state
       const distMap = {};
       (allDistricts || []).forEach(d => {
         const did = String(d._id || d.id);
         distMap[did] = {
           _id: did,
-          name: d.name,
+          name: d.name || 'District',
           next_level: 'district',
           active_fpos: 0,
           target_fpos: 0,
@@ -210,35 +212,36 @@ export default function LocationDrillDown({
         };
       });
 
-      // Merge franchisee data into district map
+      // Merge franchisee data into district map ONLY if franchisee belongs to THIS state
       (franchiseeList || []).forEach(f => {
-        const did = String(f.address?.district_id || '');
-        if (!did) return;
-        const matchedD = (allDistricts || []).find(d => String(d._id || d.id) === did);
-        const dname = matchedD?.name || f.address?.district_name || 'District';
-        if (!distMap[did]) {
-          distMap[did] = {
-            _id: did, name: dname, next_level: 'district',
-            active_fpos: 0, target_fpos: 0, active_warehouses: 0,
-            operational_shops: 0, kit_target: 0, kits_sold: 0, achievement_pct: 0,
-          };
+        const fStateId = String(f.address?.state_id || '');
+        if (currentStateId && fStateId && fStateId !== currentStateId) {
+          // Out-of-state franchisee: strictly ignore to prevent phantom district creation
+          return;
         }
-        distMap[did].active_fpos        += f.activation_status === 'active' ? 1 : 0;
-        distMap[did].operational_shops  += f.is_operational ? 1 : 0;
+        const did = String(f.address?.district_id || '');
+        if (!did || !distMap[did]) return; // Only count towards legitimate districts of this state!
+
+        distMap[did].active_fpos += f.activation_status === 'active' ? 1 : 0;
+        distMap[did].operational_shops += f.is_operational ? 1 : 0;
       });
 
-      // Merge warehouse data
+      // Merge warehouse data for this state
       (warehouses || []).forEach(w => {
+        const wStateId = String(w.state_id || w.level_1 || '');
+        if (currentStateId && wStateId && wStateId !== currentStateId) return;
         const did = String(w.district_id || w.level_2 || '');
         if (did && distMap[did]) distMap[did].active_warehouses += w.is_active ? 1 : 0;
       });
 
-      // Merge kit targets from performance tracker
+      // Merge kit targets from performance tracker for this state
       (performanceTracker?.franchisees || []).forEach(f => {
+        const fStateId = String(f.franchisee_id?.address?.state_id || '');
+        if (currentStateId && fStateId && fStateId !== currentStateId) return;
         const did = String(f.franchisee_id?.address?.district_id || '');
         if (did && distMap[did]) {
           distMap[did].kit_target += f.target_quantity || 0;
-          distMap[did].kits_sold  += f.eligible_quantity || 0;
+          distMap[did].kits_sold += f.eligible_quantity || 0;
         }
       });
 
@@ -247,17 +250,27 @@ export default function LocationDrillDown({
         achievement_pct: d.kit_target > 0 ? Math.round((d.kits_sold / d.kit_target) * 100) : 0,
       }));
     } else if (drillLevel === 'district') {
-      // Show franchisees in this district
+      const currentDistrictId = String(drillPath[drillPath.length - 1]?.id || '');
+
+      // Show ONLY franchisees in this district
       const perfMap = {};
       (performanceTracker?.franchisees || []).forEach(f => {
         const id = String(f.franchisee_id?._id || f.franchisee_id);
         perfMap[id] = f;
       });
-      built = (franchiseeList || []).map(f => {
+
+      // Filter franchisees strictly by current district
+      const districtFranchisees = (franchiseeList || []).filter(f => {
+        const fDistId = String(f.address?.district_id || '');
+        return currentDistrictId ? fDistId === currentDistrictId : true;
+      });
+
+      built = districtFranchisees.map(f => {
         const id = String(f._id || f.id);
         const perf = perfMap[id] || {};
         const whs = (warehouses || []).filter(w => String(w.reseller_id || w.franchisee_id) === id);
         return {
+          ...f,
           _id: id,
           name: f.business_name,
           next_level: 'franchisee',
@@ -266,17 +279,18 @@ export default function LocationDrillDown({
           active_warehouses: whs.filter(w => w.is_active).length,
           operational_shops: f.is_operational ? 1 : 0,
           kit_target: perf.target_quantity || 0,
-          kits_sold:  perf.eligible_quantity || 0,
+          kits_sold: perf.eligible_quantity || 0,
           achievement_pct: perf.achievement_pct || 0,
         };
       });
     } else if (drillLevel === 'franchisee') {
       // Show warehouses for this franchisee
-      const fid = drillPath[drillPath.length - 1]?.id;
+      const fid = String(drillPath[drillPath.length - 1]?.id || '');
       const fWhs = (warehouses || []).filter(w =>
-        String(w.reseller_id || w.franchisee_id) === String(fid)
+        String(w.reseller_id || w.franchisee_id) === fid
       );
       built = fWhs.map(w => ({
+        ...w,
         _id: w._id || w.id,
         name: w.name || w.warehouse_name || 'Warehouse',
         next_level: 'warehouse',
@@ -285,7 +299,7 @@ export default function LocationDrillDown({
         active_warehouses: w.is_active ? 1 : 0,
         operational_shops: null,
         kit_target: null,
-        kits_sold:  null,
+        kits_sold: null,
         achievement_pct: 0,
       }));
     }
@@ -376,7 +390,7 @@ export default function LocationDrillDown({
               <AnimatePresence>
                 {sortedRows.map((item, idx) => (
                   <LocationRow
-                    key={item._id || idx}
+                    key={item._id ? String(item._id) : `loc-${drillLevel}-${idx}`}
                     item={item}
                     drillLevel={drillLevel}
                     onDrillInto={drillInto}

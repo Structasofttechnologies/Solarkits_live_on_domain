@@ -14,15 +14,7 @@ import {
 } from 'lucide-react';
 
 export default function BdeProfile() {
-  const { user, profile, changePassword, updateProfile } = useBdeAuth();
-
-  // Change Password state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwLoading, setPwLoading] = useState(false);
-  const [pwSuccess, setPwSuccess] = useState(null);
-  const [pwError, setPwError] = useState(null);
+  const { user, profile, updateProfile } = useBdeAuth();
 
   // Address edit state
   const [address, setAddress] = useState(user?.address || '');
@@ -33,35 +25,6 @@ export default function BdeProfile() {
 
   const kyc = profile?.kyc || {};
   const territory = profile?.territory || {};
-
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    setPwError(null);
-    setPwSuccess(null);
-
-    if (newPassword.length < 6) {
-      setPwError('New password must be at least 6 characters long.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPwError('New passwords do not match.');
-      return;
-    }
-
-    setPwLoading(true);
-    try {
-      await changePassword(currentPassword, newPassword);
-      setPwSuccess('Password updated successfully!');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      setPwError(err.response?.data?.message || err.message || 'Failed to change password');
-    } finally {
-      setPwLoading(false);
-    }
-  };
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
@@ -247,72 +210,36 @@ export default function BdeProfile() {
           </form>
         </div>
 
-        {/* Change Password Form */}
-        <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-            <Lock className="w-5 h-5 text-amber-600" />
-            <h2 className="text-base font-bold text-slate-900">Change Account Password</h2>
+        {/* Login Security Information */}
+        <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Lock className="w-5 h-5 text-[#0575B8]" />
+              <h2 className="text-base font-bold text-slate-900">Login Security</h2>
+            </div>
+
+            <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-100 space-y-2">
+              <div className="flex items-center gap-2 text-[#0575B8] font-bold text-xs uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4" />
+                <span>4-Digit PIN Authentication</span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Your BDE account uses a secure 4-digit PIN for instant access across web and mobile.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1 text-xs">
+              <span className="text-slate-400 font-bold uppercase text-[10px] block">PIN Management</span>
+              <p className="text-slate-700 leading-relaxed">
+                For field compliance and central security, your 4-digit login PIN is managed by your regional Solarkits Administrator in Admin BDE Management.
+              </p>
+            </div>
           </div>
 
-          {pwError && (
-            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" /> {pwError}
-            </div>
-          )}
-
-          {pwSuccess && (
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" /> {pwSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handlePasswordSubmit} className="space-y-3.5 text-xs">
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-700 uppercase">Current Password *</label>
-              <input
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:outline-none focus:border-blue-600"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-700 uppercase">New Password *</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min 6 chars)"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:outline-none focus:border-blue-600"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-700 uppercase">Confirm New Password *</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:outline-none focus:border-blue-600"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={pwLoading}
-              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition disabled:opacity-50"
-            >
-              {pwLoading ? 'Updating Password...' : 'Update Password'}
-            </button>
-          </form>
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-[11px] font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>To reset or update your 4-digit PIN, contact your Administrator.</span>
+          </div>
         </div>
       </div>
     </div>

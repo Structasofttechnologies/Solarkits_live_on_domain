@@ -457,7 +457,7 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                                 }}
                                 className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 font-bold cursor-pointer"
                               >
-                                <FaKey className="text-amber-500" /> Reset Login
+                                <FaKey className="text-amber-500" /> Set / Reset PIN
                               </button>
                               <div className="border-t border-slate-100 my-1" />
                               {bde.status === 'active' ? (
