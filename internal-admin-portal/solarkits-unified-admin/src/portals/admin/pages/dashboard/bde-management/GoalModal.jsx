@@ -10,6 +10,8 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
   const [monthlyEpcLeadGoal, setMonthlyEpcLeadGoal] = useState(25);
   const [monthlyEpcOnboardGoal, setMonthlyEpcOnboardGoal] = useState(10);
   const [monthlyNetworkKitGoal, setMonthlyNetworkKitGoal] = useState(200);
+  const [canOnboardEpc, setCanOnboardEpc] = useState(true);
+  const [canOnboardFranchise, setCanOnboardFranchise] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear());
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,11 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
   const loadGoalData = async () => {
     // 1. Initial quick population from bde prop if available
     const existing = bde?.goal || bde?.current_goal;
+    const epcInitial = bde?.can_onboard_epc ?? existing?.can_onboard_epc ?? true;
+    const franchiseInitial = bde?.can_onboard_franchise ?? existing?.can_onboard_franchise ?? true;
+    setCanOnboardEpc(epcInitial !== false);
+    setCanOnboardFranchise(franchiseInitial !== false);
+
     if (existing) {
       setPeriodType(existing.period_type || 'monthly');
       setMonthlySignupGoal(existing.monthly_franchisee_signup_goal ?? 10);
@@ -66,6 +73,12 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
         setMonthlyNetworkKitGoal(activeGoal.monthly_network_kit_goal ?? 200);
         setYear(activeGoal.year || new Date().getFullYear());
         setNotes(activeGoal.notes || '');
+        if (activeGoal.can_onboard_epc !== undefined) {
+          setCanOnboardEpc(activeGoal.can_onboard_epc !== false);
+        }
+        if (activeGoal.can_onboard_franchise !== undefined) {
+          setCanOnboardFranchise(activeGoal.can_onboard_franchise !== false);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch latest goals in GoalModal', err);
@@ -92,6 +105,8 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
         monthly_epc_lead_goal: Number(monthlyEpcLeadGoal),
         monthly_epc_onboard_goal: Number(monthlyEpcOnboardGoal),
         monthly_network_kit_goal: Number(monthlyNetworkKitGoal),
+        can_onboard_epc: canOnboardEpc,
+        can_onboard_franchise: canOnboardFranchise,
         notes,
       });
 
@@ -231,6 +246,70 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
                 onChange={(e) => setMonthlyNetworkKitGoal(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white transition"
               />
+            </div>
+          </div>
+
+          {/* Onboarding Decision Permissions (Admin Controls) */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+              <span className="font-black text-slate-800 uppercase tracking-wider block text-[11px]">
+                Onboarding Permissions & Decision
+              </span>
+              <span className="text-[10px] text-slate-500 font-semibold">Decide what BDE can onboard</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Toggle 1: EPC Onboarding */}
+              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${canOnboardEpc ? 'bg-teal-500 ring-2 ring-teal-200' : 'bg-slate-300'}`} />
+                    <span className="font-bold text-slate-800 text-xs">EPC Onboarding</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                    {canOnboardEpc ? 'Authorized for EPCs' : 'EPC onboarding restricted'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCanOnboardEpc(!canOnboardEpc)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    canOnboardEpc ? 'bg-teal-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      canOnboardEpc ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Toggle 2: Franchise Onboarding */}
+              <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${canOnboardFranchise ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-slate-300'}`} />
+                    <span className="font-bold text-slate-800 text-xs">Franchise Onboarding</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                    {canOnboardFranchise ? 'Authorized for Franchise' : 'Franchise onboarding restricted'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCanOnboardFranchise(!canOnboardFranchise)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    canOnboardFranchise ? 'bg-amber-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      canOnboardFranchise ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 

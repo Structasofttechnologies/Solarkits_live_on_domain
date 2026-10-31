@@ -44,6 +44,8 @@ const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-confi
 const BdeManagement = lazy(() => import("../pages/dashboard/bde-management/BdeManagement"));
 const StoreSetupManagement = lazy(() => import("../pages/dashboard/store-setup/StoreSetupManagement"));
 const ConfigurationDashboard = lazy(() => import("../pages/dashboard/configuration-dashboard/ConfigurationDashboard"));
+const OperationsDashboard = lazy(() => import("../pages/dashboard/operations-dashboard/OperationsDashboard"));
+const StoreDashboard = lazy(() => import("../pages/dashboard/store-dashboard/StoreDashboard"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 /* ===================== MENU CONFIG ===================== */
@@ -53,6 +55,8 @@ const menus = [
     { name: "Dashboard", icon: <FaHome />, path: "/admin-panel/home", unique_id: "00000000" },
     { name: "Vision Dashboard", icon: <MdVisibility />, path: "/admin-panel/vision-dashboard", unique_id: "00000000" },
     { name: "Configuration Dashboard", icon: <MdTune />, path: "/admin-panel/configuration-dashboard", unique_id: "00000000" },
+    { name: "Operations Dashboard", icon: <MdEngineering />, path: "/admin-panel/operations-dashboard", unique_id: "00000000" },
+    { name: "Store Dashboard", icon: <FaStore />, path: "/admin-panel/store-dashboard", unique_id: "00000000" },
   ],
   [
     {
@@ -397,6 +401,8 @@ export default function Dashboard() {
     if (path.includes('/home')) return 'Home Dashboard';
     if (path.includes('/vision-dashboard')) return 'Vision Dashboard';
     if (path.includes('/configuration-dashboard')) return 'Configuration Dashboard';
+    if (path.includes('/operations-dashboard')) return 'Admin Operations Dashboard';
+    if (path.includes('/store-dashboard')) return 'Store & Market Analytics Dashboard';
     if (path.includes('/bde-management')) return 'BDE Management';
     if (path.includes('/operations')) return 'Operations Management';
     if (path.includes('/settings')) return 'System Settings';
@@ -459,6 +465,26 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="00000000">
                         <Suspense fallback={<Loader text="Loading configuration dashboard..." />}>
                           <ConfigurationDashboard />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/operations-dashboard"
+                    element={
+                      <PermissionGuard requiredUniqueId="00000000">
+                        <Suspense fallback={<Loader text="Loading Operations Dashboard..." />}>
+                          <OperationsDashboard />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/store-dashboard"
+                    element={
+                      <PermissionGuard requiredUniqueId="00000000">
+                        <Suspense fallback={<Loader text="Loading Store Analytics Dashboard..." />}>
+                          <StoreDashboard />
                         </Suspense>
                       </PermissionGuard>
                     }

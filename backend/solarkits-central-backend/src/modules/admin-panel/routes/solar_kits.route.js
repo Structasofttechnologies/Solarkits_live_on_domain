@@ -19,7 +19,7 @@ router.post(
 );
 
 router.get(
-  '/get-kits',
+  ['/', '/get-kits'],
   check_auth,
   check_permissions([{ unique_code: PERMISSION_CODE, permissions: ['view'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['view'] }]),
   handler.get_solar_kits

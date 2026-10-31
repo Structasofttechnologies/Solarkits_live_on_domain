@@ -1,15 +1,15 @@
 // pages/SignUp.jsx
-import { useState, useEffect, useMemo, useRef } from"react";
-import { useNavigate, Link } from"react-router-dom";
-import { useDispatch } from"react-redux";
-import axios from"axios";
-import { FiEye, FiEyeOff, FiArrowRight, FiArrowLeft, FiPhone, FiMail, FiPackage, FiTrendingUp, FiShield, FiCheckCircle, FiInfo } from"react-icons/fi";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import axios from "axios";
+import { FiEye, FiEyeOff, FiArrowRight, FiArrowLeft, FiPhone, FiMail, FiPackage, FiTrendingUp, FiShield, FiCheckCircle, FiInfo } from "react-icons/fi";
 import Button from "../Components/Button";
 import CustomInput from "../Components/CustomInput";
 import IconButton from "../Components/IconButton";
 import DropdownWithSearchInput from "../Components/DropdownWithSearchInput";
 import OTPInput from "../Components/OTPInput";
-import { setAlert } from"../features/alert.slice";
+import { setAlert } from "../features/alert.slice";
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -26,7 +26,7 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization =`Bearer ${token}`;
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
@@ -78,24 +78,24 @@ export default function SignUp() {
 
   const [formData, setFormData] = useState({
     // Step 1 - Basic Info
-    stateId:"",
-    stateName:"",
-    epcName:"",
-    customEpcName:"",
-    epcEmail:"",
-    epcId:"",
-    whatsappNumber:"",
-    registeredNumber:"", // New field for manual EPC
-    districtId:"",
-    districtName:"",
+    stateId: "",
+    stateName: "",
+    epcName: "",
+    customEpcName: "",
+    epcEmail: "",
+    epcId: "",
+    whatsappNumber: "",
+    registeredNumber: "", // New field for manual EPC
+    districtId: "",
+    districtName: "",
 
     // Step 2 - OTP Verification
-    emailOTP:"",
-    whatsappOTP:"",
+    emailOTP: "",
+    whatsappOTP: "",
 
     // Step 3 - Password
-    password:"",
-    confirmPassword:"",
+    password: "",
+    confirmPassword: "",
     agreeToTerms: [],
   });
 
@@ -103,17 +103,17 @@ export default function SignUp() {
 
   // Terms checkbox options
   const termsOptions = [
-    { value:"agree", label:"I agree to the Terms of Service and Privacy Policy" }
+    { value: "agree", label: "I agree to the Terms of Service and Privacy Policy" }
   ];
 
   // Custom EPC checkbox options
   const customEpcCheckboxOptions = [
-    { value:"custom", label:"My EPC is not in the list" }
+    { value: "custom", label: "My EPC is not in the list" }
   ];
 
   // WhatsApp same number checkbox options
   const sameWhatsappOptions = [
-    { value:"same", label:"Use this number as WhatsApp" }
+    { value: "same", label: "Use this number as WhatsApp" }
   ];
 
   // Clear timers on unmount
@@ -183,11 +183,11 @@ export default function SignUp() {
       ...prev,
       stateId: selectedStateId,
       stateName: selectedStateName,
-      epcName:"",
-      epcEmail:"",
-      epcId:"",
-      districtId:"",
-      districtName:""
+      epcName: "",
+      epcEmail: "",
+      epcId: "",
+      districtId: "",
+      districtName: ""
     }));
 
     setSelectedEpcName("");
@@ -205,23 +205,23 @@ export default function SignUp() {
     }
 
     if (errors.stateId) {
-      setErrors(prev => ({ ...prev, stateId:"" }));
+      setErrors(prev => ({ ...prev, stateId: "" }));
     }
   };
 
-// Fallback Indian EPC Companies Dataset
-const FALLBACK_EPCS = [
-  { id: "epc_1", name: "Tata Power Solar Systems Ltd", email: "contact@tatapowersolar.com" },
-  { id: "epc_2", name: "Adani Solar Power Ltd", email: "info@adanisolar.com" },
-  { id: "epc_3", name: "Waaree Energies Ltd", email: "support@waaree.com" },
-  { id: "epc_4", name: "Vikram Solar Ltd", email: "sales@vikramsolar.com" },
-  { id: "epc_5", name: "SolarKits Power Solutions", email: "contact@solarkits.com" },
-  { id: "epc_6", name: "SunSource Energy Pvt Ltd", email: "info@sunsource.in" },
-  { id: "epc_7", name: "Sterling and Wilson Solar", email: "contact@sterlingwilson.com" },
-  { id: "epc_8", name: "Jakson Green Energy", email: "support@jakson.com" },
-  { id: "epc_9", name: "Hero Future Energies", email: "contact@herofutureenergies.com" },
-  { id: "epc_10", name: "Azure Power India", email: "info@azurepower.com" }
-];
+  // Fallback Indian EPC Companies Dataset
+  const FALLBACK_EPCS = [
+    { id: "epc_1", name: "Tata Power Solar Systems Ltd", email: "contact@tatapowersolar.com" },
+    { id: "epc_2", name: "Adani Solar Power Ltd", email: "info@adanisolar.com" },
+    { id: "epc_3", name: "Waaree Energies Ltd", email: "support@waaree.com" },
+    { id: "epc_4", name: "Vikram Solar Ltd", email: "sales@vikramsolar.com" },
+    { id: "epc_5", name: "SolarKits Power Solutions", email: "contact@solarkits.com" },
+    { id: "epc_6", name: "SunSource Energy Pvt Ltd", email: "info@sunsource.in" },
+    { id: "epc_7", name: "Sterling and Wilson Solar", email: "contact@sterlingwilson.com" },
+    { id: "epc_8", name: "Jakson Green Energy", email: "support@jakson.com" },
+    { id: "epc_9", name: "Hero Future Energies", email: "contact@herofutureenergies.com" },
+    { id: "epc_10", name: "Azure Power India", email: "info@azurepower.com" }
+  ];
 
   // Fetch EPCs by state with fallback
   const fetchEpcsByState = async (stateId) => {
@@ -352,9 +352,9 @@ const FALLBACK_EPCS = [
     setFormData(prev => ({
       ...prev,
       epcName: selectedValue,
-      epcEmail:"",
-      epcId:"",
-      customEpcName:""
+      epcEmail: "",
+      epcId: "",
+      customEpcName: ""
     }));
     setSelectedEpcData(null);
 
@@ -379,7 +379,7 @@ const FALLBACK_EPCS = [
     }
 
     if (errors.epcName) {
-      setErrors(prev => ({ ...prev, epcName:"" }));
+      setErrors(prev => ({ ...prev, epcName: "" }));
     }
   };
 
@@ -403,7 +403,7 @@ const FALLBACK_EPCS = [
     }
 
     if (errors.epcEmail) {
-      setErrors(prev => ({ ...prev, epcEmail:"" }));
+      setErrors(prev => ({ ...prev, epcEmail: "" }));
     }
   };
 
@@ -414,11 +414,11 @@ const FALLBACK_EPCS = [
     setFormData(prev => ({
       ...prev,
       districtId: selectedDistrictId,
-      districtName: selectedDistrict?.name ||""
+      districtName: selectedDistrict?.name || ""
     }));
 
     if (errors.districtId) {
-      setErrors(prev => ({ ...prev, districtId:"" }));
+      setErrors(prev => ({ ...prev, districtId: "" }));
     }
   };
 
@@ -426,10 +426,10 @@ const FALLBACK_EPCS = [
     const { name, value, type, checked } = e.target;
 
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]:"" }));
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
 
-    if (type ==="checkbox") {
+    if (type === "checkbox") {
       setFormData(prev => ({
         ...prev,
         [name]: checked ? [value] : []
@@ -448,19 +448,19 @@ const FALLBACK_EPCS = [
       ...prev,
       customEpcName: value,
       epcName: value,
-      epcEmail:"",
-      epcId:""
+      epcEmail: "",
+      epcId: ""
     }));
 
     if (errors.epcName) {
-      setErrors(prev => ({ ...prev, epcName:"" }));
+      setErrors(prev => ({ ...prev, epcName: "" }));
     }
   };
 
   const handleEmailOTPChange = (otp) => {
     setFormData(prev => ({ ...prev, emailOTP: otp }));
     if (errors.emailOTP) {
-      setErrors(prev => ({ ...prev, emailOTP:"" }));
+      setErrors(prev => ({ ...prev, emailOTP: "" }));
     }
     if (isVerified) {
       setIsVerified(false);
@@ -471,7 +471,7 @@ const FALLBACK_EPCS = [
   const handleWhatsappOTPChange = (otp) => {
     setFormData(prev => ({ ...prev, whatsappOTP: otp }));
     if (errors.whatsappOTP) {
-      setErrors(prev => ({ ...prev, whatsappOTP:"" }));
+      setErrors(prev => ({ ...prev, whatsappOTP: "" }));
     }
     if (isVerified) {
       setIsVerified(false);
@@ -492,23 +492,23 @@ const FALLBACK_EPCS = [
       setUseSameWhatsapp(true); // Reset to default
       setFormData(prev => ({
         ...prev,
-        epcName:"",
-        epcEmail:"",
-        epcId:"",
-        customEpcName:"",
-        registeredNumber:"",
-        whatsappNumber:""
+        epcName: "",
+        epcEmail: "",
+        epcId: "",
+        customEpcName: "",
+        registeredNumber: "",
+        whatsappNumber: ""
       }));
     } else {
       setUserType(null);
       setFormData(prev => ({
         ...prev,
-        epcName:"",
-        epcEmail:"",
-        epcId:"",
-        customEpcName:"",
-        registeredNumber:"",
-        whatsappNumber:""
+        epcName: "",
+        epcEmail: "",
+        epcId: "",
+        customEpcName: "",
+        registeredNumber: "",
+        whatsappNumber: ""
       }));
     }
   };
@@ -516,7 +516,7 @@ const FALLBACK_EPCS = [
   const handleSameWhatsappToggle = (e) => {
     const isChecked = e.target.checked;
     setUseSameWhatsapp(isChecked);
-    
+
     if (isChecked && formData.registeredNumber) {
       setFormData(prev => ({
         ...prev,
@@ -525,7 +525,7 @@ const FALLBACK_EPCS = [
     } else if (!isChecked) {
       setFormData(prev => ({
         ...prev,
-        whatsappNumber:""
+        whatsappNumber: ""
       }));
     }
   };
@@ -573,13 +573,13 @@ const FALLBACK_EPCS = [
         use_same_whatsapp: useSameWhatsapp
       };
 
-      if (userType ==="predefined") {
+      if (userType === "predefined") {
         payload.whatsapp = formData.whatsappNumber;
       }
 
-      if (userType ==="manual") {
+      if (userType === "manual") {
         payload.registered_number = formData.registeredNumber;
-        
+
         if (useSameWhatsapp) {
           payload.whatsapp = formData.registeredNumber;
         } else {
@@ -595,8 +595,8 @@ const FALLBACK_EPCS = [
 
       const whatsappNumber = payload.whatsapp;
       dispatch(setAlert({
-        type:"success",
-        message:`Verification codes sent to ${formData.epcEmail} and ${whatsappNumber}`
+        type: "success",
+        message: `Verification codes sent to ${formData.epcEmail} and ${whatsappNumber}`
       }));
 
       setCurrentStep(2);
@@ -604,7 +604,7 @@ const FALLBACK_EPCS = [
     } catch (error) {
       console.error('Error sending OTPs:', error);
 
-      let errorMessage ="Failed to send verification codes";
+      let errorMessage = "Failed to send verification codes";
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
@@ -612,7 +612,7 @@ const FALLBACK_EPCS = [
       }
 
       dispatch(setAlert({
-        type:"error",
+        type: "error",
         message: errorMessage
       }));
     } finally {
@@ -624,16 +624,16 @@ const FALLBACK_EPCS = [
   const verifyBothOTPs = async () => {
     if (!formData.emailOTP || !formData.whatsappOTP) {
       dispatch(setAlert({
-        type:"error",
-        message:"Please enter both Email and WhatsApp OTPs"
+        type: "error",
+        message: "Please enter both Email and WhatsApp OTPs"
       }));
       return;
     }
 
     if (!/^[0-9]{6}$/.test(formData.emailOTP) || !/^[0-9]{6}$/.test(formData.whatsappOTP)) {
       dispatch(setAlert({
-        type:"error",
-        message:"Please enter valid 6-digit OTPs"
+        type: "error",
+        message: "Please enter valid 6-digit OTPs"
       }));
       return;
     }
@@ -652,8 +652,8 @@ const FALLBACK_EPCS = [
       setIsVerified(true);
 
       dispatch(setAlert({
-        type:"success",
-        message:"Both verifications completed successfully!"
+        type: "success",
+        message: "Both verifications completed successfully!"
       }));
 
       setCurrentStep(3);
@@ -664,7 +664,7 @@ const FALLBACK_EPCS = [
     } catch (error) {
       console.error('Error verifying OTPs:', error);
 
-      let errorMessage ="OTP verification failed";
+      let errorMessage = "OTP verification failed";
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
@@ -672,7 +672,7 @@ const FALLBACK_EPCS = [
       }
 
       dispatch(setAlert({
-        type:"error",
+        type: "error",
         message: errorMessage
       }));
     } finally {
@@ -693,21 +693,21 @@ const FALLBACK_EPCS = [
       if (type === 'email') {
         startEmailTimer();
         dispatch(setAlert({
-          type:"info",
-          message:`New verification code sent to ${formData.epcEmail}`
+          type: "info",
+          message: `New verification code sent to ${formData.epcEmail}`
         }));
       } else {
         startWhatsappTimer();
         dispatch(setAlert({
-          type:"info",
-          message:`New verification code sent to ${formData.whatsappNumber}`
+          type: "info",
+          message: `New verification code sent to ${formData.whatsappNumber}`
         }));
       }
 
       if (type === 'email') {
-        setFormData(prev => ({ ...prev, emailOTP:"" }));
+        setFormData(prev => ({ ...prev, emailOTP: "" }));
       } else {
-        setFormData(prev => ({ ...prev, whatsappOTP:"" }));
+        setFormData(prev => ({ ...prev, whatsappOTP: "" }));
       }
 
       setIsVerified(false);
@@ -716,7 +716,7 @@ const FALLBACK_EPCS = [
     } catch (error) {
       console.error('Error resending OTP:', error);
 
-      let errorMessage ="Failed to resend OTP";
+      let errorMessage = "Failed to resend OTP";
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
@@ -724,7 +724,7 @@ const FALLBACK_EPCS = [
       }
 
       dispatch(setAlert({
-        type:"error",
+        type: "error",
         message: errorMessage
       }));
     } finally {
@@ -749,11 +749,11 @@ const FALLBACK_EPCS = [
         company_name: isCustomEpc ? formData.customEpcName : null
       };
 
-      if (userType ==="predefined") {
+      if (userType === "predefined") {
         payload.whatsapp = formData.whatsappNumber;
       }
 
-      if (userType ==="manual") {
+      if (userType === "manual") {
         payload.registered_number = formData.registeredNumber;
         payload.whatsapp = useSameWhatsapp
           ? formData.registeredNumber
@@ -763,8 +763,8 @@ const FALLBACK_EPCS = [
       const response = await api.post('/india/v1/auth/create-account', payload);
 
       dispatch(setAlert({
-        type:"success",
-        message: response.data.message ||"Account created successfully! Please login."
+        type: "success",
+        message: response.data.message || "Account created successfully! Please login."
       }));
 
       navigate("/auth/login");
@@ -772,7 +772,7 @@ const FALLBACK_EPCS = [
     } catch (error) {
       console.error('Error creating account:', error);
 
-      let errorMessage ="Failed to create account";
+      let errorMessage = "Failed to create account";
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
@@ -780,7 +780,7 @@ const FALLBACK_EPCS = [
       }
 
       dispatch(setAlert({
-        type:"error",
+        type: "error",
         message: errorMessage
       }));
     } finally {
@@ -793,66 +793,66 @@ const FALLBACK_EPCS = [
     let isValid = true;
 
     if (!formData.stateId) {
-      newErrors.stateId ="Please select a state";
+      newErrors.stateId = "Please select a state";
       isValid = false;
     }
 
     if (isCustomEpc) {
       // Manual mode validation
       if (!formData.customEpcName.trim()) {
-        newErrors.epcName ="EPC name is required";
+        newErrors.epcName = "EPC name is required";
         isValid = false;
       }
       if (!formData.epcEmail?.trim()) {
-        newErrors.epcEmail ="Email is required for manual entry";
+        newErrors.epcEmail = "Email is required for manual entry";
         isValid = false;
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.epcEmail)) {
-        newErrors.epcEmail ="Please enter a valid email address";
+        newErrors.epcEmail = "Please enter a valid email address";
         isValid = false;
       }
 
       // Manual EPC specific validations
       if (!formData.registeredNumber?.trim()) {
-        newErrors.registeredNumber ="Registered number is required";
+        newErrors.registeredNumber = "Registered number is required";
         isValid = false;
       } else if (!/^[0-9]{10}$/.test(formData.registeredNumber)) {
-        newErrors.registeredNumber ="Please enter a valid 10-digit number";
+        newErrors.registeredNumber = "Please enter a valid 10-digit number";
         isValid = false;
       }
 
       if (!useSameWhatsapp && !formData.whatsappNumber?.trim()) {
-        newErrors.whatsappNumber ="WhatsApp number is required";
+        newErrors.whatsappNumber = "WhatsApp number is required";
         isValid = false;
       } else if (!useSameWhatsapp && !/^[0-9]{10}$/.test(formData.whatsappNumber)) {
-        newErrors.whatsappNumber ="Please enter a valid 10-digit WhatsApp number";
+        newErrors.whatsappNumber = "Please enter a valid 10-digit WhatsApp number";
         isValid = false;
       }
     } else {
       // Predefined mode validation
       if (!selectedEpcName) {
-        newErrors.epcName ="Please select an EPC name";
+        newErrors.epcName = "Please select an EPC name";
         isValid = false;
       }
 
       if (!formData.epcEmail) {
         newErrors.epcEmail = showEmailDropdown
-          ?"Please select an email for this EPC"
-          :"Email is required";
+          ? "Please select an email for this EPC"
+          : "Email is required";
         isValid = false;
       }
 
       // Predefined EPC validation
       if (!formData.whatsappNumber?.trim()) {
-        newErrors.whatsappNumber ="WhatsApp number is required";
+        newErrors.whatsappNumber = "WhatsApp number is required";
         isValid = false;
       } else if (!/^[0-9]{10}$/.test(formData.whatsappNumber)) {
-        newErrors.whatsappNumber ="Please enter a valid 10-digit WhatsApp number";
+        newErrors.whatsappNumber = "Please enter a valid 10-digit WhatsApp number";
         isValid = false;
       }
     }
 
     if (!formData.districtId) {
-      newErrors.districtId ="Please select a district";
+      newErrors.districtId = "Please select a district";
       isValid = false;
     }
 
@@ -860,7 +860,7 @@ const FALLBACK_EPCS = [
 
     if (!isValid) {
       const firstError = Object.values(newErrors)[0];
-      dispatch(setAlert({ type:"error", message: firstError }));
+      dispatch(setAlert({ type: "error", message: firstError }));
     }
 
     return isValid;
@@ -871,18 +871,18 @@ const FALLBACK_EPCS = [
     let isValid = true;
 
     if (!formData.emailOTP) {
-      newErrors.emailOTP ="Email OTP is required";
+      newErrors.emailOTP = "Email OTP is required";
       isValid = false;
     } else if (!/^[0-9]{6}$/.test(formData.emailOTP)) {
-      newErrors.emailOTP ="Please enter a valid 6-digit OTP";
+      newErrors.emailOTP = "Please enter a valid 6-digit OTP";
       isValid = false;
     }
 
     if (!formData.whatsappOTP) {
-      newErrors.whatsappOTP ="WhatsApp OTP is required";
+      newErrors.whatsappOTP = "WhatsApp OTP is required";
       isValid = false;
     } else if (!/^[0-9]{6}$/.test(formData.whatsappOTP)) {
-      newErrors.whatsappOTP ="Please enter a valid 6-digit OTP";
+      newErrors.whatsappOTP = "Please enter a valid 6-digit OTP";
       isValid = false;
     }
 
@@ -890,7 +890,7 @@ const FALLBACK_EPCS = [
 
     if (!isValid) {
       const firstError = Object.values(newErrors)[0];
-      dispatch(setAlert({ type:"error", message: firstError }));
+      dispatch(setAlert({ type: "error", message: firstError }));
     }
 
     return isValid;
@@ -901,28 +901,28 @@ const FALLBACK_EPCS = [
     let isValid = true;
 
     if (!formData.password) {
-      newErrors.password ="Password is required";
+      newErrors.password = "Password is required";
       isValid = false;
     } else {
       if (formData.password.length < 6) {
-        newErrors.password ="Password must be at least 6 characters";
+        newErrors.password = "Password must be at least 6 characters";
         isValid = false;
       } else if (!/[A-Z]/.test(formData.password)) {
-        newErrors.password ="Password must contain at least one uppercase letter";
+        newErrors.password = "Password must contain at least one uppercase letter";
         isValid = false;
       } else if (!/[0-9]/.test(formData.password)) {
-        newErrors.password ="Password must contain at least one number";
+        newErrors.password = "Password must contain at least one number";
         isValid = false;
       }
     }
 
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword ="Passwords do not match";
+      newErrors.confirmPassword = "Passwords do not match";
       isValid = false;
     }
 
     if (!formData.agreeToTerms || formData.agreeToTerms.length === 0) {
-      newErrors.agreeToTerms ="You must agree to the terms and conditions";
+      newErrors.agreeToTerms = "You must agree to the terms and conditions";
       isValid = false;
     }
 
@@ -930,7 +930,7 @@ const FALLBACK_EPCS = [
 
     if (!isValid) {
       const firstError = Object.values(newErrors)[0];
-      dispatch(setAlert({ type:"error", message: firstError }));
+      dispatch(setAlert({ type: "error", message: firstError }));
     }
 
     return isValid;
@@ -959,8 +959,8 @@ const FALLBACK_EPCS = [
 
     if (!isVerified) {
       dispatch(setAlert({
-        type:"error",
-        message:"Please complete OTP verification first"
+        type: "error",
+        message: "Please complete OTP verification first"
       }));
       setCurrentStep(2);
       return;
@@ -972,8 +972,8 @@ const FALLBACK_EPCS = [
   const handleResendEmailOTP = () => {
     if (emailTimer > 0) {
       dispatch(setAlert({
-        type:"warning",
-        message:`Please wait ${emailTimer} seconds before resending`
+        type: "warning",
+        message: `Please wait ${emailTimer} seconds before resending`
       }));
       return;
     }
@@ -984,8 +984,8 @@ const FALLBACK_EPCS = [
   const handleResendWhatsappOTP = () => {
     if (whatsappTimer > 0) {
       dispatch(setAlert({
-        type:"warning",
-        message:`Please wait ${whatsappTimer} seconds before resending`
+        type: "warning",
+        message: `Please wait ${whatsappTimer} seconds before resending`
       }));
       return;
     }
@@ -1004,43 +1004,43 @@ const FALLBACK_EPCS = [
 
   const getStepTitle = () => {
     switch (currentStep) {
-      case 1: return"Create Your Account";
-      case 2: return"Verify Your Contact Information";
-      case 3: return"Set Up Password";
-      default: return"Sign Up";
+      case 1: return "Create Your Account";
+      case 2: return "Verify Your Contact Information";
+      case 3: return "Set Up Password";
+      default: return "Sign Up";
     }
   };
 
   const getStepDescription = () => {
     switch (currentStep) {
-      case 1: return"Tell us about your company and contact details";
-      case 2: return"Please verify both your email and WhatsApp number together";
-      case 3: return"Create a strong password for your account";
-      default: return"";
+      case 1: return "Tell us about your company and contact details";
+      case 2: return "Please verify both your email and WhatsApp number together";
+      case 3: return "Create a strong password for your account";
+      default: return "";
     }
   };
 
   const getEpcPlaceholder = () => {
     if (!formData.stateId) {
-      return"Select a state first";
+      return "Select a state first";
     }
     if (loadingEpcs) {
-      return"Loading EPCs...";
+      return "Loading EPCs...";
     }
-    return"Select or search EPC name";
+    return "Select or search EPC name";
   };
 
   const bothOTPsEntered = formData.emailOTP && formData.whatsappOTP &&
     formData.emailOTP.length === 6 && formData.whatsappOTP.length === 6;
 
   const getWhatsAppDisplayNumber = () => {
-    if (userType ==="predefined") {
+    if (userType === "predefined") {
       return formData.whatsappNumber;
     }
-    if (userType ==="manual") {
+    if (userType === "manual") {
       return useSameWhatsapp ? formData.registeredNumber : formData.whatsappNumber;
     }
-    return"";
+    return "";
   };
 
   return (
@@ -1069,13 +1069,13 @@ const FALLBACK_EPCS = [
               <div className="space-y-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${currentStep >= 1
-                    ?"bg-gradient-to-r from-primary to-primary-end text-white"
-                    :"bg-gray-200 text-text-secondary"
+                    ? "bg-gradient-to-r from-primary to-primary-end text-white"
+                    : "bg-gray-200 text-text-secondary"
                     }`}>
-                    {currentStep > 1 ?"✓" :"1"}
+                    {currentStep > 1 ? "✓" : "1"}
                   </div>
                   <div>
-                    <p className={`font-medium ${currentStep >= 1 ?"text-text-primary dark:text-info" :"text-text-secondary"}`}>
+                    <p className={`font-medium ${currentStep >= 1 ? "text-text-primary dark:text-info" : "text-text-secondary"}`}>
                       Basic Information
                     </p>
                     <p className="text-xs text-text-secondary">State, EPC & contacts</p>
@@ -1084,13 +1084,13 @@ const FALLBACK_EPCS = [
 
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${currentStep >= 2
-                    ?"bg-gradient-to-r from-primary to-primary-end text-white"
-                    :"bg-gray-200 text-text-secondary"
+                    ? "bg-gradient-to-r from-primary to-primary-end text-white"
+                    : "bg-gray-200 text-text-secondary"
                     }`}>
-                    {currentStep > 2 ?"✓" :"2"}
+                    {currentStep > 2 ? "✓" : "2"}
                   </div>
                   <div>
-                    <p className={`font-medium ${currentStep >= 2 ?"text-text-primary dark:text-info" :"text-text-secondary"}`}>
+                    <p className={`font-medium ${currentStep >= 2 ? "text-text-primary dark:text-info" : "text-text-secondary"}`}>
                       Dual Verification
                     </p>
                     <p className="text-xs text-text-secondary">Email & WhatsApp OTP</p>
@@ -1099,13 +1099,13 @@ const FALLBACK_EPCS = [
 
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${currentStep >= 3
-                    ?"bg-gradient-to-r from-primary to-primary-end text-white"
-                    :"bg-gray-200 text-text-secondary"
+                    ? "bg-gradient-to-r from-primary to-primary-end text-white"
+                    : "bg-gray-200 text-text-secondary"
                     }`}>
                     3
                   </div>
                   <div>
-                    <p className={`font-medium ${currentStep >= 3 ?"text-text-primary dark:text-info" :"text-text-secondary"}`}>
+                    <p className={`font-medium ${currentStep >= 3 ? "text-text-primary dark:text-info" : "text-text-secondary"}`}>
                       Security
                     </p>
                     <p className="text-xs text-text-secondary">Set password</p>
@@ -1117,15 +1117,15 @@ const FALLBACK_EPCS = [
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-text-secondary">Step {currentStep} of 3</span>
                   <span className="text-xs font-medium text-primary dark:text-info">
-                    {currentStep === 1 &&"Information"}
-                    {currentStep === 2 &&"Verification"}
-                    {currentStep === 3 &&"Security"}
+                    {currentStep === 1 && "Information"}
+                    {currentStep === 2 && "Verification"}
+                    {currentStep === 3 && "Security"}
                   </span>
                 </div>
                 <div className="w-full bg-border rounded-full h-1.5">
                   <div
                     className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                    style={{ width:`${(currentStep / 3) * 100}%` }}
+                    style={{ width: `${(currentStep / 3) * 100}%` }}
                   ></div>
                 </div>
               </div>
@@ -1162,14 +1162,14 @@ const FALLBACK_EPCS = [
                 </div>
               </div>
 
-              <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/20">
+              {/* <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/20">
                 <p className="text-xs text-text-secondary">
                   Need help? Contact us at{""}
                   <a href="mailto:support@solarmarket.com" className="text-primary dark:text-info hover:underline">
                     support@solarmarket.com
                   </a>
                 </p>
-              </div>
+              </div> */}
             </div>
           </div>
 
@@ -1207,7 +1207,7 @@ const FALLBACK_EPCS = [
                         options={stateOptions}
                         placeholder="Select your state"
                         searchPlaceholder="Search states..."
-                        className={errors.stateId ?"border-danger" :""}
+                        className={errors.stateId ? "border-danger" : ""}
                         disabled={loadingStates}
                       />
                       {loadingStates && (
@@ -1225,7 +1225,7 @@ const FALLBACK_EPCS = [
                           options={epcNameOptions}
                           placeholder={getEpcPlaceholder()}
                           searchPlaceholder="Search EPC names..."
-                          className={errors.epcName ?"border-danger" :""}
+                          className={errors.epcName ? "border-danger" : ""}
                           disabled={isCustomEpc || loadingEpcs || !formData.stateId}
                         />
 
@@ -1243,7 +1243,7 @@ const FALLBACK_EPCS = [
                               options={emailOptions}
                               placeholder="Select email for this EPC"
                               searchPlaceholder="Search emails..."
-                              className={errors.epcEmail ?"border-danger" :""}
+                              className={errors.epcEmail ? "border-danger" : ""}
                             />
                           </div>
                         )}
@@ -1265,7 +1265,7 @@ const FALLBACK_EPCS = [
                             name="customEpcToggle"
                             type="checkbox"
                             options={customEpcCheckboxOptions}
-                            value={isCustomEpc ?"custom" :""}
+                            value={isCustomEpc ? "custom" : ""}
                             checked={isCustomEpc ? ["custom"] : []}
                             onChange={toggleCustomEpc}
                             customCheckbox={true}
@@ -1289,9 +1289,9 @@ const FALLBACK_EPCS = [
                               value={formData.epcEmail}
                               onChange={handleInputChange}
                               type="email"
-                              className={errors.epcEmail ?"border-danger" :""}
+                              className={errors.epcEmail ? "border-danger" : ""}
                             />
-                            
+
                             {/* Manual EPC Specific Fields */}
                             <CustomInput
                               label="Registered Number (PM Surya Ghar)"
@@ -1301,15 +1301,15 @@ const FALLBACK_EPCS = [
                               onChange={handleInputChange}
                               type="tel"
                               maxLength={10}
-                              className={errors.registeredNumber ?"border-danger" :""}
+                              className={errors.registeredNumber ? "border-danger" : ""}
                             />
-                            
+
                             <div className="mt-2">
                               <CustomInput
                                 type="checkbox"
                                 name="useSameWhatsapp"
                                 options={sameWhatsappOptions}
-                                value={useSameWhatsapp ?"same" :""}
+                                value={useSameWhatsapp ? "same" : ""}
                                 checked={useSameWhatsapp ? ["same"] : []}
                                 onChange={handleSameWhatsappToggle}
                                 customCheckbox={true}
@@ -1325,10 +1325,10 @@ const FALLBACK_EPCS = [
                                 onChange={handleInputChange}
                                 type="tel"
                                 maxLength={10}
-                                className={errors.whatsappNumber ?"border-danger" :""}
+                                className={errors.whatsappNumber ? "border-danger" : ""}
                               />
                             )}
-                            
+
                             {useSameWhatsapp && formData.registeredNumber && (
                               <div className="text-sm text-text-secondary mt-1">
                                 <FiInfo className="inline mr-1" size={14} />
@@ -1351,7 +1351,7 @@ const FALLBACK_EPCS = [
                           onChange={handleInputChange}
                           type="tel"
                           maxLength={10}
-                          className={errors.whatsappNumber ?"border-danger" :""}
+                          className={errors.whatsappNumber ? "border-danger" : ""}
                         />
                       </div>
                     )}
@@ -1367,14 +1367,14 @@ const FALLBACK_EPCS = [
                           !formData.stateId
                             ? "Select a state first"
                             : loadingDistricts
-                            ? "Loading districts..."
-                            : districts.length === 0
-                            ? "No active districts available"
-                            : "Select your district"
+                              ? "Loading districts..."
+                              : districts.length === 0
+                                ? "No active districts available"
+                                : "Select your district"
                         }
                         searchPlaceholder="Search districts..."
                         disabled={!formData.stateId || loadingDistricts}
-                        className={errors.districtId ?"border-danger" :""}
+                        className={errors.districtId ? "border-danger" : ""}
                       />
                       {loadingDistricts && (
                         <p className="text-xs text-text-secondary mt-1">Loading districts...</p>
@@ -1411,10 +1411,10 @@ const FALLBACK_EPCS = [
                     </div>
 
                     <div className={`p-4 rounded-xl border-2 transition-all ${isVerified
-                      ?"border-success bg-success/5"
+                      ? "border-success bg-success/5"
                       : verificationAttempted && !isVerified
-                        ?"border-danger/30 bg-danger/5"
-                        :"border-border"
+                        ? "border-danger/30 bg-danger/5"
+                        : "border-border"
                       }`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -1453,7 +1453,7 @@ const FALLBACK_EPCS = [
                             className="text-primary dark:text-info font-medium"
                             disabled={loading.resendOtp || isVerified}
                           >
-                            {loading.resendOtp ?"Resending..." :"Resend OTP"}
+                            {loading.resendOtp ? "Resending..." : "Resend OTP"}
                           </Button>
                         ) : (
                           <span className="text-sm text-text-secondary">
@@ -1464,10 +1464,10 @@ const FALLBACK_EPCS = [
                     </div>
 
                     <div className={`p-4 rounded-xl border-2 transition-all ${isVerified
-                      ?"border-success bg-success/5"
+                      ? "border-success bg-success/5"
                       : verificationAttempted && !isVerified
-                        ?"border-danger/30 bg-danger/5"
-                        :"border-border"
+                        ? "border-danger/30 bg-danger/5"
+                        : "border-border"
                       }`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -1506,7 +1506,7 @@ const FALLBACK_EPCS = [
                             className="text-primary dark:text-info font-medium"
                             disabled={loading.resendOtp || isVerified}
                           >
-                            {loading.resendOtp ?"Resending..." :"Resend OTP"}
+                            {loading.resendOtp ? "Resending..." : "Resend OTP"}
                           </Button>
                         ) : (
                           <span className="text-sm text-text-secondary">
@@ -1527,10 +1527,10 @@ const FALLBACK_EPCS = [
                         disabled={!bothOTPsEntered || loading.verifyOtp || isVerified}
                       >
                         {isVerified
-                          ?"Verified Successfully"
+                          ? "Verified Successfully"
                           : bothOTPsEntered
-                            ?"Verify Both OTPs"
-                            :"Enter both OTPs to continue"}
+                            ? "Verify Both OTPs"
+                            : "Enter both OTPs to continue"}
                       </Button>
                     </div>
                   </div>
@@ -1579,8 +1579,8 @@ const FALLBACK_EPCS = [
                         placeholder="Create a password"
                         value={formData.password}
                         onChange={handleInputChange}
-                        type={showPassword ?"text" :"password"}
-                        className={errors.password ?"border-danger" :""}
+                        type={showPassword ? "text" : "password"}
+                        className={errors.password ? "border-danger" : ""}
                       />
                       <IconButton
                         type="button"
@@ -1600,8 +1600,8 @@ const FALLBACK_EPCS = [
                         placeholder="Re-enter your password"
                         value={formData.confirmPassword}
                         onChange={handleInputChange}
-                        type={showConfirmPassword ?"text" :"password"}
-                        className={errors.confirmPassword ?"border-danger" :""}
+                        type={showConfirmPassword ? "text" : "password"}
+                        className={errors.confirmPassword ? "border-danger" : ""}
                       />
                       <IconButton
                         type="button"
@@ -1618,17 +1618,17 @@ const FALLBACK_EPCS = [
                       <p className="text-xs text-text-secondary mb-2">Password must contain:</p>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="flex items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${formData.password.length >= 6 ?"bg-success" :"bg-gray-300"
+                          <div className={`w-2 h-2 rounded-full ${formData.password.length >= 6 ? "bg-success" : "bg-gray-300"
                             }`}></div>
                           <span className="text-xs text-text-secondary">6+ characters</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${/[A-Z]/.test(formData.password) ?"bg-success" :"bg-gray-300"
+                          <div className={`w-2 h-2 rounded-full ${/[A-Z]/.test(formData.password) ? "bg-success" : "bg-gray-300"
                             }`}></div>
                           <span className="text-xs text-text-secondary">Uppercase letter</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${/[0-9]/.test(formData.password) ?"bg-success" :"bg-gray-300"
+                          <div className={`w-2 h-2 rounded-full ${/[0-9]/.test(formData.password) ? "bg-success" : "bg-gray-300"
                             }`}></div>
                           <span className="text-xs text-text-secondary">Number</span>
                         </div>
@@ -1643,7 +1643,7 @@ const FALLBACK_EPCS = [
                         value={formData.agreeToTerms[0]}
                         checked={formData.agreeToTerms}
                         onChange={handleInputChange}
-                        className={errors.agreeToTerms ?"border-danger" :""}
+                        className={errors.agreeToTerms ? "border-danger" : ""}
                         customCheckbox={true}
                       />
                     </div>

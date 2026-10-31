@@ -15,6 +15,7 @@ export default function GoalAssignment({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
   const [selectedBde, setSelectedBde] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [togglingMap, setTogglingMap] = useState({});
 
   useEffect(() => {
     fetchBdes();
@@ -29,6 +30,39 @@ export default function GoalAssignment({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
       console.error('Failed to load BDEs for goal assignment', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTogglePermission = async (bde, field) => {
+    const bdeId = bde.id || bde._id;
+    const currentVal = bde[field] !== false;
+    const newVal = !currentVal;
+    const toggleKey = `${bdeId}-${field}`;
+
+    // Optimistic UI update
+    setBdes((prev) =>
+      prev.map((item) =>
+        (item.id || item._id) === bdeId ? { ...item, [field]: newVal } : item
+      )
+    );
+    setTogglingMap((prev) => ({ ...prev, [toggleKey]: true }));
+
+    try {
+      await bdeApi.updatePermissions(
+        bdeId,
+        { [field]: newVal },
+        moduleUniqueId
+      );
+    } catch (err) {
+      console.error('Failed to update onboarding permission', err);
+      // Revert on error
+      setBdes((prev) =>
+        prev.map((item) =>
+          (item.id || item._id) === bdeId ? { ...item, [field]: currentVal } : item
+        )
+      );
+    } finally {
+      setTogglingMap((prev) => ({ ...prev, [toggleKey]: false }));
     }
   };
 
@@ -141,6 +175,72 @@ export default function GoalAssignment({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                       "{b.goal?.notes || b.current_goal?.notes}"
                     </div>
                   )}
+                </div>
+
+                {/* Onboarding Decision Permissions (Admin Controls) */}
+                <div className="mt-3.5 p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/80">
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
+                      Onboarding Permissions
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">Decision Control</span>
+                  </div>
+
+                  {/* 1. EPC Onboarding Toggle */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${b.can_onboard_epc !== false ? 'bg-teal-500 ring-2 ring-teal-200' : 'bg-slate-300'}`} />
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 leading-none">EPC Onboarding</div>
+                        <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          {b.can_onboard_epc !== false ? 'Authorized to onboard' : 'Onboarding restricted'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      title={b.can_onboard_epc !== false ? 'Click to disable EPC onboarding' : 'Click to enable EPC onboarding'}
+                      disabled={togglingMap[`${b.id || b._id}-can_onboard_epc`]}
+                      onClick={() => handleTogglePermission(b, 'can_onboard_epc')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-60 ${
+                        b.can_onboard_epc !== false ? 'bg-teal-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          b.can_onboard_epc !== false ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* 2. Franchise Onboarding Toggle */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${b.can_onboard_franchise !== false ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-slate-300'}`} />
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 leading-none">Franchise Onboarding</div>
+                        <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          {b.can_onboard_franchise !== false ? 'Authorized to onboard' : 'Onboarding restricted'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      title={b.can_onboard_franchise !== false ? 'Click to disable Franchise onboarding' : 'Click to enable Franchise onboarding'}
+                      disabled={togglingMap[`${b.id || b._id}-can_onboard_franchise`]}
+                      onClick={() => handleTogglePermission(b, 'can_onboard_franchise')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-60 ${
+                        b.can_onboard_franchise !== false ? 'bg-amber-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          b.can_onboard_franchise !== false ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
 

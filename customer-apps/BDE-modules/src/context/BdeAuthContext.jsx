@@ -112,6 +112,8 @@ export function BdeAuthProvider({ children }) {
         user,
         profile,
         loading,
+        canOnboardEpc: (profile?.can_onboard_epc ?? user?.can_onboard_epc) !== false,
+        canOnboardFranchise: (profile?.can_onboard_franchise ?? user?.can_onboard_franchise) !== false,
         login,
         logout,
         changePassword,
