@@ -100,6 +100,15 @@ const schema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  // Onboarding Permissions / Decision controls
+  can_onboard_epc: {
+    type: Boolean,
+    default: true,
+  },
+  can_onboard_franchise: {
+    type: Boolean,
+    default: true,
+  },
   token_version: {
     type: Number,
     default: 0,

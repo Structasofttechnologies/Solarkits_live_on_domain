@@ -26,12 +26,15 @@ import {
   ChevronRight,
   Building,
   Zap,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Lock,
 } from 'lucide-react';
 import api from '../services/api';
+import { useBdeAuth } from '../context/BdeAuthContext';
 import BdeFranchiseOnboardingModal from '../components/BdeFranchiseOnboardingModal';
 
 export default function BdeLeads() {
+  const { canOnboardFranchise } = useBdeAuth();
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [pipeline, setPipeline] = useState(null);
@@ -308,13 +311,23 @@ export default function BdeLeads() {
             </button>
           </div>
 
-          <button
-            onClick={() => setCreateModalOpen(true)}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Add Franchisee Lead
-          </button>
+          {canOnboardFranchise !== false ? (
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Add Franchisee Lead
+            </button>
+          ) : (
+            <div
+              title="Franchise onboarding is disabled for your BDE account by Administrator"
+              className="px-3.5 py-2 bg-slate-100 border border-slate-300 text-slate-500 font-semibold rounded-xl text-xs flex items-center gap-1.5 cursor-not-allowed select-none"
+            >
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Franchise Onboarding Restricted</span>
+            </div>
+          )}
         </div>
       </div>
 

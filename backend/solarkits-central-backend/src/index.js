@@ -177,6 +177,8 @@ adminRouter.use('/payment-milestones', require('./modules/admin-panel/routes/pro
 // ─── Centralized Order & Stage Approval Workflow Engine ───────────────────────
 adminRouter.use('/order-approvals', require('./modules/admin-panel/routes/order.approval.route'));
 adminRouter.use('/epc-types', require('./modules/admin-panel/routes/epc.types.route'));
+adminRouter.use('/operations-dashboard', require('./modules/admin-panel/routes/operations.dashboard.route'));
+adminRouter.use('/store-dashboard', require('./modules/admin-panel/routes/store.dashboard.route'));
 
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
@@ -268,7 +270,7 @@ process.on('uncaughtException', (err) => {
 });
 
 // Start Express unified server
-const server = app.listen(port, () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Centralized backend server running on ${ipv4}:${port}`);
 });
 

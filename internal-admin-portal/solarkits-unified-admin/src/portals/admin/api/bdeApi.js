@@ -134,6 +134,12 @@ export const bdeApi = {
     return res.data;
   },
 
+  // Onboarding Decision Permissions (EPC & Franchise Onboarding)
+  updatePermissions: async (id, data, uniqueId = 'ADM_BDE_MGMT') => {
+    const res = await axios.put(`${API_BASE}/bde/permissions/${id}?unique_id=${uniqueId}&req_for=edit`, data, getHeaders());
+    return res.data;
+  },
+
   // Activity History
   getActivityHistory: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
     const query = buildCleanQuery(params, uniqueId, 'view');

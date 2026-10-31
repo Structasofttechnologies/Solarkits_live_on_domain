@@ -283,6 +283,8 @@ exports.login_bde = async (req, res) => {
         mobile_number: bde.mobile_number,
         status: bde.status,
         is_first_login: bde.is_first_login,
+        can_onboard_epc: bde.can_onboard_epc !== false,
+        can_onboard_franchise: bde.can_onboard_franchise !== false,
       },
     });
   } catch (error) {
@@ -417,6 +419,8 @@ exports.get_bde_me = async (req, res) => {
           start_date: t.assignment_start_date,
         })),
         plans: plans ? plans.plan_names : [],
+        can_onboard_epc: bde.can_onboard_epc !== false,
+        can_onboard_franchise: bde.can_onboard_franchise !== false,
       },
     });
   } catch (error) {
@@ -1496,6 +1500,15 @@ exports.verify_epc_gstin = async (req, res) => {
 exports.onboard_epc_with_gst = async (req, res) => {
   try {
     const bdeId = req.user?.id || req.user?._id;
+    if (bdeId) {
+      const bdeProfile = await BDEProfile.findById(bdeId).select('can_onboard_epc').lean();
+      if (bdeProfile && bdeProfile.can_onboard_epc === false) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'EPC onboarding is disabled for your BDE account by Administrator.',
+        });
+      }
+    }
     const {
       lead_id,
       gstin,
@@ -1578,14 +1591,13 @@ exports.onboard_epc_with_gst = async (req, res) => {
     const finalStateName = geoState ? geoState.name : resolvedState;
     const finalDistrictName = geoDistrict ? geoDistrict.name : (district_name || 'Ahmedabad');
 
-    // Auto-detect district franchise if not passed
+    // Only assign franchisee if explicitly passed or requested; otherwise direct Solar Store EPC onboarding
     let targetFranchisee = null;
     if (reseller_id) {
       targetFranchisee = await Reseller.findById(reseller_id)
         .select('business_name reseller_code contact_person mobile email is_operational activation_status address gst_number')
         .lean();
-    }
-    if (!targetFranchisee) {
+    } else if (req.body.auto_assign_franchisee === true) {
       targetFranchisee = await _findDistrictFranchisee(finalDistrictName, finalStateName);
     }
 
@@ -1608,7 +1620,7 @@ exports.onboard_epc_with_gst = async (req, res) => {
     const assignedResellerId = targetFranchisee ? (targetFranchisee.id || targetFranchisee._id) : null;
     const assignedResellerName = targetFranchisee ? targetFranchisee.business_name : null;
 
-    // 3. Create EpcAccount with 'pending' status (Awaiting Admin Approval)
+    // 3. Create EpcAccount with 'approved' status for instant Direct Solar Store access
     const epcAccount = await EpcAccount.create({
       name: cleanName,
       contact_person: contact_person.trim(),
@@ -1625,7 +1637,7 @@ exports.onboard_epc_with_gst = async (req, res) => {
       district_name: finalDistrictName,
       address: address ? address.trim() : null,
       pincode: pincode ? pincode.trim() : null,
-      status: 'pending', // Pending Admin Approval
+      status: 'approved', // Active Direct Solar Store access
       epc_type: epc_type ? epc_type.trim() : 'New EPC',
       epc_type_id: epc_type_id || null,
       is_email_verified: true,
@@ -1650,13 +1662,13 @@ exports.onboard_epc_with_gst = async (req, res) => {
       );
     }
 
-    // 4. Create EpcSignupRequest for Admin Approval at /admin-panel/solar-shop/india/approve-new-epc
+    // 4. Create EpcSignupRequest recorded as approved
     const signupRequest = await EpcSignupRequest.create({
       account_id: epcAccount._id,
       company_name: cleanName,
       email: cleanEmail,
       whatsapp: cleanMobile,
-      status: 'pending',
+      status: 'approved',
       epc_type: epc_type ? epc_type.trim() : 'New EPC',
       epc_type_id: epc_type_id || null,
       state_id: geoState?._id || territory?.state_id || null,
@@ -1769,15 +1781,15 @@ exports.onboard_epc_with_gst = async (req, res) => {
       actor_name: req.user.full_name,
       action: 'EPC_ONBOARDED',
       notes: assignedResellerId
-        ? `Submitted EPC Onboarding for "${cleanName}" (${cleanGst || 'No GST'}). Auto-assigned to Franchisee "${assignedResellerName}" (${resolvedDistrict}). Pending Admin Approval.`
-        : `Submitted EPC Onboarding for "${cleanName}" (${cleanGst || 'No GST'}). No franchise in ${resolvedDistrict} - routed for Direct Solar Store Access. Pending Admin Approval.`,
+        ? `Onboarded EPC "${cleanName}" (${cleanGst || 'No GST'}). Assigned to Franchisee "${assignedResellerName}" (${finalDistrictName}).`
+        : `Onboarded EPC "${cleanName}" (${cleanGst || 'No GST'}). Activated with Direct Solar Store Access (${finalDistrictName}).`,
     });
 
     return res.status(201).json({
       status: 'success',
       message: assignedResellerId
-        ? `EPC "${cleanName}" successfully submitted and auto-assigned to Franchise Partner "${assignedResellerName}". Routed to Admin Panel for approval.`
-        : `EPC "${cleanName}" successfully submitted for Direct Solar Store access (No franchise in ${resolvedDistrict}). Routed to Admin Panel for approval.`,
+        ? `EPC "${cleanName}" successfully onboarded and assigned to Franchise Partner "${assignedResellerName}".`
+        : `EPC "${cleanName}" successfully onboarded with Direct Solar Store access!`,
       data: {
         epc_id: epcAccount._id,
         epc_account_id: epcAccount._id,
@@ -1787,8 +1799,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
         name: epcAccount.name,
         email: epcAccount.email,
         gstin: epcAccount.gstin,
-        state_name: resolvedState,
-        district_name: resolvedDistrict,
+        state_name: finalStateName,
+        district_name: finalDistrictName,
         assigned_reseller_name: assignedResellerName,
         assigned_reseller_id: assignedResellerId,
         matched_franchisee: targetFranchisee ? {
@@ -1800,7 +1812,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
           is_operational: targetFranchisee.is_operational,
         } : null,
         is_direct_store_epc: isDirectStoreEpc,
-        status: 'pending_admin_approval',
+        store_access: true,
+        status: 'approved',
       },
     });
   } catch (err) {
@@ -1897,12 +1910,37 @@ exports.assign_epc_to_franchisee = async (req, res) => {
     const bdeId = req.user.id;
     const { epc_account_id, reseller_id, lead_id, remarks } = req.body;
 
-    if (!epc_account_id || !reseller_id) {
+    let targetEpcAccountId = epc_account_id;
+    let targetLead = null;
+
+    if (lead_id) {
+      targetLead = await EPCLead.findById(lead_id);
+      if (!targetEpcAccountId && targetLead?.onboarded_epc_account_id) {
+        targetEpcAccountId = targetLead.onboarded_epc_account_id;
+      }
+    }
+
+    if (!targetEpcAccountId && targetLead && (targetLead.gst_number || targetLead.email)) {
+      const match = await EpcAccount.findOne({
+        deleted_at: null,
+        $or: [
+          ...(targetLead.gst_number ? [{ gstin: targetLead.gst_number }] : []),
+          ...(targetLead.email ? [{ email: targetLead.email.toLowerCase() }] : []),
+        ],
+      });
+      if (match) {
+        targetEpcAccountId = match._id;
+        targetLead.onboarded_epc_account_id = match._id;
+        await targetLead.save();
+      }
+    }
+
+    if (!targetEpcAccountId || !reseller_id) {
       return res.status(400).json({ status: 'error', message: 'epc_account_id and reseller_id are required' });
     }
 
     const [epcAccount, reseller] = await Promise.all([
-      EpcAccount.findById(epc_account_id),
+      EpcAccount.findById(targetEpcAccountId),
       Reseller.findById(reseller_id),
     ]);
 
@@ -1910,7 +1948,7 @@ exports.assign_epc_to_franchisee = async (req, res) => {
     if (!reseller) return res.status(404).json({ status: 'error', message: 'Franchisee partner not found' });
 
     // Revoke any existing active relationship
-    const existing = await EpcResellerRelationship.findOne({ epc_id: epc_account_id, status: 'active' });
+    const existing = await EpcResellerRelationship.findOne({ epc_id: targetEpcAccountId, status: 'active' });
     if (existing) {
       existing.status = 'revoked';
       existing.effective_to = new Date();
@@ -1920,7 +1958,7 @@ exports.assign_epc_to_franchisee = async (req, res) => {
 
     // Create new active relationship
     const newRel = await EpcResellerRelationship.create({
-      epc_id: epc_account_id,
+      epc_id: targetEpcAccountId,
       reseller_id: reseller._id,
       effective_from: new Date(),
       status: 'active',
@@ -2507,7 +2545,29 @@ exports.get_franchisee_ranking = async (req, res) => {
 // 11. LEGACY BDE STORE SETUPS & FRANCHISEE LEADS (Backward Compatible)
 // ─────────────────────────────────────────────────────────────────────────────
 exports.create_bde_lead = async (req, res) => {
-  return createLead(req.user.id, req.body, req, res);
+  try {
+    const bdeId = req.user?.id || req.user?._id;
+    if (bdeId) {
+      const bdeProfile = await BDEProfile.findById(bdeId).select('can_onboard_franchise').lean();
+      if (bdeProfile && bdeProfile.can_onboard_franchise === false) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'Franchise onboarding is disabled for your BDE account by Administrator.',
+        });
+      }
+    }
+    const result = await createLead(req.body, bdeId);
+    return res.status(201).json({
+      status: 'success',
+      message: 'Franchisee lead created successfully',
+      data: result,
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({
+      status: 'error',
+      message: err.message || 'Failed to create lead',
+    });
+  }
 };
 
 exports.list_bde_leads = async (req, res) => {

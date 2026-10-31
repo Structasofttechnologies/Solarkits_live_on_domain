@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export default function BdeLayout() {
-  const { user, profile, logout } = useBdeAuth();
+  const { user, profile, logout, canOnboardEpc, canOnboardFranchise } = useBdeAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -62,7 +62,9 @@ export default function BdeLayout() {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Franchisee Leads', path: '/leads', icon: Users },
     { name: 'EPC Leads', path: '/epc-leads', icon: Zap },
-    { name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
+    ...(canOnboardEpc !== false
+      ? [{ name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck }]
+      : []),
     { name: 'EPC Quotes', path: '/epc-quotes', icon: FileText },
     { name: 'Quote Follow-ups', path: '/epc-quote-followups', icon: CalendarCheck },
     { name: 'Purchase Orders (PO)', path: '/purchase-orders', icon: ShoppingCart },

@@ -33,7 +33,7 @@ router.get(
 
 // List and Search BDEs
 router.get(
-  '/list',
+  ['/list', '/all', '/'],
   check_auth,
   check_permissions([{ unique_code: 'ADM_BDE_MGMT', permissions: ['view'] }]),
   handler.list_bdes
@@ -148,6 +148,14 @@ router.get(
   check_auth,
   check_permissions([{ unique_code: 'ADM_BDE_MGMT', permissions: ['view'] }]),
   handler.get_goals
+);
+
+// Onboarding Permissions Toggle
+router.put(
+  '/permissions/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'ADM_BDE_MGMT', permissions: ['edit'] }]),
+  handler.update_bde_permissions
 );
 
 // Activity History

@@ -20,17 +20,23 @@ import {
   FileCheck,
   Check,
   AlertTriangle,
+  Copy,
+  ExternalLink,
+  ShoppingBag,
+  Zap,
 } from 'lucide-react';
 import api from '../services/api';
+import { useBdeAuth } from '../context/BdeAuthContext';
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 export default function BdeEpcOnboardingWizard() {
+  const { canOnboardEpc } = useBdeAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const initialLead = location.state?.lead || null;
 
-  const [step, setStep] = useState(1); // 1 = GST Verify, 2 = EPC Details, 3 = Franchisee Assignment, 4 = Success
+  const [step, setStep] = useState(1); // 1 = GST Verify, 2 = EPC Details, 3 = Store Access Confirmation, 4 = Success
 
   // Step 1: GST Verification State
   const [gstInput, setGstInput] = useState(initialLead?.gst_number || '');
@@ -60,14 +66,7 @@ export default function BdeEpcOnboardingWizard() {
   ]);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [createdEpcAccount, setCreatedEpcAccount] = useState(null);
-
-  // Step 3: Franchisee Assignment State
-  const [eligibleFranchisees, setEligibleFranchisees] = useState([]);
-  const [loadingFranchisees, setLoadingFranchisees] = useState(false);
-  const [franchiseeSearch, setFranchiseeSearch] = useState('');
-  const [selectedFranchisee, setSelectedFranchisee] = useState(null);
-  const [assignmentLoading, setAssignmentLoading] = useState(false);
-  const [assignmentResult, setAssignmentResult] = useState(null);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
 
   // Fetch Dynamic Active EPC Classification Types
   useEffect(() => {
@@ -84,7 +83,7 @@ export default function BdeEpcOnboardingWizard() {
               setEpcTypes(res2.data.data);
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       });
   }, []);
 
@@ -98,6 +97,7 @@ export default function BdeEpcOnboardingWizard() {
       setGstError('Please enter a valid GST number');
       return;
     }
+
     if (!GSTIN_REGEX.test(cleanGst)) {
       setGstError('Invalid GSTIN format. Example: 27ABCDE1234F1Z5');
       return;
@@ -113,7 +113,6 @@ export default function BdeEpcOnboardingWizard() {
       if (res.data?.status === 'success') {
         const d = res.data.data;
         setGstResult(d);
-        setSelectedFranchisee(d.matched_franchisee || null);
         setFormData((prev) => ({
           ...prev,
           company_name: d.legal_name || d.trade_name || prev.company_name,
@@ -133,20 +132,19 @@ export default function BdeEpcOnboardingWizard() {
     }
   };
 
-  // ── Step 2: Proceed to Assignment Review ──
-  const handleProceedToAssignment = (e) => {
+  // ── Step 2: Proceed to Store Access Setup ──
+  const handleProceedToStoreAccess = (e) => {
     e.preventDefault();
     setStep(3);
   };
 
-  // ── Step 3: Submit EPC Onboarding for Admin Approval ──
-  const handleSubmitEpcForApproval = async () => {
+  // ── Step 3: Complete EPC Onboarding & Grant Store Access ──
+  const handleCompleteOnboarding = async () => {
     setOnboardingLoading(true);
     try {
       const res = await api.post('/epc/onboard-with-gst', {
         ...formData,
         gstin: gstResult?.gstin || gstInput.trim().toUpperCase(),
-        reseller_id: selectedFranchisee?.id || undefined,
       });
 
       if (res.data?.status === 'success') {
@@ -160,22 +158,29 @@ export default function BdeEpcOnboardingWizard() {
             channel.postMessage({ type: 'NEW_REGISTRATION', request: res.data.data });
             channel.close();
           }
-        } catch (bcErr) {}
+        } catch (bcErr) { }
       } else {
-        alert(res.data?.message || 'Failed to submit EPC onboarding');
+        alert(res.data?.message || 'Failed to complete EPC onboarding');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to submit EPC onboarding');
+      alert(err.response?.data?.message || 'Failed to complete EPC onboarding');
     } finally {
       setOnboardingLoading(false);
     }
+  };
+
+  const handleCopyCredentials = () => {
+    const defaultPass = formData.password || 'SolarEPC@2026';
+    const text = `SolarKits Store Access Credentials:\nURL: https://solarkits.in\nEmail: ${formData.email}\nPassword: ${defaultPass}\nCompany: ${formData.company_name}\nGSTIN: ${gstResult?.gstin || gstInput}`;
+    navigator.clipboard.writeText(text);
+    setCopiedCredentials(true);
+    setTimeout(() => setCopiedCredentials(false), 2500);
   };
 
   const handleResetWizard = () => {
     setStep(1);
     setGstInput('');
     setGstResult(null);
-    setSelectedFranchisee(null);
     setCreatedEpcAccount(null);
     setFormData({
       lead_id: '',
@@ -192,6 +197,28 @@ export default function BdeEpcOnboardingWizard() {
     });
   };
 
+  const defaultPassword = formData.password?.trim() || 'SolarEPC@2026';
+
+  if (canOnboardEpc === false) {
+    return (
+      <div className="max-w-xl mx-auto my-16 p-8 bg-white border border-rose-200 rounded-3xl shadow-sm text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+          <Lock className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-black text-slate-900">EPC Onboarding Restricted</h2>
+        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+          EPC contractor onboarding has been turned <strong className="text-slate-800">OFF</strong> for your BDE account by the Administrator. You are not authorized to register new EPC accounts.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition cursor-pointer"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header Banner */}
@@ -199,19 +226,22 @@ export default function BdeEpcOnboardingWizard() {
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full uppercase flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" /> GST Verification Journey
+              <ShieldCheck className="w-3.5 h-3.5" /> GST Verified Onboarding
+            </span>
+            <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-bold rounded-full uppercase flex items-center gap-1">
+              <Store className="w-3.5 h-3.5" /> Direct Store Access
             </span>
             {initialLead && (
               <span className="text-xs font-semibold text-slate-500 font-mono">
-                Attributed Lead: {initialLead.lead_id}
+                Lead: {initialLead.lead_id}
               </span>
             )}
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-1">
-            EPC Onboarding & Franchisee Assignment
+            EPC Contractor Onboarding
           </h1>
           <p className="text-xs text-slate-500">
-            Verify contractor GSTIN, fetch company details, auto-detect district, and assign to an operational franchisee.
+            Verify contractor GSTIN, set up account credentials, and grant Direct Solar Store procurement access.
           </p>
         </div>
 
@@ -229,9 +259,8 @@ export default function BdeEpcOnboardingWizard() {
           {/* Step 1 */}
           <div className="flex items-center gap-3">
             <div
-              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${
-                step >= 1 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-400'
-              }`}
+              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${step >= 1 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-400'
+                }`}
             >
               1
             </div>
@@ -246,9 +275,8 @@ export default function BdeEpcOnboardingWizard() {
           {/* Step 2 */}
           <div className="flex items-center gap-3">
             <div
-              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${
-                step >= 2 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-400'
-              }`}
+              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${step >= 2 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-400'
+                }`}
             >
               2
             </div>
@@ -263,15 +291,14 @@ export default function BdeEpcOnboardingWizard() {
           {/* Step 3 */}
           <div className="flex items-center gap-3">
             <div
-              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${
-                step >= 3 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-400'
-              }`}
+              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${step >= 3 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-400'
+                }`}
             >
               3
             </div>
             <div className="hidden sm:block">
-              <span className="text-xs font-bold text-slate-800 block">District Match</span>
-              <span className="text-[10px] text-slate-400">Auto-assign & review</span>
+              <span className="text-xs font-bold text-slate-800 block">Solar Store Access</span>
+              <span className="text-[10px] text-slate-400">Setup & permissions</span>
             </div>
           </div>
 
@@ -280,15 +307,14 @@ export default function BdeEpcOnboardingWizard() {
           {/* Step 4 */}
           <div className="flex items-center gap-3">
             <div
-              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${
-                step >= 4 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'bg-slate-100 text-slate-400'
-              }`}
+              className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition ${step >= 4 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'bg-slate-100 text-slate-400'
+                }`}
             >
               <Check className="w-4 h-4" />
             </div>
             <div className="hidden sm:block">
-              <span className="text-xs font-bold text-slate-800 block">Submitted</span>
-              <span className="text-[10px] text-slate-400">Pending Admin Approval</span>
+              <span className="text-xs font-bold text-slate-800 block">Onboarded</span>
+              <span className="text-[10px] text-slate-400">Store Access Active</span>
             </div>
           </div>
         </div>
@@ -399,7 +425,7 @@ export default function BdeEpcOnboardingWizard() {
             </div>
           </div>
 
-          <form onSubmit={handleProceedToAssignment} className="space-y-5 text-xs">
+          <form onSubmit={handleProceedToStoreAccess} className="space-y-5 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Company Trade / Legal Name *</label>
@@ -478,7 +504,7 @@ export default function BdeEpcOnboardingWizard() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Set Portal Password (Optional)</label>
+                <label className="block font-bold text-slate-700 mb-1">Set Store Password (Optional)</label>
                 <input
                   type="text"
                   value={formData.password}
@@ -486,6 +512,7 @@ export default function BdeEpcOnboardingWizard() {
                   placeholder="Defaults to: SolarEPC@2026"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
                 />
+                <span className="text-[10px] text-slate-400 mt-1 block">Contractor uses this password to log in to the Solar Store.</span>
               </div>
 
               <div>
@@ -533,26 +560,26 @@ export default function BdeEpcOnboardingWizard() {
                 type="submit"
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-2"
               >
-                Confirm & Review District Assignment <ArrowRight className="w-4 h-4" />
+                Configure Solar Store Access <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* STEP 3: AUTOMATIC DISTRICT FRANCHISEE MATCH OR DIRECT STORE ROUTING */}
+      {/* STEP 3: DIRECT SOLAR STORE ACCESS PROVISIONING */}
       {step === 3 && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="space-y-1">
               <span className="text-[11px] font-bold text-blue-600 uppercase flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Auto-Territory Assignment
+                <Store className="w-3.5 h-3.5 text-blue-600" /> Direct Store Provisioning
               </span>
               <h2 className="text-lg font-black text-slate-900">
-                District Franchisee Assignment & Request Submission
+                Direct Solar Store Access & Onboarding Confirmation
               </h2>
               <p className="text-xs text-slate-500">
-                EPC registered district: <strong className="text-slate-800 font-semibold">{formData.district_name}, {formData.state_name}</strong>
+                This EPC will be granted immediate access to browse and purchase solar kits and equipment directly from the SolarKits Store.
               </p>
             </div>
             <button
@@ -563,139 +590,99 @@ export default function BdeEpcOnboardingWizard() {
             </button>
           </div>
 
-          {/* Franchisee Matched Scenario */}
-          {selectedFranchisee ? (
-            <div className="space-y-4">
-              <div className="p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border border-emerald-200 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Auto-Matched District Partner
-                      </span>
-                      <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                        {selectedFranchisee.reseller_code || 'FRANCHISE'}
-                      </span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-200/60 px-2 py-0.5 rounded-full">
-                        District: {formData.district_name}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-black text-slate-900">
-                      {selectedFranchisee.business_name}
-                    </h3>
-                  </div>
-
-                  <div className="text-left sm:text-right">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Operating Jurisdiction</span>
-                    <span className="text-xs font-bold text-emerald-800">{formData.district_name}, {formData.state_name}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-emerald-200/60 text-xs">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Contact Person</span>
-                    <span className="font-semibold text-slate-800">{selectedFranchisee.contact_person || 'Authorized Representative'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Contact Mobile</span>
-                    <span className="font-semibold text-slate-800">{selectedFranchisee.mobile || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">GST Number</span>
-                    <span className="font-mono font-semibold text-slate-800">{selectedFranchisee.gst_number || 'Registered'}</span>
-                  </div>
-                </div>
+          {/* Store Access Configuration Pill */}
+          <div className="p-5 bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-slate-50 rounded-2xl border border-blue-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
+                <ShoppingBag className="w-6 h-6" />
               </div>
-
-              {/* Notice Pill */}
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3 text-xs text-blue-800">
-                <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-bold">Automatic Admin Approval Routing</p>
-                  <p className="text-[11px] text-blue-700">
-                    Once submitted, a formal approval request will be dispatched to the Admin Panel at{' '}
-                    <span className="font-mono font-bold">/admin-panel/solar-shop/india/approve-new-epc</span> notifying that BDE{' '}
-                    is onboarding this EPC and assigning them to <strong>{selectedFranchisee.business_name}</strong>.
-                  </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider">
+                    Direct Solar Store Contractor
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-emerald-600" /> Active Store Access
+                  </span>
                 </div>
+                <h3 className="text-base font-black text-slate-900 mt-1">
+                  {formData.company_name}
+                </h3>
               </div>
             </div>
-          ) : (
-            /* No Franchisee in District Scenario -> Direct Store Access */
-            <div className="space-y-4">
-              <div className="p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-2xl border border-blue-200 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
-                    <Store className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider">
-                        Direct Solar Store Routing
-                      </span>
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                        No Franchise in {formData.district_name}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-black text-slate-900 mt-1">
-                      Direct Solar Store Contractor Access
-                    </h3>
-                  </div>
-                </div>
 
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  No operational franchisee partner is registered in district <strong className="text-slate-900">{formData.district_name}</strong>.
-                  Upon Admin approval, this EPC will be provisioned with direct Solar Store credentials to place procurement orders directly.
-                </p>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Upon completing this onboarding step, the EPC contractor account will be immediately activated with full procurement rights. They can log in to the SolarKits Store to view live contractor pricing, configure combo kits, and place procurement orders.
+            </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-blue-200/60 text-xs">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Territory</span>
-                    <span className="font-semibold text-slate-800">{formData.district_name}, {formData.state_name}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Order Fulfillment</span>
-                    <span className="font-semibold text-slate-800">Central SolarKits Warehouse / Direct Store</span>
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-blue-200/60 text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Territory Jurisdiction</span>
+                <span className="font-semibold text-slate-800">{formData.district_name}, {formData.state_name}</span>
               </div>
-
-              {/* Notice Pill */}
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs text-amber-800">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-bold">Direct Store Login Activation Notice</p>
-                  <p className="text-[11px] text-amber-700">
-                    The request will be sent to the Admin Panel at{' '}
-                    <span className="font-mono font-bold">/admin-panel/solar-shop/india/approve-new-epc</span> specifying that no franchise exists in this territory and direct store access should be granted upon approval.
-                  </p>
-                </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">EPC Tier</span>
+                <span className="font-semibold text-slate-800">{formData.epc_type}</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Procurement Channel</span>
+                <span className="font-semibold text-blue-700">SolarKits Direct Store</span>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Submission Summary Table */}
+          {/* Store Credentials Preview Card */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
+              <strong className="text-slate-800 font-bold flex items-center gap-1.5">
+                <Lock className="w-4 h-4 text-slate-600" /> Store Login Credentials Preview
+              </strong>
+              <span className="text-[10px] text-slate-500 font-mono">Role: EPC Contractor</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Login Email / Mobile</span>
+                <span className="font-mono font-bold text-slate-800">{formData.email}</span>
+                <span className="text-[10px] text-slate-500 block mt-0.5">or {formData.mobile}</span>
+              </div>
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Initial Password</span>
+                <span className="font-mono font-bold text-blue-700">{defaultPassword}</span>
+                <span className="text-[10px] text-slate-500 block mt-0.5">Can be changed after login</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Informational Notice */}
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs text-amber-800">
+            <Store className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Franchisee Assignment from BDE Leads</p>
+              <p className="text-[11px] text-amber-700">
+                This onboarding only creates the EPC account and activates their Solar Store access. Once onboarded, this contractor will appear in your <strong>BDE Leads</strong> list, where you can assign them to any local Franchisee Partner whenever you choose.
+              </p>
+            </div>
+          </div>
+
+          {/* Summary Table */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
             <div className="flex justify-between py-1 border-b border-slate-200/60">
               <span className="text-slate-500">Contractor Trade Name:</span>
               <span className="font-bold text-slate-900">{formData.company_name}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500">Contractor GSTIN:</span>
-              <span className="font-mono font-bold text-slate-900">{gstResult?.gstin}</span>
+              <span className="text-slate-500">GSTIN:</span>
+              <span className="font-mono font-bold text-slate-900">{gstResult?.gstin || gstInput}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500">Contact Person / Phone:</span>
+              <span className="text-slate-500">Contact Person:</span>
               <span className="font-semibold text-slate-800">{formData.contact_person} ({formData.mobile})</span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-slate-500">Assigned Routing:</span>
-              <span className="font-bold text-slate-900">
-                {selectedFranchisee ? (
-                  <span className="text-emerald-700">Franchise: {selectedFranchisee.business_name}</span>
-                ) : (
-                  <span className="text-blue-700">Direct Solar Store Access</span>
-                )}
+              <span className="text-slate-500">Store Access Status:</span>
+              <span className="font-bold text-emerald-700 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Store Access Provisioned
               </span>
             </div>
           </div>
@@ -708,17 +695,17 @@ export default function BdeEpcOnboardingWizard() {
               Back
             </button>
             <button
-              onClick={handleSubmitEpcForApproval}
+              onClick={handleCompleteOnboarding}
               disabled={onboardingLoading}
               className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
               {onboardingLoading ? (
                 <>
-                  <RotateCw className="w-4 h-4 animate-spin" /> Submitting Request to Admin...
+                  <RotateCw className="w-4 h-4 animate-spin" /> Onboarding & Activating Store...
                 </>
               ) : (
                 <>
-                  Submit EPC for Admin Approval <ArrowRight className="w-4 h-4" />
+                  Complete Onboarding & Grant Store Access <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
@@ -726,7 +713,7 @@ export default function BdeEpcOnboardingWizard() {
         </div>
       )}
 
-      {/* STEP 4: REQUEST SUBMITTED FOR ADMIN APPROVAL */}
+      {/* STEP 4: ONBOARDING SUCCESS WITH STORE ACCESS */}
       {step === 4 && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center space-y-6">
           <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-md shadow-emerald-600/10">
@@ -734,49 +721,60 @@ export default function BdeEpcOnboardingWizard() {
           </div>
 
           <div className="space-y-2 max-w-lg mx-auto">
-            <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-wider">
-              Pending Admin Approval
+            <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+              <Zap className="w-3 h-3 text-emerald-600" /> Solar Store Access Active
             </span>
             <h2 className="text-2xl font-black text-slate-900">
-              EPC Onboarding Request Submitted!
+              EPC Contractor Onboarded Successfully!
             </h2>
             <p className="text-xs text-slate-500">
               Contractor <strong className="text-slate-800">{formData.company_name}</strong> (GST:{' '}
-              <strong className="font-mono text-slate-800">{gstResult?.gstin}</strong>) has been onboarded and the approval request is routed to the central Admin Panel.
+              <strong className="font-mono text-slate-800">{gstResult?.gstin || gstInput}</strong>) is now registered and equipped with full Solar Store procurement access.
             </p>
           </div>
 
+          {/* Credentials Card with 1-Click Copy */}
           <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 max-w-lg mx-auto text-xs text-left space-y-3">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                <Lock className="w-4 h-4 text-blue-600" /> Store Access Credentials
+              </span>
+              <button
+                onClick={handleCopyCredentials}
+                className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1 transition"
+              >
+                {copiedCredentials ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" /> Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 text-slate-500" /> Copy Credentials
+                  </>
+                )}
+              </button>
+            </div>
+
             <div className="flex justify-between items-center py-1 border-b border-slate-200">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">EPC Company:</span>
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Contractor:</span>
               <span className="font-bold text-slate-900">{formData.company_name}</span>
             </div>
             <div className="flex justify-between items-center py-1 border-b border-slate-200">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Territory Jurisdiction:</span>
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Login Email:</span>
+              <span className="font-mono font-bold text-slate-900">{formData.email}</span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-slate-200">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Store Password:</span>
+              <span className="font-mono font-bold text-blue-600">{defaultPassword}</span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-slate-200">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Territory:</span>
               <span className="font-semibold text-slate-900">{formData.district_name}, {formData.state_name}</span>
             </div>
-            <div className="flex justify-between items-center py-1 border-b border-slate-200">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Assignment Target:</span>
-              {selectedFranchisee ? (
-                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  Franchise: {selectedFranchisee.business_name}
-                </span>
-              ) : (
-                <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  Direct Solar Store Access
-                </span>
-              )}
-            </div>
-            <div className="flex justify-between items-center py-1 border-b border-slate-200">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Admin Approval Desk:</span>
-              <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                /admin-panel/solar-shop/india/approve-new-epc
-              </span>
-            </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Current Status:</span>
-              <span className="text-amber-600 font-bold flex items-center gap-1.5">
-                <RotateCw className="w-3 h-3 animate-spin text-amber-500" /> Awaiting Admin Approval
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Store Access Status:</span>
+              <span className="text-emerald-700 font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active (Direct Store Access)
               </span>
             </div>
           </div>
@@ -784,9 +782,9 @@ export default function BdeEpcOnboardingWizard() {
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <button
               onClick={() => navigate('/epc-leads')}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-blue-600/20"
             >
-              View EPC Leads Pipeline
+              <Store className="w-4 h-4" /> View in BDE Leads & Assign Franchisee
             </button>
             <button
               onClick={handleResetWizard}

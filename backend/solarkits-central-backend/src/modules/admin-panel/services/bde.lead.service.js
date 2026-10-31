@@ -157,6 +157,12 @@ async function generateNextLeadId() {
  * 4. Create Lead
  */
 async function createLead(data, bdeId) {
+  // Support both createLead(data, bdeId) and createLead(bdeId, data)
+  if ((typeof data === 'string' || (data && data._bsontype === 'ObjectID')) && typeof bdeId === 'object') {
+    const temp = data;
+    data = bdeId;
+    bdeId = temp;
+  }
   // Validate Duplicates
   const dupCheck = await validateLeadDuplicates({
     mobile_number: data.mobile_number,
@@ -174,6 +180,13 @@ async function createLead(data, bdeId) {
   if (!bde) {
     const err = new Error('BDE Profile not found');
     err.statusCode = 404;
+    throw err;
+  }
+
+  // Check Franchise Onboarding Permission
+  if (bde.can_onboard_franchise === false) {
+    const err = new Error('Franchise onboarding is disabled for your BDE account by Administrator');
+    err.statusCode = 403;
     throw err;
   }
 

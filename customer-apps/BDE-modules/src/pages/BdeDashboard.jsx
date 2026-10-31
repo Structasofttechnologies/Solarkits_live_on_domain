@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 
 export default function BdeDashboard() {
-  const { user } = useBdeAuth();
+  const { user, canOnboardEpc } = useBdeAuth();
   const navigate = useNavigate();
 
   const [dashboardData, setDashboardData] = useState(null);
@@ -119,12 +119,14 @@ export default function BdeDashboard() {
             >
               <ShoppingCart className="w-4 h-4 stroke-[2.5]" /> Bulk PO Orders
             </button>
-            <button
-              onClick={() => navigate('/epc-onboarding')}
-              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
-            >
-              <ShieldCheck className="w-4 h-4" /> GST Onboard EPC
-            </button>
+            {canOnboardEpc !== false && (
+              <button
+                onClick={() => navigate('/epc-onboarding')}
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4" /> GST Onboard EPC
+              </button>
+            )}
             <button
               onClick={() => navigate('/epc-leads')}
               className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
@@ -240,24 +242,22 @@ export default function BdeDashboard() {
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-24 bg-slate-100 h-2 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${
-                              d.goal_achievement_pct >= 100
+                            className={`h-full rounded-full transition-all ${d.goal_achievement_pct >= 100
                                 ? 'bg-emerald-500'
                                 : d.goal_achievement_pct >= 60
-                                ? 'bg-blue-500'
-                                : 'bg-amber-500'
-                            }`}
+                                  ? 'bg-blue-500'
+                                  : 'bg-amber-500'
+                              }`}
                             style={{ width: `${Math.min(100, d.goal_achievement_pct)}%` }}
                           />
                         </div>
                         <span
-                          className={`font-black text-xs ${
-                            d.goal_achievement_pct >= 100
+                          className={`font-black text-xs ${d.goal_achievement_pct >= 100
                               ? 'text-emerald-700'
                               : d.goal_achievement_pct >= 60
-                              ? 'text-blue-700'
-                              : 'text-amber-700'
-                          }`}
+                                ? 'text-blue-700'
+                                : 'text-amber-700'
+                            }`}
                         >
                           {d.goal_achievement_pct}%
                         </span>
@@ -319,11 +319,10 @@ export default function BdeDashboard() {
               <div
                 className="bg-teal-600 h-full rounded-full transition-all"
                 style={{
-                  width: `${
-                    goals.monthly_epc_onboard_goal > 0
+                  width: `${goals.monthly_epc_onboard_goal > 0
                       ? Math.min(100, Math.round(((goals.monthly_epc_onboarded_achieved || 0) / goals.monthly_epc_onboard_goal) * 100))
                       : 0
-                  }%`,
+                    }%`,
                 }}
               />
             </div>

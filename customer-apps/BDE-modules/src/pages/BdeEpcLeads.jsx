@@ -30,8 +30,10 @@ import {
   CalendarPlus,
   ArrowUpRight,
   Lock,
+  Check,
 } from 'lucide-react';
 import api from '../services/api';
+import { useBdeAuth } from '../context/BdeAuthContext';
 
 const STAGES = [
   'New',
@@ -97,6 +99,7 @@ function getEpcTypeBadge(type) {
 }
 
 export default function BdeEpcLeads() {
+  const { canOnboardEpc } = useBdeAuth();
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [stageCounts, setStageCounts] = useState({});
@@ -128,6 +131,15 @@ export default function BdeEpcLeads() {
   const [followUpNotes, setFollowUpNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState({});
+
+  // Assign Franchisee Modal State
+  const [assignModalLead, setAssignModalLead] = useState(null);
+  const [eligibleFranchisees, setEligibleFranchisees] = useState([]);
+  const [loadingFranchisees, setLoadingFranchisees] = useState(false);
+  const [franchiseeSearch, setFranchiseeSearch] = useState('');
+  const [selectedFranchisee, setSelectedFranchisee] = useState(null);
+  const [assigningLoading, setAssigningLoading] = useState(false);
+  const [assignError, setAssignError] = useState('');
 
   // Form State for Add / Edit
   const [formData, setFormData] = useState({
@@ -410,8 +422,99 @@ export default function BdeEpcLeads() {
   };
 
   const handleStartOnboarding = (lead) => {
+    if (canOnboardEpc === false) {
+      alert('EPC Onboarding is restricted for your BDE account by Administrator.');
+      return;
+    }
     // Navigate to GST Onboarding Wizard with lead info passed in state
     navigate('/epc-onboarding', { state: { lead } });
+  };
+
+  const handleOpenAssignModal = async (lead) => {
+    setAssignModalLead(lead);
+    setSelectedFranchisee(null);
+    setFranchiseeSearch('');
+    setAssignError('');
+    setLoadingFranchisees(true);
+    try {
+      const res = await api.get('/epc/eligible-franchisees', {
+        params: {
+          state_name: lead.state_name,
+          district_name: lead.district_name,
+        },
+      });
+      if (res.data?.status === 'success' && Array.isArray(res.data.data)) {
+        setEligibleFranchisees(res.data.data);
+      } else {
+        const fallbackRes = await api.get('/epc/franchise-partners');
+        setEligibleFranchisees(fallbackRes.data?.data || []);
+      }
+    } catch (err) {
+      try {
+        const fallbackRes = await api.get('/epc/franchise-partners');
+        setEligibleFranchisees(fallbackRes.data?.data || []);
+      } catch (err2) {
+        setAssignError('Failed to load eligible franchise partners');
+      }
+    } finally {
+      setLoadingFranchisees(false);
+    }
+  };
+
+  const handleConfirmAssignment = async () => {
+    if (!selectedFranchisee || !assignModalLead) {
+      setAssignError('Please select a franchisee partner to assign');
+      return;
+    }
+    setAssigningLoading(true);
+    setAssignError('');
+    try {
+      const res = await api.post('/epc/assign-franchisee', {
+        lead_id: assignModalLead._id,
+        epc_account_id: assignModalLead.onboarded_epc_account_id || undefined,
+        reseller_id: selectedFranchisee.id || selectedFranchisee._id,
+      });
+
+      if (res.data?.status === 'success') {
+        const assignedData = {
+          _id: selectedFranchisee.id || selectedFranchisee._id,
+          business_name: selectedFranchisee.business_name,
+          reseller_code: selectedFranchisee.reseller_code,
+          mobile: selectedFranchisee.mobile,
+        };
+
+        setLeads((prev) =>
+          prev.map((l) =>
+            l._id === assignModalLead._id
+              ? {
+                ...l,
+                lead_status: 'Assigned to Franchisee',
+                assigned_franchisee_id: assignedData,
+                assigned_franchisee_name: selectedFranchisee.business_name,
+              }
+              : l
+          )
+        );
+
+        if (detailLead && detailLead._id === assignModalLead._id) {
+          setDetailLead((prev) => ({
+            ...prev,
+            lead_status: 'Assigned to Franchisee',
+            assigned_franchisee_id: assignedData,
+            assigned_franchisee_name: selectedFranchisee.business_name,
+          }));
+        }
+
+        setAssignModalLead(null);
+        fetchLeads();
+      } else {
+        setAssignError(res.data?.message || 'Failed to assign franchisee');
+      }
+    } catch (err) {
+      setAssignError(err.response?.data?.message || 'Failed to assign franchisee');
+    } finally {
+      setAssigningLoading(false);
+    }
   };
 
   const handleToggleProduct = (product) => {
@@ -486,12 +589,14 @@ export default function BdeEpcLeads() {
           >
             <RotateCw className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => navigate('/epc-onboarding')}
-            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center gap-2"
-          >
-            <ShieldCheck className="w-4 h-4" /> GST Onboarding Wizard
-          </button>
+          {canOnboardEpc !== false && (
+            <button
+              onClick={() => navigate('/epc-onboarding')}
+              className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" /> GST Onboarding Wizard
+            </button>
+          )}
           <button
             onClick={handleOpenCreateModal}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-blue-600/20 flex items-center gap-2"
@@ -625,8 +730,8 @@ export default function BdeEpcLeads() {
           <button
             onClick={() => setEpcTypeFilter('all')}
             className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition text-[11px] ${epcTypeFilter === 'all'
-                ? 'bg-slate-800 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              ? 'bg-slate-800 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
           >
             All Types ({totalLeadsCount})
@@ -638,8 +743,8 @@ export default function BdeEpcLeads() {
                 key={t.id || t.code || t.name}
                 onClick={() => setEpcTypeFilter(t.name)}
                 className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition text-[11px] flex items-center gap-1.5 ${epcTypeFilter === t.name
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
                   }`}
               >
                 <span>{t.name}</span>
@@ -746,9 +851,16 @@ export default function BdeEpcLeads() {
                       )}
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border inline-block ${getStageBadge(lead.lead_status)}`}>
-                        {lead.lead_status}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border inline-block ${getStageBadge(lead.lead_status)}`}>
+                          {lead.lead_status}
+                        </span>
+                        {lead.lead_status === 'Onboarded' && (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-flex items-center gap-1">
+                            <Zap className="w-2.5 h-2.5 text-blue-600" /> Store Access Active
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       {lead.assigned_franchisee_id ? (
@@ -757,7 +869,14 @@ export default function BdeEpcLeads() {
                           <span>{lead.assigned_franchisee_id.business_name || lead.assigned_franchisee_name}</span>
                         </div>
                       ) : (
-                        <span className="text-slate-400 italic">Not Assigned</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400 italic">Not Assigned</span>
+                          {lead.lead_status === 'Onboarded' && (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                              Direct Store
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3.5">
@@ -779,6 +898,24 @@ export default function BdeEpcLeads() {
                             title="Start GST Onboarding"
                           >
                             <ShieldCheck className="w-3.5 h-3.5" /> Onboard
+                          </button>
+                        )}
+                        {lead.lead_status === 'Onboarded' && (
+                          <button
+                            onClick={() => handleOpenAssignModal(lead)}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] transition flex items-center gap-1 shadow-2xs"
+                            title="Assign to Franchisee Partner"
+                          >
+                            <Store className="w-3.5 h-3.5 text-blue-600" /> Assign Franchisee
+                          </button>
+                        )}
+                        {lead.lead_status === 'Assigned to Franchisee' && (
+                          <button
+                            onClick={() => handleOpenAssignModal(lead)}
+                            className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition"
+                            title="Reassign Franchisee Partner"
+                          >
+                            <Store className="w-4 h-4" />
                           </button>
                         )}
                         <button
@@ -849,19 +986,28 @@ export default function BdeEpcLeads() {
                           GST: {l.gst_number}
                         </div>
                       )}
-                      <div className="pt-1 border-t border-slate-100 flex items-center justify-between">
+                      <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-1">
                         <button
                           onClick={() => setDetailLead(l)}
                           className="text-[10px] font-bold text-blue-600 hover:underline"
                         >
                           View Details
                         </button>
-                        <button
-                          onClick={() => handleStartOnboarding(l)}
-                          className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700"
-                        >
-                          Onboard
-                        </button>
+                        {l.lead_status !== 'Onboarded' && l.lead_status !== 'Assigned to Franchisee' ? (
+                          <button
+                            onClick={() => handleStartOnboarding(l)}
+                            className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 flex items-center gap-1"
+                          >
+                            <ShieldCheck className="w-3 h-3" /> Onboard
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenAssignModal(l)}
+                            className="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-bold hover:bg-blue-700 flex items-center gap-1"
+                          >
+                            <Store className="w-3 h-3" /> Assign
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1307,12 +1453,24 @@ export default function BdeEpcLeads() {
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleStartOnboarding(detailLead)}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center gap-1.5"
-                >
-                  <ShieldCheck className="w-4 h-4" /> Start Onboarding
-                </button>
+                <div className="flex items-center gap-2">
+                  {detailLead.lead_status !== 'Onboarded' && detailLead.lead_status !== 'Assigned to Franchisee' ? (
+                    <button
+                      onClick={() => handleStartOnboarding(detailLead)}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-4 h-4" /> Start Onboarding
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenAssignModal(detailLead)}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center gap-1.5"
+                    >
+                      <Store className="w-4 h-4" />
+                      {detailLead.assigned_franchisee_id ? 'Reassign Franchisee' : 'Assign to Franchisee'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Lead Info */}
@@ -1347,6 +1505,27 @@ export default function BdeEpcLeads() {
                     <span className="text-slate-400">Lead Source:</span>
                     <span className="capitalize font-semibold text-slate-900">{detailLead.lead_source?.replace('_', ' ')}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Assigned Franchisee:</span>
+                    {detailLead.assigned_franchisee_id ? (
+                      <span className="font-semibold text-emerald-800 flex items-center gap-1">
+                        <Store className="w-3.5 h-3.5 text-emerald-600" />
+                        {detailLead.assigned_franchisee_id.business_name || detailLead.assigned_franchisee_name}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-slate-500 italic">
+                        Not Assigned {detailLead.lead_status === 'Onboarded' ? '(Direct Store Access)' : ''}
+                      </span>
+                    )}
+                  </div>
+                  {(detailLead.lead_status === 'Onboarded' || detailLead.lead_status === 'Assigned to Franchisee') && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Store Access:</span>
+                      <span className="font-bold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active (Solar Store)
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1373,6 +1552,200 @@ export default function BdeEpcLeads() {
                     <p className="text-slate-400 italic">No activity entries recorded yet.</p>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Assign Franchisee Partner */}
+      {assignModalLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/70">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    <Store className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Assign Franchisee Partner
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Select an operational franchisee to manage fulfillment and orders for this contractor.
+                </p>
+              </div>
+              <button
+                onClick={() => setAssignModalLead(null)}
+                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Target EPC Details Card */}
+            <div className="p-4 mx-6 mt-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/70 border border-blue-200/80 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">EPC Contractor</span>
+                <span className="font-bold text-slate-900">{assignModalLead.company_name}</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">GSTIN / Territory</span>
+                <span className="font-mono font-bold text-slate-800">{assignModalLead.gst_number || 'No GST'}</span>
+                <span className="text-[10px] text-slate-500 block">{assignModalLead.district_name}, {assignModalLead.state_name}</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Store Status</span>
+                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-emerald-600" /> Active Store Access
+                </span>
+              </div>
+            </div>
+
+            {/* Franchisee Search Bar */}
+            <div className="px-6 pt-4 pb-2">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  value={franchiseeSearch}
+                  onChange={(e) => setFranchiseeSearch(e.target.value)}
+                  placeholder="Search franchise partners by business name, code, contact, mobile..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {assignError && (
+              <div className="mx-6 my-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{assignError}</span>
+              </div>
+            )}
+
+            {/* Franchisees List */}
+            <div className="flex-1 overflow-y-auto px-6 py-2 space-y-2.5">
+              {loadingFranchisees ? (
+                <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
+                  <RotateCw className="w-5 h-5 animate-spin text-blue-600" />
+                  <span>Loading eligible franchise partners...</span>
+                </div>
+              ) : (
+                (() => {
+                  const filtered = eligibleFranchisees.filter((f) => {
+                    if (!franchiseeSearch.trim()) return true;
+                    const q = franchiseeSearch.toLowerCase().trim();
+                    return (
+                      (f.business_name || '').toLowerCase().includes(q) ||
+                      (f.reseller_code || '').toLowerCase().includes(q) ||
+                      (f.contact_person || '').toLowerCase().includes(q) ||
+                      (f.mobile || '').includes(q) ||
+                      (f.district || '').toLowerCase().includes(q)
+                    );
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                        No franchise partners found for this territory or search query.
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((f) => {
+                    const isSelected = selectedFranchisee && (selectedFranchisee.id === f.id || selectedFranchisee._id === f.id || selectedFranchisee.id === f._id || selectedFranchisee._id === f._id);
+                    return (
+                      <div
+                        key={f.id || f._id}
+                        onClick={() => setSelectedFranchisee(f)}
+                        className={`p-3.5 rounded-2xl border cursor-pointer transition text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSelected
+                          ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                          : 'bg-white hover:bg-slate-50 border-slate-200'
+                          }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-black text-slate-900 text-sm">
+                              {f.business_name}
+                            </span>
+                            <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+                              {f.reseller_code || 'FRANCHISE'}
+                            </span>
+                            {f.is_district_match && (
+                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> District Match ({assignModalLead.district_name})
+                              </span>
+                            )}
+                            {f.is_operational && (
+                              <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded-full">
+                                Operational
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-slate-500 text-[11px] flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span>Contact: <strong className="text-slate-700">{f.contact_person || 'Authorized Rep'}</strong></span>
+                            <span>Phone: <strong className="text-slate-700">{f.mobile || '-'}</strong></span>
+                            <span>Territory: <strong className="text-slate-700">{f.district || f.address?.district_name || 'Regional'}, {f.state || f.address?.state_name}</strong></span>
+                            {f.assigned_epc_count != null && (
+                              <span>Assigned EPCs: <strong className="text-blue-700">{f.assigned_epc_count}</strong></span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-2">
+                          {isSelected ? (
+                            <span className="px-3 py-1 bg-blue-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs">
+                              <Check className="w-3.5 h-3.5" /> Selected
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold rounded-xl text-xs">
+                              Select
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <span className="text-xs text-slate-500">
+                {selectedFranchisee ? (
+                  <span>Selected: <strong className="text-blue-700 font-bold">{selectedFranchisee.business_name}</strong></span>
+                ) : (
+                  <span>Select a franchisee above to assign</span>
+                )}
+              </span>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setAssignModalLead(null)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-white text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAssignment}
+                  disabled={!selectedFranchisee || assigningLoading}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition"
+                >
+                  {assigningLoading ? (
+                    <>
+                      <RotateCw className="w-3.5 h-3.5 animate-spin" /> Assigning...
+                    </>
+                  ) : (
+                    <>
+                      <Store className="w-3.5 h-3.5" /> Confirm Assignment
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

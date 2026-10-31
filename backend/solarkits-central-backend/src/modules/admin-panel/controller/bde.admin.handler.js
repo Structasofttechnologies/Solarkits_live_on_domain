@@ -314,6 +314,8 @@ exports.update_bde = async (req, res) => {
     if (district_id !== undefined) bde.district_id = district_id;
     if (district_name !== undefined) bde.district_name = district_name;
     if (joining_date) bde.joining_date = new Date(joining_date);
+    if (req.body.can_onboard_epc !== undefined) bde.can_onboard_epc = Boolean(req.body.can_onboard_epc);
+    if (req.body.can_onboard_franchise !== undefined) bde.can_onboard_franchise = Boolean(req.body.can_onboard_franchise);
 
     if (mobile_number && mobile_number !== bde.mobile_number) {
       const cleanMobile = String(mobile_number).trim();
@@ -1112,6 +1114,8 @@ exports.assign_goals = async (req, res) => {
       monthly_epc_lead_goal = 0,
       monthly_epc_onboard_goal = 0,
       monthly_network_kit_goal = 0,
+      can_onboard_epc,
+      can_onboard_franchise,
       start_date,
       end_date,
       notes,
@@ -1132,6 +1136,15 @@ exports.assign_goals = async (req, res) => {
     if (!bde) {
       return res.status(404).json({ status: 'error', message: 'BDE profile not found' });
     }
+
+    // Update BDE Profile onboarding decision permissions if provided
+    if (can_onboard_epc !== undefined) {
+      bde.can_onboard_epc = Boolean(can_onboard_epc);
+    }
+    if (can_onboard_franchise !== undefined) {
+      bde.can_onboard_franchise = Boolean(can_onboard_franchise);
+    }
+    await bde.save();
 
     const currentMonth = month || (new Date().getMonth() + 1);
     const currentQuarter = quarter || (Math.floor(new Date().getMonth() / 3) + 1);
@@ -1154,6 +1167,8 @@ exports.assign_goals = async (req, res) => {
       monthly_epc_lead_goal: Number(monthly_epc_lead_goal || 0),
       monthly_epc_onboard_goal: Number(monthly_epc_onboard_goal || 0),
       monthly_network_kit_goal: Number(monthly_network_kit_goal || 0),
+      can_onboard_epc: bde.can_onboard_epc !== false,
+      can_onboard_franchise: bde.can_onboard_franchise !== false,
       start_date: start_date ? new Date(start_date) : new Date(),
       end_date: end_date ? new Date(end_date) : null,
       status: 'active',
@@ -1220,6 +1235,70 @@ exports.get_goals = async (req, res) => {
   } catch (error) {
     console.error('[get_goals Error]', error);
     return res.status(500).json({ status: 'error', message: 'Failed to fetch goals', error: error.message });
+  }
+};
+
+// Update Onboarding Decision Permissions (EPC Onboarding & Franchise Onboarding)
+exports.update_bde_permissions = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { can_onboard_epc, can_onboard_franchise } = req.body;
+
+    const bde = await BDEProfile.findOne({ _id: id, deleted_at: null });
+    if (!bde) {
+      return res.status(404).json({ status: 'error', message: 'BDE profile not found' });
+    }
+
+    if (can_onboard_epc !== undefined) {
+      bde.can_onboard_epc = Boolean(can_onboard_epc);
+    }
+    if (can_onboard_franchise !== undefined) {
+      bde.can_onboard_franchise = Boolean(can_onboard_franchise);
+    }
+
+    bde.updated_by = req.user?.id || null;
+    await bde.save();
+
+    // Keep active goal in sync
+    await BDEGoal.updateMany(
+      { bde_id: bde._id, status: 'active' },
+      {
+        $set: {
+          ...(can_onboard_epc !== undefined ? { can_onboard_epc: Boolean(can_onboard_epc) } : {}),
+          ...(can_onboard_franchise !== undefined ? { can_onboard_franchise: Boolean(can_onboard_franchise) } : {}),
+        },
+      }
+    );
+
+    await recordBdeActivity({
+      bde_id: bde._id,
+      actor_type: 'admin',
+      actor_id: req.user?.id,
+      actor_name: req.user?.name || 'Admin',
+      action: 'BDE_PERMISSIONS_UPDATED',
+      details: {
+        can_onboard_epc: bde.can_onboard_epc,
+        can_onboard_franchise: bde.can_onboard_franchise,
+      },
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Onboarding permissions updated successfully',
+      data: {
+        id: bde._id,
+        can_onboard_epc: bde.can_onboard_epc,
+        can_onboard_franchise: bde.can_onboard_franchise,
+      },
+    });
+  } catch (error) {
+    console.error('[update_bde_permissions Error]', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to update onboarding permissions',
+      error: error.message,
+    });
   }
 };
 
@@ -1373,6 +1452,8 @@ exports.list_bdes = async (req, res) => {
         current_goal: goal,
         kyc: kycInfo,
         status: b.status,
+        can_onboard_epc: b.can_onboard_epc !== false,
+        can_onboard_franchise: b.can_onboard_franchise !== false,
         kyc_status: kycInfo.kyc_status,
         aadhaar_masked: kycInfo.aadhaar_masked,
         pan_masked: kycInfo.pan_masked,

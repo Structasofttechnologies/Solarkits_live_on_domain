@@ -65,6 +65,15 @@ const schema = new mongoose.Schema({
     min: 0,
     default: 0,
   },
+  // Onboarding Permissions / Decision controls
+  can_onboard_epc: {
+    type: Boolean,
+    default: true,
+  },
+  can_onboard_franchise: {
+    type: Boolean,
+    default: true,
+  },
   monthly_signup_achieved: {
     type: Number,
     min: 0,
