@@ -90,6 +90,8 @@ exports.create_bde = async (req, res) => {
       pan_document_url,
       kyc_remarks,
       initial_password,
+      initial_pin,
+      pin,
     } = req.body;
 
     // 1. Basic validation
@@ -178,9 +180,15 @@ exports.create_bde = async (req, res) => {
       finalBdeId = await generateNextBdeId();
     }
 
-    // Hash default / initial password (default: Bde@1234)
-    const rawPassword = initial_password || 'Bde@1234';
-    const passwordHash = await bcrypt.hash(rawPassword, 10);
+    // Hash 4-digit PIN (default: '1234')
+    const rawPin = String(pin || initial_pin || initial_password || '1234').trim();
+    if (!/^\d{4}$/.test(rawPin)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'BDE Login PIN must be exactly 4 digits (0-9)',
+      });
+    }
+    const passwordHash = await bcrypt.hash(rawPin, 10);
 
     // 4. Create BDE Profile
     const bde = await BDEProfile.create({
@@ -197,7 +205,7 @@ exports.create_bde = async (req, res) => {
       joining_date: joining_date ? new Date(joining_date) : new Date(),
       status: 'kyc_pending',
       password_hash: passwordHash,
-      is_first_login: true,
+      is_first_login: false,
       created_by: req.user?.id || null,
       updated_by: req.user?.id || null,
     });
@@ -287,6 +295,8 @@ exports.update_bde = async (req, res) => {
       district_id,
       district_name,
       joining_date,
+      pin,
+      new_pin,
     } = req.body;
 
     const bde = await BDEProfile.findOne({ _id: id, deleted_at: null });
@@ -327,6 +337,16 @@ exports.update_bde = async (req, res) => {
         return res.status(400).json({ status: 'error', message: 'Email address is already registered to another BDE' });
       }
       bde.email = cleanEmail;
+    }
+
+    const updatedPin = String(pin || new_pin || '').trim();
+    if (updatedPin) {
+      if (!/^\d{4}$/.test(updatedPin)) {
+        return res.status(400).json({ status: 'error', message: 'PIN must be exactly 4 digits (0-9)' });
+      }
+      bde.password_hash = await bcrypt.hash(updatedPin, 10);
+      bde.is_first_login = false;
+      bde.token_version = (bde.token_version || 0) + 1;
     }
 
     bde.updated_by = req.user?.id || null;
@@ -667,31 +687,42 @@ exports.change_status = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. RESET BDE LOGIN CREDENTIALS
+// 6. RESET BDE LOGIN 4-DIGIT PIN
 // ─────────────────────────────────────────────────────────────────────────────
 exports.reset_login = async (req, res) => {
   try {
     const { id } = req.params;
-    const { new_password } = req.body;
+    const { new_pin, pin, new_password } = req.body;
 
-    const bde = await BDEProfile.findOne({ _id: id, deleted_at: null });
+    const query = { deleted_at: null };
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      query.$or = [{ _id: id }, { bde_id: String(id).trim().toUpperCase() }];
+    } else {
+      query.bde_id = String(id).trim().toUpperCase();
+    }
+
+    const bde = await BDEProfile.findOne(query);
     if (!bde) {
       return res.status(404).json({ status: 'error', message: 'BDE profile not found' });
     }
 
-    const tempPassword = new_password || 'Bde@1234';
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const targetPin = String(pin || new_pin || new_password || '').trim();
+    if (!/^\d{4}$/.test(targetPin)) {
+      return res.status(400).json({ status: 'error', message: 'PIN must be exactly 4 digits (0-9)' });
+    }
+
+    const passwordHash = await bcrypt.hash(targetPin, 10);
 
     bde.password_hash = passwordHash;
-    bde.is_first_login = true;
+    bde.is_first_login = false;
     bde.token_version = (bde.token_version || 0) + 1;
     bde.updated_by = req.user?.id || null;
     await bde.save();
 
     await BDENotification.create({
       bde_id: bde._id,
-      title: 'Login Credentials Reset',
-      message: 'Your login password has been reset by the Admin. You will be required to create a new password on next login.',
+      title: 'Login PIN Reset',
+      message: `Your BDE 4-digit login PIN has been updated by the Admin.`,
       type: 'system',
     });
 
@@ -701,7 +732,7 @@ exports.reset_login = async (req, res) => {
       actor_id: req.user?.id,
       actor_name: req.user?.name || 'Admin',
       action: 'LOGIN_RESET',
-      notes: 'BDE login password reset and token invalidated',
+      notes: `BDE 4-digit PIN updated to ${targetPin} and sessions invalidated`,
       req,
     });
 
@@ -716,12 +747,13 @@ exports.reset_login = async (req, res) => {
 
     return res.status(200).json({
       status: 'success',
-      message: `Login access for BDE "${bde.full_name}" has been reset. Temporary password set to: ${tempPassword}`,
+      message: `4-Digit PIN for BDE "${bde.full_name}" has been set to: ${targetPin}`,
       data: {
         bde_id: bde.bde_id,
         email: bde.email,
-        temporary_password: tempPassword,
-        is_first_login: true,
+        pin: targetPin,
+        temporary_password: targetPin,
+        is_first_login: false,
       },
     });
   } catch (error) {

@@ -33,7 +33,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     pan_document_url: '',
     kyc_remarks: '',
     // Credentials
-    initial_password: 'Bde@Test1234',
+    pin: '1234',
+    initial_password: '1234',
   });
 
   const [states, setStates] = useState([]);
@@ -120,6 +121,9 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     if (!formData.pan_document_url.trim()) {
       errs.pan_document_url = 'PAN document URL/proof is required';
     }
+    if (!formData.pin || !/^\d{4}$/.test(String(formData.pin).trim())) {
+      errs.pin = '4-digit numeric PIN is required (0-9)';
+    }
     setValidationErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -133,6 +137,7 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
 
     setLoading(true);
     try {
+      const cleanPin = String(formData.pin || '1234').trim();
       const payload = {
         full_name: formData.full_name.trim(),
         bde_id: formData.bde_id.trim() || undefined,
@@ -150,7 +155,9 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
         pan_number: formData.pan_number.trim().toUpperCase(),
         pan_document_url: formData.pan_document_url.trim(),
         kyc_remarks: formData.kyc_remarks.trim() || undefined,
-        initial_password: formData.initial_password || 'Bde@Test1234',
+        pin: cleanPin,
+        initial_pin: cleanPin,
+        initial_password: cleanPin,
       };
 
       const res = await bdeApi.createBde(payload, moduleUniqueId);
@@ -226,9 +233,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.full_name}
                   onChange={(e) => handleChange('full_name', e.target.value)}
                   placeholder="e.g. Vikram Sharma"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white ${
-                    validationErrors.full_name ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white ${validationErrors.full_name ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.full_name && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.full_name}</p>
@@ -259,9 +265,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.mobile_number}
                   onChange={(e) => handleChange('mobile_number', e.target.value)}
                   placeholder="10-digit Indian mobile number (e.g. 9876543210)"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8] focus:bg-white ${
-                    validationErrors.mobile_number ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8] focus:bg-white ${validationErrors.mobile_number ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.mobile_number && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.mobile_number}</p>
@@ -277,9 +282,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
                   placeholder="e.g. vikram.bde@solarkits.com"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white ${
-                    validationErrors.email ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white ${validationErrors.email ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.email && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.email}</p>
@@ -374,9 +378,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.aadhaar_number}
                   onChange={(e) => handleChange('aadhaar_number', e.target.value)}
                   placeholder="12-digit Aadhaar number"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8] focus:bg-white ${
-                    validationErrors.aadhaar_number ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8] focus:bg-white ${validationErrors.aadhaar_number ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.aadhaar_number && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.aadhaar_number}</p>
@@ -393,9 +396,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.pan_number}
                   onChange={(e) => handleChange('pan_number', e.target.value.toUpperCase())}
                   placeholder="ABCDE1234F"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8] focus:bg-white uppercase ${
-                    validationErrors.pan_number ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8] focus:bg-white uppercase ${validationErrors.pan_number ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.pan_number && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.pan_number}</p>
@@ -411,9 +413,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.aadhaar_document_url}
                   onChange={(e) => handleChange('aadhaar_document_url', e.target.value)}
                   placeholder="https://... (Cloudinary/Storage URL)"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs focus:outline-none focus:border-[#0575B8] focus:bg-white ${
-                    validationErrors.aadhaar_document_url ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs focus:outline-none focus:border-[#0575B8] focus:bg-white ${validationErrors.aadhaar_document_url ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.aadhaar_document_url && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.aadhaar_document_url}</p>
@@ -429,9 +430,8 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   value={formData.pan_document_url}
                   onChange={(e) => handleChange('pan_document_url', e.target.value)}
                   placeholder="https://... (Cloudinary/Storage URL)"
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs focus:outline-none focus:border-[#0575B8] focus:bg-white ${
-                    validationErrors.pan_document_url ? 'border-rose-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 text-xs focus:outline-none focus:border-[#0575B8] focus:bg-white ${validationErrors.pan_document_url ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
                 {validationErrors.pan_document_url && (
                   <p className="text-[11px] text-rose-600 font-bold">{validationErrors.pan_document_url}</p>
@@ -456,21 +456,31 @@ export default function CreateBde({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
           <div className="space-y-4 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
               <FaInfoCircle className="text-[#0575B8]" />
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">3. Initial Login Credentials</h2>
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">3. Login Credentials (4-Digit PIN)</h2>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 uppercase tracking-wider block text-[11px]">Default Initial Password</label>
+                <label className="font-bold text-slate-700 uppercase tracking-wider block text-[11px]">
+                  4-Digit Login PIN *
+                </label>
                 <input
                   type="text"
-                  value={formData.initial_password}
-                  onChange={(e) => handleChange('initial_password', e.target.value)}
-                  placeholder="e.g. Bde@Test1234"
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:border-[#0575B8]"
+                  required
+                  maxLength={4}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={formData.pin}
+                  onChange={(e) => handleChange('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="1234"
+                  className={`w-full max-w-xs px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 font-mono text-base tracking-[0.25em] font-bold focus:outline-none focus:border-[#0575B8] ${validationErrors.pin ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                 />
+                {validationErrors.pin && (
+                  <p className="text-[11px] text-rose-600 font-bold">{validationErrors.pin}</p>
+                )}
                 <p className="text-xs text-slate-500 font-medium">
-                  The BDE will be required to change this password on their first login. Login will only be active once KYC is verified.
+                  The BDE will use their registered Email/Mobile number and this 4-digit PIN to sign in to the BDE portal.
                 </p>
               </div>
             </div>

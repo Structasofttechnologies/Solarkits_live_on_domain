@@ -46,10 +46,11 @@ export function BdeAuthProvider({ children }) {
     }
   };
 
-  const login = async (identifier, password, rememberMe = false) => {
+  const login = async (identifier, pin, rememberMe = false) => {
     const res = await api.post('/auth/login', {
       identifier,
-      password,
+      pin,
+      password: pin,
       remember_me: rememberMe,
     });
 
