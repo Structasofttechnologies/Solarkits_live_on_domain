@@ -2051,62 +2051,45 @@ exports.get_vehicle_presets = async (req, res) => {
       console.warn('Could not fetch DeliveryServiceProvider:', err.message);
     }
 
-    // Map Vehicle Types uniquely
+    // Map Vehicle Types uniquely from Admin Vehicle Masters (Live Catalog)
     const vehicleTypeMap = new Map();
 
-    // From Admin Masters
-    adminMasters.forEach(m => {
-      const capStr = m.max_load_kg ? (m.max_load_kg >= 1000 ? `${(m.max_load_kg / 1000).toFixed(1)} Ton` : `${m.max_load_kg} Kg`) : '';
-      const label = capStr ? `${m.name} (${capStr})` : m.name;
-      vehicleTypeMap.set(label, {
-        value: label,
-        label,
-        name: m.name,
-        brand_make: m.brand_make,
-        model: m.model,
-        capacity_kg: m.max_load_kg,
-        source: 'Admin Vehicle Master'
+    if (adminMasters && adminMasters.length > 0) {
+      adminMasters.forEach(m => {
+        const capStr = m.max_load_kg ? (m.max_load_kg >= 1000 ? `${(m.max_load_kg / 1000).toFixed(1).replace('.0', '')} Ton` : `${m.max_load_kg} Kg`) : '';
+        const label = capStr ? `${m.name} (${capStr})` : m.name;
+        vehicleTypeMap.set(m.name, {
+          value: m.name,
+          label: label,
+          name: m.name,
+          brand_make: m.brand_make,
+          model: m.model,
+          capacity_kg: m.max_load_kg,
+          source: 'Admin Vehicle Master'
+        });
       });
-    });
-
-    // From Warehouse Vehicles
-    warehouseVehicles.forEach(wv => {
-      const typeName = wv.vehicle_type || wv.name;
-      if (typeName) {
-        const capStr = wv.capacity_kg ? (wv.capacity_kg >= 1000 ? `${(wv.capacity_kg / 1000).toFixed(1)} Ton` : `${wv.capacity_kg} Kg`) : '';
-        const label = capStr ? `${typeName} (${capStr})` : typeName;
-        if (!vehicleTypeMap.has(label)) {
-          vehicleTypeMap.set(label, {
-            value: label,
-            label,
-            name: typeName,
-            capacity_kg: wv.capacity_kg,
-            source: 'Warehouse Fleet'
-          });
-        }
-      }
-    });
-
-    // Fallback standard options to ensure dropdown is never empty
-    const defaultTypes = [
-      { name: '3-Wheeler Electric', label: '3-Wheeler Electric (500 Kg)', capacity_kg: 500 },
-      { name: 'Tata Ace', label: 'Tata Ace (1.5 Ton)', capacity_kg: 1500 },
-      { name: 'Mahindra Bolero Pickup', label: 'Mahindra Bolero Pickup (1.7 Ton)', capacity_kg: 1700 },
-      { name: '14ft Eicher', label: '14ft Eicher (4.0 Ton)', capacity_kg: 4000 },
-      { name: '17ft Canter', label: '17ft Canter (5.0 Ton)', capacity_kg: 5000 },
-      { name: '20ft Container', label: '20ft Container (7.0 Ton)', capacity_kg: 7000 },
-    ];
-    defaultTypes.forEach(dt => {
-      if (!vehicleTypeMap.has(dt.label)) {
-        vehicleTypeMap.set(dt.label, {
-          value: dt.label,
+    } else {
+      // Fallback only if no admin vehicle masters configured
+      const defaultTypes = [
+        { name: 'Tata Ace (Chota Hathi)', label: 'Tata Ace (Chota Hathi) (750 Kg)', capacity_kg: 750 },
+        { name: 'Mahindra Bolero Pickup', label: 'Mahindra Bolero Pickup (1.3 Ton)', capacity_kg: 1300 },
+        { name: 'Ashok Leyland Dost+', label: 'Ashok Leyland Dost+ (1.5 Ton)', capacity_kg: 1500 },
+        { name: 'Tata 407 (10 Ft LCV)', label: 'Tata 407 (10 Ft LCV) (2.5 Ton)', capacity_kg: 2500 },
+        { name: 'Eicher Pro 2049 (12 Ft Canter)', label: 'Eicher Pro 2049 (12 Ft Canter) (3.5 Ton)', capacity_kg: 3500 },
+        { name: 'Tata 1109 (14 Ft Canter)', label: 'Tata 1109 (14 Ft Canter) (6 Ton)', capacity_kg: 6000 },
+        { name: 'Tata 1613 (19 Ft Open Truck)', label: 'Tata 1613 (19 Ft Open Truck) (10 Ton)', capacity_kg: 10000 },
+        { name: '1924 / BB1924', label: '1924 / BB1924 (20 Ton)', capacity_kg: 20000 }
+      ];
+      defaultTypes.forEach(dt => {
+        vehicleTypeMap.set(dt.name, {
+          value: dt.name,
           label: dt.label,
           name: dt.name,
           capacity_kg: dt.capacity_kg,
           source: 'Standard Preset'
         });
-      }
-    });
+      });
+    }
 
     // Deduplicate and sort vehicle types by capacity
     const uniqueVehicleTypes = Array.from(vehicleTypeMap.values());
